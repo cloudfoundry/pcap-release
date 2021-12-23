@@ -1,0 +1,8 @@
+log_level: "debug"
+listen: ":8080"
+container_store: "/var/vcap/data/container-metadata/store.json"
+runc: "/var/vcap/packages/runc/bin/runc"
+runc_root: "/run/containerd/runc/garden"
+cert: "cert.pem"
+key: "key.pem"
+ca_cert: "cacert.pem"
