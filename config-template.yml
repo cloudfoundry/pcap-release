@@ -1,0 +1,4 @@
+log_level: "debug"
+listen: ":8080"
+cert: "cert.pem"
+key: "key.pem"
