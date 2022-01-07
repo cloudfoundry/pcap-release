@@ -6,14 +6,12 @@ import (
 )
 
 type Config struct {
-	LogLevel       string `yaml:"log_level"`
-	Listen         string `yaml:"listen"`
-	ContainerStore string `yaml:"container_store"`
-	RunC           string `yaml:"runc"`
-	RunCRoot       string `yaml:"runc_root"`
-	Cert           string `yaml:"cert"`
-	Key            string `yaml:"key"`
-	CaCert         string `yaml:"ca_cert"`
+	LogLevel string `yaml:"log_level"`
+	Listen   string `yaml:"listen"`
+	Cert     string `yaml:"cert"`
+	Key      string `yaml:"key"`
+	CaCert   string `yaml:"ca_cert"`
+	CfApi    string `yaml:"cf_api"`
 }
 
 func NewConfigFromFile(filename string) (*Config, error) {
@@ -36,6 +34,7 @@ func NewConfigFromFile(filename string) (*Config, error) {
 }
 
 func (c *Config) validate() error {
+	//TODO implement
 	return nil
 }
 
