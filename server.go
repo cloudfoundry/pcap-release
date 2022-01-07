@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 type server struct {
@@ -34,6 +35,14 @@ type cfAppResponse struct {
 	Name string `json:"name"`
 }
 
+type cfAppStatsResponse struct {
+	Resources []struct {
+		Type  string `json:"type"`
+		Index int    `json:"index"`
+		Host  string `json:"host"`
+	} `json:"resources"`
+}
+
 func (s *server) handleCapture(response http.ResponseWriter, request *http.Request) {
 
 	if request.Method != http.MethodGet {
@@ -42,7 +51,7 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	}
 
 	appId := request.URL.Query().Get("appid")
-	appIndex := request.URL.Query().Get("index")
+	appIndexStr := request.URL.Query().Get("index")
 	appType := request.URL.Query().Get("type")
 	//filter := request.URL.Query().Get("filter")
 	authToken := request.Header.Get("Authorization")
@@ -53,8 +62,9 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	if appIndex == "" {
-		appIndex = "0" // default value
+	appIndex, err := strconv.Atoi(appIndexStr)
+	if err != nil {
+		appIndex = 0 // default value
 	}
 
 	if appType == "" {
@@ -81,14 +91,69 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	}
 
 	// App is visible? Great! Let's find out where it lives
-	fmt.Println("App is visible")
+	appLocation, err := s.getAppLocation(appId, appIndex, appType, authToken)
+	if err != nil {
+		log.Errorf("could not get location of app %s index %d of type %s (%s)", appId, appIndex, appType, err)
+		response.WriteHeader(http.StatusNotFound) //TODO depending on error type this could also be a 5xx status
+		return
+	}
 
+	// We found the app's location? Nice! Let's contact the pcap-server on that VM
+	fmt.Println("Found app at " + appLocation)
+}
+
+func (s *server) getAppLocation(appId string, appIndex int, appType string, authToken string) (string, error) {
+	//FIXME refactor with isAppVisibleByToken into common http client that uses authToken
+	log.Debugf("Trying to get location of app %s with index %d of type %s", appId, appIndex, appType)
+	httpClient := http.DefaultClient
+	appUrl, err := url.Parse(fmt.Sprintf("%s/apps/%s/processes/%s/stats", s.ccBaseURL, appId, appType))
+
+	if err != nil {
+		return "", err
+	}
+	req := &http.Request{
+		Method: "GET",
+		URL:    appUrl,
+		Header: map[string][]string{
+			"Authorization": {authToken},
+		},
+	}
+
+	r, err := httpClient.Do(req)
+
+	if err != nil {
+		return "", err
+	}
+
+	var appStatsResponse *cfAppStatsResponse
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return "", err
+	}
+	err = json.Unmarshal(data, &appStatsResponse)
+	if err != nil {
+		return "", err
+	}
+
+	if len(appStatsResponse.Resources) < appIndex+1 {
+		return "", fmt.Errorf("expected at least %d elements in stats array for app %s with index %d of type %s but got %d",
+			appIndex+1, appId, appIndex, appType, len(appStatsResponse.Resources))
+	}
+
+	for _, process := range appStatsResponse.Resources {
+		if process.Index == appIndex {
+			if process.Type == appType {
+				return process.Host, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("could not find process with index %d of type %s for app %s", appIndex, appType, appId)
 }
 
 func (s *server) isAppVisibleByToken(appId string, authToken string) (bool, error) {
 	log.Debugf("Checking at %s if app %s can be seen by token %s", s.ccBaseURL, appId, authToken)
 	httpClient := http.DefaultClient
-
 	appUrl, err := url.Parse(fmt.Sprintf("%s/apps/%s", s.ccBaseURL, appId))
 
 	if err != nil {
