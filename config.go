@@ -6,12 +6,15 @@ import (
 )
 
 type Config struct {
-	LogLevel string `yaml:"log_level"`
-	Listen   string `yaml:"listen"`
-	Cert     string `yaml:"cert"`
-	Key      string `yaml:"key"`
-	CaCert   string `yaml:"ca_cert"`
-	CfApi    string `yaml:"cf_api"`
+	LogLevel             string `yaml:"log_level"`
+	Listen               string `yaml:"listen"`
+	Cert                 string `yaml:"cert"`
+	Key                  string `yaml:"key"`
+	CfApi                string `yaml:"cf_api"`
+	PcapServerPort       string `yaml:"pcap_server_port"`
+	PcapServerClientCert string `yaml:"pcap_server_client_cert"`
+	PcapServerClientKey  string `yaml:"pcap_server_client_key"`
+	PcapServerCaCert     string `yaml:"pcap_server_ca_cert"`
 }
 
 func NewConfigFromFile(filename string) (*Config, error) {

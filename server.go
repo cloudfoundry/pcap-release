@@ -1,9 +1,13 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -53,7 +57,7 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	appId := request.URL.Query().Get("appid")
 	appIndexStr := request.URL.Query().Get("index")
 	appType := request.URL.Query().Get("type")
-	//filter := request.URL.Query().Get("filter")
+	filter := request.URL.Query().Get("filter")
 	authToken := request.Header.Get("Authorization")
 
 	if appId == "" {
@@ -99,11 +103,84 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	}
 
 	// We found the app's location? Nice! Let's contact the pcap-server on that VM
-	fmt.Println("Found app at " + appLocation)
+	pcapServerUrl := fmt.Sprintf("https://%s:%s/capture?appid=%s&filter=%s", appLocation, s.config.PcapServerPort, appId, filter)
+	pcapStream, err := s.getPcapStream(pcapServerUrl)
+	if err != nil {
+		log.Errorf("could not stream pcap from URL %s (%s)", pcapServerUrl, err)
+		response.WriteHeader(http.StatusBadGateway)
+		return
+	}
+	defer pcapStream.Close()
+
+	handleIOError := func(err error) {
+		if errors.Is(err, io.EOF) {
+			log.Debug("Done capturing.")
+		} else {
+			log.Errorf("Error during capture: %s", err)
+		}
+	}
+
+	// Stream the pcap back to the client
+	for {
+		buffer := make([]byte, 4096)
+		n, errRead := pcapStream.Read(buffer)
+		if n > 0 {
+			log.Debugf("Read %d bytes from input stream", n)
+			m, errWrite := response.Write(buffer[:n])
+			if m > 0 {
+				log.Debugf("Wrote %d bytes to output stream", m)
+				if f, ok := response.(http.Flusher); ok {
+					f.Flush()
+				}
+			}
+			if errWrite != nil {
+				handleIOError(errWrite)
+				return
+			}
+		}
+		if errRead != nil {
+			handleIOError(errRead)
+			return
+		}
+	}
+}
+
+func (s *server) getPcapStream(pcapServerUrl string) (io.ReadCloser, error) {
+	//TODO possibly move this into a pcapServerClient type
+	log.Debugf("Getting pcap stream from %s", pcapServerUrl)
+	cert, err := tls.LoadX509KeyPair(s.config.PcapServerClientCert, s.config.PcapServerClientKey)
+	if err != nil {
+		return nil, err
+	}
+
+	caCert, err := ioutil.ReadFile(s.config.PcapServerCaCert)
+	if err != nil {
+		return nil, err
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:            caCertPool,
+				Certificates:       []tls.Certificate{cert},
+				InsecureSkipVerify: true, //TODO remove before production
+			},
+		},
+	}
+
+	r, err := client.Get(pcapServerUrl)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Body, nil
 }
 
 func (s *server) getAppLocation(appId string, appIndex int, appType string, authToken string) (string, error) {
-	//FIXME refactor with isAppVisibleByToken into common http client that uses authToken
+	//FIXME refactor with isAppVisibleByToken into common cf client that uses authToken
 	log.Debugf("Trying to get location of app %s with index %d of type %s", appId, appIndex, appType)
 	httpClient := http.DefaultClient
 	appUrl, err := url.Parse(fmt.Sprintf("%s/apps/%s/processes/%s/stats", s.ccBaseURL, appId, appType))
