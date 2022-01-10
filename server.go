@@ -24,21 +24,25 @@ type server struct {
 }
 
 func (s *server) handleCapture(response http.ResponseWriter, request *http.Request) {
+	log.Debugf("Accepted connection from %s", request.RemoteAddr)
 
 	if request.Method != http.MethodGet {
 		response.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	instanceId := request.URL.Query().Get("instanceid")
+	appId := request.URL.Query().Get("appid")
 	filter := request.URL.Query().Get("filter")
 	device := "eth0"
 
-	if instanceId == "" {
+	if appId == "" {
 		response.WriteHeader(http.StatusBadRequest)
 		//TODO: add some nice error message
 		return
 	}
+
+	log.Debugf("Appid = %s", appId)
+	log.Debugf("Filter = %s", filter)
 
 	// CF-SPECIFIC PARTS BEGIN
 	type ContainerConfig struct {
@@ -77,17 +81,19 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	// Get runc container id from instance id
 	var containerId string
 	for key, value := range store.Keys {
-		if value.Metadata.AppId == instanceId {
+		if value.Metadata.AppId == appId {
 			containerId = key
 		}
 	}
 
 	if containerId == "" {
 		response.WriteHeader(http.StatusBadRequest)
-		response.Write([]byte("Could not find container for instance id " + instanceId))
+		response.Write([]byte("Could not find container for instance id " + appId))
 		log.Errorln(err)
 		return
 	}
+
+	log.Debugf("Found container id %s for appid %s", containerId, appId)
 
 	// Get pid from runc container state
 	ctx := context.Background()
@@ -104,6 +110,8 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	}
 
 	pid := container.Pid
+
+	log.Debugf("Found pid %d for container id %s", pid, containerId)
 
 	// CF-SPECIFIC PARTS END
 
@@ -130,13 +138,15 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	defer netns.Set(origns)
 
 	// Start capturing packets
+	log.Debugf("Starting capture of eth0 in netns %s of pid %d", newns, pid)
 	w := pcapgo.NewWriter(response)
-	err = w.WriteFileHeader(1600, layers.LinkTypeEthernet)
+	err = w.WriteFileHeader(65535, layers.LinkTypeEthernet)
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		log.Errorln(err)
 		return
 	}
+	flush(response)
 
 	if handle, err := pcap.OpenLive(device, 65535, true, pcap.BlockForever); err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
@@ -153,13 +163,21 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 			err = w.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
 			if err != nil {
 				if errors.Is(err, io.EOF) {
+					log.Debug("Done.")
 					return
 				}
 				response.WriteHeader(http.StatusInternalServerError)
 				log.Errorln(err)
 				return
 			}
+			flush(response)
 		}
+	}
+}
+
+func flush(writer io.Writer) {
+	if f, ok := writer.(http.Flusher); ok {
+		f.Flush()
 	}
 }
 
@@ -191,6 +209,7 @@ func (s *server) run() {
 	}
 
 	// Listen to HTTPS connections with the server certificate and wait
+	log.Infof("Listening on %s ...", s.config.Listen)
 	log.Fatal(server.ListenAndServeTLS(s.config.Cert, s.config.Key))
 
 }
