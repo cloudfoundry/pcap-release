@@ -1,5 +1,5 @@
 log_level: "debug"
-listen: ":8080"
+listen: ":9494"
 container_store: "/var/vcap/data/container-metadata/store.json"
 runc: "/var/vcap/packages/runc/bin/runc"
 runc_root: "/run/containerd/runc/garden"
