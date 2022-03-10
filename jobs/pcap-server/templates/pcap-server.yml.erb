@@ -1,0 +1,13 @@
+<%=
+config = {
+  "log_level" => p("pcap-server.log_level"),
+  "listen" => p("pcap-server.listen"),
+  "container_store" => p("pcap-server.container_store"),
+  "runc" => p("pcap-server.runc"),
+  "runc_root" => p("pcap-server.runc_root"),
+  "cert" => p("pcap-server.cert"),
+  "key" => p("pcap-server.key"),
+  "ca_cert" => p("pcap-server.ca_cert"),
+}
+YAML.dump(config)
+%>
