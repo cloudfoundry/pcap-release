@@ -1,0 +1,14 @@
+<%=
+config = {
+  "listen" => p("pcap-server-api.listen"),
+  "log_level" => p("pcap-server-api.log_level"),
+  "cert" => p("pcap-server-api.cert"),
+  "key" => p("pcap-server-api.key"),
+  "cf_api" => p("pcap-server-api.cf_api"),
+  "pcap_server_port" => p("pcap-server-api.pcap_server_port"),
+  "pcap_server_client_cert" => p("pcap-server-api.client_cert"),
+  "pcap_server_client_key" => p("pcap-server-api.client_key"),
+  "pcap_server_ca_cert" => p("pcap-server-api.ca_cert"),
+}
+YAML.dump(config)
+%>
