@@ -5,9 +5,9 @@ config = {
   "container_store" => p("pcap-server.container_store"),
   "runc" => p("pcap-server.runc"),
   "runc_root" => p("pcap-server.runc_root"),
-  "cert" => p("pcap-server.cert"),
-  "key" => p("pcap-server.key"),
-  "ca_cert" => p("pcap-server.ca_cert"),
+  "cert" => "/var/vcap/jobs/pcap-server/config/certs/pcap-server.crt",
+  "key" => "/var/vcap/jobs/pcap-server/config/certs/pcap-server_private.key",
+  "ca_cert" => "/var/vcap/jobs/pcap-server/config/certs/client_ca.crt",
 }
 YAML.dump(config)
 %>

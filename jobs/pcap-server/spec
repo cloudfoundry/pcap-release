@@ -4,6 +4,9 @@ name: pcap-server
 templates:
   ctl.erb: bin/ctl
   pcap-server.yml.erb: config/pcap-server.yml
+  pcap-server-private.key.erb:      config/certs/pcap-server_private.key
+  pcap-server.crt.erb:              config/certs/pcap-server.crt
+  client-ca.crt.erb:                config/certs/client_ca.crt
 
 packages: 
 - pcap-server
