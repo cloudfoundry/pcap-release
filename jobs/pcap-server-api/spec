@@ -5,7 +5,8 @@ templates:
   ctl.erb: bin/ctl
   pcap-server-api.yml.erb: config/pcap-server-api.yml
 
-packages: []
+packages: 
+- pcap-server-api
 
 properties:
   pcap-server-api.listen:
