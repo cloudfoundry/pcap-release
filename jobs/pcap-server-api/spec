@@ -4,6 +4,11 @@ name: pcap-server-api
 templates:
   ctl.erb: bin/ctl
   pcap-server-api.yml.erb: config/pcap-server-api.yml
+  pcap-server-api.crt.erb: config/pcap-server-api.crt
+  pcap-server-api.key.erb: config/pcap-server-api.key
+  pcap-server-client.crt.erb: config/pcap-server-client.crt
+  pcap-server-client.key.erb: config/pcap-server-client.key
+  pcap-server-client.ca.erb: config/pcap-server-client.ca
 
 packages:
 - pcap-server-api
