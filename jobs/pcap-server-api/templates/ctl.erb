@@ -14,7 +14,7 @@ case $1 in
     echo $$ > $PIDFILE
 
     exec /var/vcap/packages/pcap-server-api/bin/pcap-server-api \
-      /var/vcap/jobs/pcap-server/config/pcap-server-api.yml \
+      /var/vcap/jobs/pcap-server-api/config/pcap-server-api.yml \
       >> $LOG_DIR/pcap-server-api.stdout.log \
       2>> $LOG_DIR/pcap-server-api.stderr.log
     ;;
