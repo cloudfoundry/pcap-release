@@ -20,7 +20,7 @@ properties:
   pcap-server-api.log_level:
     default: "info"
   pcap-server-api.enable_server_tls:
-    default: false
+    default: true
   pcap-server-api.cert:
     description: "TLS certificate for this server"
   pcap-server-api.key:
