@@ -8,6 +8,7 @@ import (
 type Config struct {
 	LogLevel             string `yaml:"log_level"`
 	Listen               string `yaml:"listen"`
+	EnableServerTLS      bool   `yaml:"enable_server_tls"`
 	Cert                 string `yaml:"cert"`
 	Key                  string `yaml:"key"`
 	CfApi                string `yaml:"cf_api"`
