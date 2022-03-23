@@ -166,7 +166,8 @@ func (s *server) getPcapStream(pcapServerUrl string) (io.ReadCloser, error) {
 			TLSClientConfig: &tls.Config{
 				RootCAs:            caCertPool,
 				Certificates:       []tls.Certificate{cert},
-				InsecureSkipVerify: true, //TODO remove before production
+				ServerName:         s.config.PcapServerName,
+				InsecureSkipVerify: s.config.ClientSkipVerify,
 			},
 		},
 	}
