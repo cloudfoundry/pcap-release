@@ -36,3 +36,11 @@ properties:
     description: "Key for mTLS client certificate"
   pcap-server-api.ca_cert:
     description: "CA of the pcap-server cert"
+  pcap-server-api.client_server_name:
+    description: "CN of the pcap-server"
+    default: "pcap-server.service.cf.internal"
+  pcap-server-api.client_skip_verify:
+    description: "skip server verification for connection to pcap-server"
+    default: false
+
+

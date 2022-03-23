@@ -10,6 +10,8 @@ config = {
   "pcap_server_client_cert" => "/var/vcap/jobs/pcap-server-api/config/pcap-server-client.crt",
   "pcap_server_client_key" => "/var/vcap/jobs/pcap-server-api/config/pcap-server-client.key",
   "pcap_server_ca_cert" => "/var/vcap/jobs/pcap-server-api/config/pcap-server-client.ca",
+  "pcap_server_client_server_name" => p("pcap-server-api.client_server_name")
+  "pcap_server_client_skip_verify" => p("pcap-server-api.client_skip_verify")
 }
 YAML.dump(config)
 %>
