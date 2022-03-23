@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type server struct {
@@ -165,7 +166,8 @@ func (s *server) getPcapStream(pcapServerUrl string) (io.ReadCloser, error) {
 			TLSClientConfig: &tls.Config{
 				RootCAs:            caCertPool,
 				Certificates:       []tls.Certificate{cert},
-				InsecureSkipVerify: true, //TODO remove before production
+				ServerName:         s.config.PcapServerName,
+				InsecureSkipVerify: s.config.ClientSkipVerify,
 			},
 		},
 	}
@@ -304,5 +306,9 @@ func (s *server) run() {
 	}
 
 	log.Infof("Listening on %s ...", s.config.Listen)
-	log.Fatal(server.ListenAndServeTLS(s.config.Cert, s.config.Key))
+	if s.config.EnableServerTLS {
+		log.Fatal(server.ListenAndServeTLS(s.config.Cert, s.config.Key))
+	} else {
+		log.Fatal(server.ListenAndServe())
+	}
 }

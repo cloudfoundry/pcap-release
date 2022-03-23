@@ -1,5 +1,6 @@
 log_level: "debug"
 listen: ":8080"
+enable_server_tls: true
 cert: "test/server.crt"
 key: "test/server.key"
 cf_api: "https://api.cf.sap.hana.ondemand.com"
@@ -7,4 +8,6 @@ pcap_server_port: "9494"
 pcap_server_client_cert: "test/client.crt"
 pcap_server_client_key: "test/client.key"
 pcap_server_ca_cert: "test/cacert.pem"
+pcap_server_name: "pcap-server.service.cf.internal"
+pcap_server_client_skip_verify: "false"
 
