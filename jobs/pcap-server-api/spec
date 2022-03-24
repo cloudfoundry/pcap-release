@@ -4,8 +4,14 @@ name: pcap-server-api
 templates:
   ctl.erb: bin/ctl
   pcap-server-api.yml.erb: config/pcap-server-api.yml
+  pcap-server-api.crt.erb: config/pcap-server-api.crt
+  pcap-server-api.key.erb: config/pcap-server-api.key
+  pcap-server-client.crt.erb: config/pcap-server-client.crt
+  pcap-server-client.key.erb: config/pcap-server-client.key
+  pcap-server-client.ca.erb: config/pcap-server-client.ca
 
-packages: []
+packages:
+- pcap-server-api
 
 properties:
   pcap-server-api.listen:
@@ -13,6 +19,8 @@ properties:
     default: ":8080"
   pcap-server-api.log_level:
     default: "info"
+  pcap-server-api.enable_server_tls:
+    default: true
   pcap-server-api.cert:
     description: "TLS certificate for this server"
   pcap-server-api.key:
@@ -28,3 +36,11 @@ properties:
     description: "Key for mTLS client certificate"
   pcap-server-api.ca_cert:
     description: "CA of the pcap-server cert"
+  pcap-server-api.client_server_name:
+    description: "CN of the pcap-server"
+    default: "pcap-server.service.cf.internal"
+  pcap-server-api.client_skip_verify:
+    description: "skip server verification for connection to pcap-server"
+    default: false
+
+

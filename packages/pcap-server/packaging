@@ -17,6 +17,13 @@ mkdir $BOSH_INSTALL_TARGET/gocache
 export GOPATH=$BOSH_COMPILE_TARGET/gopath
 export GOCACHE=$BOSH_COMPILE_TARGET/gocache
 
+echo "Installing libpcap..."
+LIBPCAP_VERSION=1.8
+tar xzf libpcap-${LIBPCAP_VERSION}.tgz
+ln -s /usr/lib/x86_64-linux-gnu/libpcap.so.1.8.1 /usr/lib/x86_64-linux-gnu/libpcap.so
+
+export CGO_CFLAGS="-I$BOSH_COMPILE_TARGET/libpcap"
+
 pushd pcap-server
   $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/pcap-server
 popd
