@@ -23,7 +23,7 @@ BOSH release of the pcap-server CF add-on
 * Connect to pcap server on diego-cell
 * Stream packets back to client
 
-### pca-server
+### pcap-server
 
 * Find container PID for app id
 * enter container network namespace
