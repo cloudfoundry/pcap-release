@@ -12,13 +12,13 @@ type Config struct {
 	EnableServerTLS            bool   `yaml:"enable_server_tls"`
 	Cert                       string `yaml:"cert"`
 	Key                        string `yaml:"key"`
-	CfApi                      string `yaml:"cf_api"`
+	CfAPI                      string `yaml:"cf_api"`
 	PcapServerPort             string `yaml:"pcap_server_port"`
 	PcapServerClientCert       string `yaml:"pcap_server_client_cert"`
 	PcapServerClientKey        string `yaml:"pcap_server_client_key"`
 	PcapServerCaCert           string `yaml:"pcap_server_ca_cert"`
 	PcapServerName             string `yaml:"pcap_server_name"`
-	PcapServerClientSkipVerify string `yaml:"pcap_server_client_skip_verify"`
+	PcapServerClientSkipVerify bool   `yaml:"pcap_server_client_skip_verify"`
 }
 
 func NewConfigFromFile(filename string) (*Config, error) {

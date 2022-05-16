@@ -167,7 +167,7 @@ func (s *server) getPcapStream(pcapServerUrl string) (io.ReadCloser, error) {
 				RootCAs:            caCertPool,
 				Certificates:       []tls.Certificate{cert},
 				ServerName:         s.config.PcapServerName,
-				InsecureSkipVerify: s.config.ClientSkipVerify,
+				InsecureSkipVerify: s.config.PcapServerClientSkipVerify,
 			},
 		},
 	}
@@ -270,10 +270,10 @@ func (s *server) isAppVisibleByToken(appId string, authToken string) (bool, erro
 
 func (s *server) setup() {
 	log.Info("Discovering CF API endpoints...")
-	r, err := http.Get(s.config.CfApi)
+	r, err := http.Get(s.config.CfAPI)
 
 	if err != nil {
-		log.Fatalf("Could not fetch CF API from %s (%s)", s.config.CfApi, err)
+		log.Fatalf("Could not fetch CF API from %s (%s)", s.config.CfAPI, err)
 	}
 
 	var apiResponse *cfApiResponse
