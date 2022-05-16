@@ -1,0 +1,50 @@
+---
+name: pcap-server
+
+addons:
+  - name: bpm
+    jobs:
+      - name: bpm
+        release: bpm
+
+instance_groups:
+  - name: pcap-server-api
+    azs:
+      - z1
+    instances: 1
+    vm_type: default
+    stemcell: default
+    networks: [{name: default}]
+    jobs:
+      - name: pcap-server-api
+        release: pcap-server
+        properties:
+          pcap-server-api:
+            enable_server_tls: false
+            client_skip_verify: true
+            cf_api: ((cf-api))
+            client_cert: ((client-cert))
+            client_key: ((client-key))
+            ca_cert: ((ca_cert))
+
+update:
+  canaries: 1
+  max_in_flight: 1
+  canary_watch_time: 1000-30000
+  update_watch_time: 1000-30000
+  serial: false
+
+stemcells:
+  - alias: default
+    os: ubuntu-bionic
+    version: latest
+
+releases:
+  - name: bpm
+    version: 1.1.8
+    url: https://bosh.io/d/github.com/cloudfoundry/bpm-release?v=1.1.8
+    sha1: c956394fce7e74f741e4ae8c256b480904ad5942
+  - name: pcap-server
+    version: 0+dev.1
+    url: https://github.com/domdom82/pcap-server-release/releases/download/v0.0.1/pcap-server-0.0.1.tgz
+    sha1: a1655c1992b911fef3ad0b46c5abb8a0217ef0a2
