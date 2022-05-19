@@ -58,11 +58,6 @@ releases:
     sha1: 1150a7c89a04db07145c906ccdbfda7424e6dfc6
 
 variables:
-  - name: pcap_server_ca
-    type: certificate
-    options:
-      common_name: pcap_server_ca
-      is_ca: true
   - name: pcap_server_api_mtls
     type: certificate
     update_mode: converge
