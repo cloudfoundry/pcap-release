@@ -29,8 +29,20 @@ BOSH release of the pcap-server CF add-on
 * enter container network namespace
 * capture packets and stream back to client
 
+## How to deploy
+The release provides two files to integrate with an 
+existing [cf-deployment](https://github.com/cloudfoundry/cf-deployment):
+* `manifests/ops-files/add-pcap-server.yml` This provides a shared CA between pcap-server and pcap-server-api. It also adds the pcap-server job to all diego cells.
+* `manifests/pcap-server.yml` This is an example BOSH manifest to deploy the pcap-server-api
 
+### Step 1 - Add pcap-server to cf-deployment
+```
+bosh interpolate -o manifests/ops-files/add-pcap-server.yml cf-deployment.yml > cf-deployment-pcap.yml
+bosh -d cf deploy cf-deployment-pcap.yml
+```
+This assumes your BOSH deployment name of cf-deployment is called `cf`
 
-
-
-
+### Step 2 - Deploy pcap-server-api
+```
+tbd
+```
