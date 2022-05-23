@@ -62,7 +62,7 @@ variables:
     type: certificate
     update_mode: converge
     options:
-      ca: pcap_server_ca
+      ca: ((pcap_server_api.ca_path))
       common_name: pcap_server_api_mtls
       alternative_names:
         - pcap-server-api.service.cf.internal

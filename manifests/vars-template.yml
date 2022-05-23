@@ -4,3 +4,4 @@ pcap_server_api:
   vm_type: default
   networks: [{name: default}]
   cf_api: "https://api.cf.cfapp.com"
+  ca_path: /cf/pcap_server_mtls_ca
