@@ -12,9 +12,9 @@ instance_groups:
     azs:
       - z1
     instances: 1
-    vm_type: default
+    vm_type: ((pcap_server_api.vm_type))
     stemcell: default
-    networks: [{name: default}]
+    networks: ((pcap_server_api.networks))
     jobs:
       - name: pcap-server-api
         release: pcap-server
@@ -22,7 +22,7 @@ instance_groups:
           pcap-server-api:
             enable_server_tls: false
             client_skip_verify: true
-            cf_api: ((cf-api))
+            cf_api: ((pcap_server_api.cf_api))
             client_cert: ((pcap_server_api_mtls.certificate))
             client_key: ((pcap_server_api_mtls.private_key))
             ca_cert: ((pcap_server_api_mtls.ca))
