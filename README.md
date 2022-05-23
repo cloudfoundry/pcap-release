@@ -1,5 +1,5 @@
 # pcap-server-release
-BOSH release of the pcap-server CF add-on
+[BOSH](https://bosh.io/) release of the pcap-server [Cloud Foundry](https://www.cloudfoundry.org/) add-on
 
 ## Architecture
 
@@ -10,7 +10,7 @@ BOSH release of the pcap-server CF add-on
   This token is used to gather information about the app from the cloud-controller.
 * The pcap-api-server makes requests to the pcap-server on corresponding diego cell.
 
-* The pcap server starts a tcptrace using libpcap and streams the results.
+* The pcap server starts a tcpdump using libpcap via [the gopacket module](https://github.com/google/gopacket) and streams the results.
 
 ![alt text](docs/tcpdump-for-cf.svg "tcpdump in cf architecture")
 
