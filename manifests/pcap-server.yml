@@ -26,6 +26,28 @@ instance_groups:
             client_cert: ((pcap_server_api_mtls.certificate))
             client_key: ((pcap_server_api_mtls.private_key))
             ca_cert: ((pcap_server_api_mtls.ca))
+      - name: bpm
+        release: bpm
+      - name: route_registrar
+        release: routing
+        consumes:
+          nats-tls:
+            from: nats-tls
+            deployment: cf
+        properties:
+          route_registrar:
+            routes:
+              - name: pcap-server-public-endpoint
+                registration_interval: 20s
+                port: 8080
+                uris:
+                  - ((route_registrar.public_route))
+            port: 8080
+          nats:
+            tls:
+              enabled: true
+              client_cert: ((nats.client_cert))
+              client_key: ((nats.client_key))
 
 update:
   canaries: 1
@@ -45,7 +67,7 @@ releases:
     url: https://bosh.io/d/github.com/cloudfoundry/bpm-release?v=1.1.8
     sha1: c956394fce7e74f741e4ae8c256b480904ad5942
   - name: pcap-server
-    version: 0+dev.1
+    version: 0+dev.2
     url: https://github.com/domdom82/pcap-server-release/releases/download/v0.0.1/pcap-server-0.0.1.tgz
     sha1: a1655c1992b911fef3ad0b46c5abb8a0217ef0a2
   - name: bosh-dns-aliases
