@@ -55,6 +55,14 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
+	//TODO: Support multiple instances for capture
+	//PcapServer-API:
+	//
+	//Check if index is a number or a list
+	//For each list element, start a go routine that captures from an instance
+	//Merge the packets into a single pcap stream
+	//Stream to client or store locally as usual
+
 	appId := request.URL.Query().Get("appid")
 	appIndexStr := request.URL.Query().Get("index")
 	appType := request.URL.Query().Get("type")
