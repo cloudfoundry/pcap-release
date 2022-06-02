@@ -6,7 +6,26 @@ addons:
     jobs:
       - name: bpm
         release: bpm
-
+  - name: bosh-dns-aliases
+    jobs:
+      - name: bosh-dns-aliases
+        release: bosh-dns-aliases
+        properties:
+          aliases:
+            - domain: nats.service.cf.internal
+              targets:
+                - deployment: cf
+                  domain: bosh
+                  instance_group: nats
+                  network: cf
+                  query: '*'
+            - domain: _.nats.service.cf.internal
+              targets:
+                - deployment: cf
+                  domain: bosh
+                  instance_group: nats
+                  network: cf
+                  query: _
 instance_groups:
   - name: pcap-server-api
     azs:
@@ -26,8 +45,6 @@ instance_groups:
             client_cert: ((pcap_server_api_mtls.certificate))
             client_key: ((pcap_server_api_mtls.private_key))
             ca_cert: ((pcap_server_api_mtls.ca))
-      - name: bpm
-        release: bpm
       - name: route_registrar
         release: routing
         consumes:
