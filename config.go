@@ -19,6 +19,7 @@ type Config struct {
 	PcapServerCaCert           string `yaml:"pcap_server_ca_cert"`
 	PcapServerName             string `yaml:"pcap_server_name"`
 	PcapServerClientSkipVerify bool   `yaml:"pcap_server_client_skip_verify"`
+	CLIDownloadRoot            string `yaml:"cli_download_root"`
 }
 
 func NewConfigFromFile(filename string) (*Config, error) {

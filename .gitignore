@@ -16,3 +16,4 @@
 .idea
 pcap-server-api
 config.yml
+cli/build/cli_darwin

@@ -6,7 +6,6 @@ import (
 )
 
 func main() {
-
 	log.SetFormatter(&log.JSONFormatter{TimestampFormat: "2006-01-02 15:04:05.0000"})
 
 	if len(os.Args) > 1 {

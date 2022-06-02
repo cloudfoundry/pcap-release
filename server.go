@@ -307,6 +307,8 @@ func (s *server) run() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/capture", s.handleCapture)
+	log.Info("Starting CLI file server at root " + s.config.CLIDownloadRoot)
+	mux.Handle("/cli/", http.StripPrefix("/cli/", http.FileServer(http.Dir(s.config.CLIDownloadRoot))))
 
 	server := &http.Server{
 		Addr:    s.config.Listen,
