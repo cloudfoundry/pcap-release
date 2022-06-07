@@ -21,11 +21,11 @@ type server struct {
 	uaaBaseURL string
 }
 
-type cfApiResponse struct {
+type cfAPIResponse struct {
 	Links struct {
 		CCv2 struct {
 			Href string `json:"href"`
-		} `json:"cloud_controller_v2"`
+		} `json:"cloud_controller_v2"` //nolint:tagliatelle
 		CCv3 struct {
 			Href string `json:"href"`
 		} `json:"cloud_controller_v3"`
@@ -36,7 +36,7 @@ type cfApiResponse struct {
 }
 
 type cfAppResponse struct {
-	Guid string `json:"guid"`
+	GUID string `json:"guid"`
 	Name string `json:"name"`
 }
 
@@ -112,10 +112,10 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	}
 
 	// We found the app's location? Nice! Let's contact the pcap-server on that VM
-	pcapServerUrl := fmt.Sprintf("https://%s:%s/capture?appid=%s&filter=%s", appLocation, s.config.PcapServerPort, appId, filter)
-	pcapStream, err := s.getPcapStream(pcapServerUrl)
+	pcapServerURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&filter=%s", appLocation, s.config.PcapServerPort, appId, filter)
+	pcapStream, err := s.getPcapStream(pcapServerURL)
 	if err != nil {
-		log.Errorf("could not stream pcap from URL %s (%s)", pcapServerUrl, err)
+		log.Errorf("could not stream pcap from URL %s (%s)", pcapServerURL, err)
 		response.WriteHeader(http.StatusBadGateway)
 		return
 	}
@@ -270,22 +270,23 @@ func (s *server) isAppVisibleByToken(appId string, authToken string) (bool, erro
 		return false, err
 	}
 
-	if appResponse.Guid != appId {
-		return false, fmt.Errorf("expected app id %s but got app id %s (%s)", appId, appResponse.Guid, appResponse.Name)
+	if appResponse.GUID != appId {
+		return false, fmt.Errorf("expected app id %s but got app id %s (%s)", appId, appResponse.GUID, appResponse.Name)
 	}
+
 	return true, nil
 }
 
 func (s *server) setup() {
 	log.Info("Discovering CF API endpoints...")
-	r, err := http.Get(s.config.CfAPI)
+	response, err := http.Get(s.config.CfAPI)
 
 	if err != nil {
 		log.Fatalf("Could not fetch CF API from %s (%s)", s.config.CfAPI, err)
 	}
 
-	var apiResponse *cfApiResponse
-	data, err := ioutil.ReadAll(r.Body)
+	var apiResponse *cfAPIResponse
+	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		log.Fatalf("Could not read CF API response: %s", err)
 	}
@@ -300,7 +301,6 @@ func (s *server) setup() {
 }
 
 func (s *server) run() {
-
 	log.Info("PcapServer-API starting...")
 	s.setup()
 
