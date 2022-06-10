@@ -7,13 +7,17 @@ import (
 	"errors"
 	"fmt"
 	"github.com/domdom82/pcap-server-api/config"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcapgo"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
-
-	log "github.com/sirupsen/logrus"
+	"sync"
+	"time"
 )
 
 type Server struct {
@@ -125,55 +129,87 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 		}
 	}
 
-	// TODO this won't work. to be able to capture from several sources in parallel,
-	// we need to decode individual packets here and only put whole packets into the client-side stream
-	// otherwise we would interleave bits of packet A with bits of packet B from another source
+	packets := make(chan gopacket.Packet, 1000)
+	packetsDone := make(chan bool, 1)
+	packetsWg := sync.WaitGroup{}
+
 	for _, index := range appIndices {
-		// go func(appIndex int) {
-		func(appIndex int) {
+		go func(appIndex int, packets chan gopacket.Packet, packetsWg *sync.WaitGroup) {
+			packetsWg.Add(1)
 			// App is visible? Great! Let's find out where it lives
 			appLocation, err := s.getAppLocation(appId, appIndex, appType, authToken)
 			if err != nil {
 				log.Errorf("could not get location of app %s index %d of type %s (%s)", appId, appIndex, appType, err)
-
+				packetsWg.Done()
 				return
 			}
-			// We found the app's location? Nice! Let's contact the pcap-Server on that VM
-			pcapServerURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&filter=%s", appLocation, s.config.PcapServerPort, appId, filter)
+			// We found the app's location? Nice! Let's contact the pcap-Server on that VM (index only needed for testing)
+			pcapServerURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&index=%d&filter=%s", appLocation, s.config.PcapServerPort, appId, appIndex, filter)
 			pcapStream, err := s.getPcapStream(pcapServerURL)
+			defer pcapStream.Close()
 			if err != nil {
-				log.Errorf("could not stream pcap from URL %s (%s)", pcapServerURL, err)
+				log.Errorf("could not get pcap stream from URL %s (%s)", pcapServerURL, err)
 				response.WriteHeader(http.StatusBadGateway)
+				packetsWg.Done()
 				return
 			}
-			defer pcapStream.Close()
 
 			// Stream the pcap back to the client
+			pcapReader, err := pcapgo.NewReader(pcapStream)
+			if err != nil {
+				log.Errorf("could not create pcap reader from pcap stream %s (%s)", pcapStream, err)
+				response.WriteHeader(http.StatusBadGateway)
+				packetsWg.Done()
+				return
+			}
 			for {
-				buffer := make([]byte, 4096)
-				n, errRead := pcapStream.Read(buffer)
-				if n > 0 {
-					log.Debugf("Read %d bytes from input stream", n)
-					m, errWrite := response.Write(buffer[:n])
-					if m > 0 {
-						log.Debugf("Wrote %d bytes to output stream", m)
-						if f, ok := response.(http.Flusher); ok {
-							f.Flush()
-						}
-					}
-					if errWrite != nil {
-						handleIOError(errWrite)
-						return
-					}
-				}
-				if errRead != nil {
-					handleIOError(errRead)
+				data, capInfo, err := pcapReader.ReadPacketData()
+				if err != nil {
+					handleIOError(err)
+					packetsWg.Done()
 					return
 				}
+				log.Debugf("Read packet: Time %s Length %d Captured %d", capInfo.Timestamp, capInfo.Length, capInfo.CaptureLength)
+				packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.Default)
+				packet.Metadata().CaptureInfo = capInfo
+				packets <- packet
 			}
-		}(index)
+		}(index, packets, &packetsWg)
 	}
 
+	// Wait for all app instances to finish capturing
+	go func() {
+		time.Sleep(1 * time.Second)
+		packetsWg.Wait()
+		packetsDone <- true
+	}()
+
+	// Collect all packets from multiple input streams and merge them into one output stream
+	w := pcapgo.NewWriter(response)
+	err = w.WriteFileHeader(65535, layers.LinkTypeEthernet)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	bytesTotal := 24 // pcap header is 24 bytes
+	for {
+		select {
+		case packet := <-packets:
+			err = w.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
+			if err != nil {
+				handleIOError(err)
+				return
+			}
+			bytesTotal += packet.Metadata().Length
+			if f, ok := response.(http.Flusher); ok {
+				f.Flush()
+			}
+		case <-packetsDone:
+			log.Infof("Done capturing. Wrote %d bytes from %s to %s", bytesTotal, request.URL, request.RemoteAddr)
+			return
+		}
+	}
 }
 
 func (s *Server) getPcapStream(pcapServerURL string) (io.ReadCloser, error) {

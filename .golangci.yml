@@ -12,3 +12,4 @@ linters:
     - wsl
     - tagliatelle
     - exhaustivestruct
+    - gci

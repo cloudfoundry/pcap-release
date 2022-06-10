@@ -1,11 +1,11 @@
 package test
 
 import (
-	"fmt"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"text/template"
 )
@@ -66,7 +66,13 @@ func MockCfAPI(responses map[string]string) *httptest.Server {
 	return ts
 }
 
-func MockPcapServer(responses map[string]string) *httptest.Server {
+type MockPcapServer struct {
+	*httptest.Server
+	Host string
+	Port string
+}
+
+func NewMockPcapServer(responses map[string]string) *MockPcapServer {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		response := responses[request.URL.Path+"?"+request.URL.RawQuery]
@@ -81,13 +87,16 @@ func MockPcapServer(responses map[string]string) *httptest.Server {
 		}
 		nbytes, err := io.Copy(writer, file)
 		if err != nil {
-			log.Info(err)
-			fmt.Println(err)
+			panic(err)
 		}
-		log.Infof("wrote %s with %d bytes\n", response, nbytes)
+		log.Infof("wrote %s with %d bytes", response, nbytes)
 	})
 
-	ts := httptest.NewTLSServer(mux)
+	mockup := MockPcapServer{Server: httptest.NewTLSServer(mux)}
 
-	return ts
+	pcapServerURL, _ := url.Parse(mockup.URL)
+	mockup.Host = pcapServerURL.Hostname()
+	mockup.Port = pcapServerURL.Port()
+
+	return &mockup
 }

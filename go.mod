@@ -5,6 +5,7 @@ go 1.18
 require (
 	code.cloudfoundry.org/bytefmt v0.0.0-20211005130812-5bb3c17173e5
 	code.cloudfoundry.org/cli v7.1.0+incompatible
+	github.com/google/gopacket v1.1.19
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.16.0
