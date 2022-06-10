@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"io/ioutil"
@@ -6,7 +6,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type Config struct {
+type Config struct { //nolint:maligned
 	LogLevel                   string `yaml:"log_level"`
 	Listen                     string `yaml:"listen"`
 	EnableServerTLS            bool   `yaml:"enable_server_tls"`
@@ -20,6 +20,22 @@ type Config struct {
 	PcapServerName             string `yaml:"pcap_server_name"`
 	PcapServerClientSkipVerify bool   `yaml:"pcap_server_client_skip_verify"`
 	CLIDownloadRoot            string `yaml:"cli_download_root"`
+}
+
+var DefaultConfig = Config{
+	LogLevel:                   "debug",
+	Listen:                     ":8080",
+	EnableServerTLS:            false,
+	Cert:                       "test/server.crt",
+	Key:                        "test/server.key",
+	CfAPI:                      "https://api.cf.aws-cfn02.aws.cfi.sapcloud.io",
+	PcapServerPort:             "9494",
+	PcapServerClientCert:       "test/client.crt",
+	PcapServerClientKey:        "test/client.key",
+	PcapServerCaCert:           "test/cacert.pem",
+	PcapServerName:             "",
+	PcapServerClientSkipVerify: true,
+	CLIDownloadRoot:            "cli/build",
 }
 
 func NewConfigFromFile(filename string) (*Config, error) {
@@ -44,11 +60,4 @@ func NewConfigFromFile(filename string) (*Config, error) {
 func (c *Config) validate() error {
 	//TODO implement
 	return nil
-}
-
-func (c *Config) NewServer() *server {
-	server := &server{
-		config: c,
-	}
-	return server
 }
