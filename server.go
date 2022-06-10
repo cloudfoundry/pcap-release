@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/domdom82/pcap-server-api/config"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -15,8 +16,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type server struct {
-	config     *Config
+type Server struct {
+	httpServer *http.Server
+	config     *config.Config
 	ccBaseURL  string
 	uaaBaseURL string
 }
@@ -48,23 +50,20 @@ type cfAppStatsResponse struct {
 	} `json:"resources"`
 }
 
-func (s *server) handleCapture(response http.ResponseWriter, request *http.Request) {
+func (s *Server) handleHealth(response http.ResponseWriter, request *http.Request) {
+	response.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleCapture(response http.ResponseWriter, request *http.Request) {
 
 	if request.Method != http.MethodGet {
 		response.WriteHeader(http.StatusMethodNotAllowed)
+
 		return
 	}
 
-	//TODO: Support multiple instances for capture
-	//PcapServer-API:
-	//
-	//Check if index is a number or a list
-	//For each list element, start a go routine that captures from an instance
-	//Merge the packets into a single pcap stream
-	//Stream to client or store locally as usual
-
 	appId := request.URL.Query().Get("appid")
-	appIndexStr := request.URL.Query().Get("index")
+	appIndicesStr := request.URL.Query()["index"]
 	appType := request.URL.Query().Get("type")
 	filter := request.URL.Query().Get("filter")
 	authToken := request.Header.Get("Authorization")
@@ -72,12 +71,24 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	if appId == "" {
 		response.WriteHeader(http.StatusBadRequest)
 		response.Write([]byte("appid missing"))
+
 		return
 	}
 
-	appIndex, err := strconv.Atoi(appIndexStr)
-	if err != nil {
-		appIndex = 0 // default value
+	var appIndices []int
+
+	if len(appIndicesStr) == 0 {
+		appIndices = append(appIndices, 0) // default value
+	} else {
+		for _, appIndexStr := range appIndicesStr {
+			appIndex, err := strconv.Atoi(appIndexStr)
+			if err != nil {
+				response.WriteHeader(http.StatusBadRequest)
+				response.Write([]byte("could not parse index parameter"))
+				return
+			}
+			appIndices = append(appIndices, appIndex)
+		}
 	}
 
 	if appType == "" {
@@ -87,6 +98,7 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	if authToken == "" {
 		response.WriteHeader(http.StatusUnauthorized)
 		response.Write([]byte("authentication required"))
+
 		return
 	}
 
@@ -95,31 +107,15 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	if err != nil {
 		log.Errorf("could not check if app %s can be seen by token %s (%s)", appId, authToken, err)
 		response.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 	if appVisible == false {
 		log.Infof("app %s cannot be seen by token %s", appId, authToken)
 		response.WriteHeader(http.StatusForbidden)
-		return
-	}
 
-	// App is visible? Great! Let's find out where it lives
-	appLocation, err := s.getAppLocation(appId, appIndex, appType, authToken)
-	if err != nil {
-		log.Errorf("could not get location of app %s index %d of type %s (%s)", appId, appIndex, appType, err)
-		response.WriteHeader(http.StatusNotFound) //TODO depending on error type this could also be a 5xx status
 		return
 	}
-
-	// We found the app's location? Nice! Let's contact the pcap-server on that VM
-	pcapServerURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&filter=%s", appLocation, s.config.PcapServerPort, appId, filter)
-	pcapStream, err := s.getPcapStream(pcapServerURL)
-	if err != nil {
-		log.Errorf("could not stream pcap from URL %s (%s)", pcapServerURL, err)
-		response.WriteHeader(http.StatusBadGateway)
-		return
-	}
-	defer pcapStream.Close()
 
 	handleIOError := func(err error) {
 		if errors.Is(err, io.EOF) {
@@ -129,34 +125,60 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 		}
 	}
 
-	// Stream the pcap back to the client
-	for {
-		buffer := make([]byte, 4096)
-		n, errRead := pcapStream.Read(buffer)
-		if n > 0 {
-			log.Debugf("Read %d bytes from input stream", n)
-			m, errWrite := response.Write(buffer[:n])
-			if m > 0 {
-				log.Debugf("Wrote %d bytes to output stream", m)
-				if f, ok := response.(http.Flusher); ok {
-					f.Flush()
-				}
-			}
-			if errWrite != nil {
-				handleIOError(errWrite)
+	// TODO this won't work. to be able to capture from several sources in parallel,
+	// we need to decode individual packets here and only put whole packets into the client-side stream
+	// otherwise we would interleave bits of packet A with bits of packet B from another source
+	for _, index := range appIndices {
+		// go func(appIndex int) {
+		func(appIndex int) {
+			// App is visible? Great! Let's find out where it lives
+			appLocation, err := s.getAppLocation(appId, appIndex, appType, authToken)
+			if err != nil {
+				log.Errorf("could not get location of app %s index %d of type %s (%s)", appId, appIndex, appType, err)
+
 				return
 			}
-		}
-		if errRead != nil {
-			handleIOError(errRead)
-			return
-		}
+			// We found the app's location? Nice! Let's contact the pcap-Server on that VM
+			pcapServerURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&filter=%s", appLocation, s.config.PcapServerPort, appId, filter)
+			pcapStream, err := s.getPcapStream(pcapServerURL)
+			if err != nil {
+				log.Errorf("could not stream pcap from URL %s (%s)", pcapServerURL, err)
+				response.WriteHeader(http.StatusBadGateway)
+				return
+			}
+			defer pcapStream.Close()
+
+			// Stream the pcap back to the client
+			for {
+				buffer := make([]byte, 4096)
+				n, errRead := pcapStream.Read(buffer)
+				if n > 0 {
+					log.Debugf("Read %d bytes from input stream", n)
+					m, errWrite := response.Write(buffer[:n])
+					if m > 0 {
+						log.Debugf("Wrote %d bytes to output stream", m)
+						if f, ok := response.(http.Flusher); ok {
+							f.Flush()
+						}
+					}
+					if errWrite != nil {
+						handleIOError(errWrite)
+						return
+					}
+				}
+				if errRead != nil {
+					handleIOError(errRead)
+					return
+				}
+			}
+		}(index)
 	}
+
 }
 
-func (s *server) getPcapStream(pcapServerUrl string) (io.ReadCloser, error) {
+func (s *Server) getPcapStream(pcapServerURL string) (io.ReadCloser, error) {
 	//TODO possibly move this into a pcapServerClient type
-	log.Debugf("Getting pcap stream from %s", pcapServerUrl)
+	log.Debugf("Getting pcap stream from %s", pcapServerURL)
 	cert, err := tls.LoadX509KeyPair(s.config.PcapServerClientCert, s.config.PcapServerClientKey)
 	if err != nil {
 		return nil, err
@@ -175,45 +197,51 @@ func (s *server) getPcapStream(pcapServerUrl string) (io.ReadCloser, error) {
 				RootCAs:            caCertPool,
 				Certificates:       []tls.Certificate{cert},
 				ServerName:         s.config.PcapServerName,
-				InsecureSkipVerify: s.config.PcapServerClientSkipVerify,
+				InsecureSkipVerify: s.config.PcapServerClientSkipVerify, //nolint:gosec
 			},
 		},
 	}
 
-	r, err := client.Get(pcapServerUrl)
+	res, err := client.Get(pcapServerURL)
 
 	if err != nil {
 		return nil, err
 	}
+	if res.StatusCode != http.StatusOK {
+		return res.Body, fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
+	}
 
-	return r.Body, nil
+	return res.Body, nil
 }
 
-func (s *server) getAppLocation(appId string, appIndex int, appType string, authToken string) (string, error) {
-	//FIXME refactor with isAppVisibleByToken into common cf client that uses authToken
+func (s *Server) getAppLocation(appId string, appIndex int, appType string, authToken string) (string, error) {
+	// FIXME refactor with isAppVisibleByToken into common cf client that uses authToken
 	log.Debugf("Trying to get location of app %s with index %d of type %s", appId, appIndex, appType)
 	httpClient := http.DefaultClient
-	appUrl, err := url.Parse(fmt.Sprintf("%s/apps/%s/processes/%s/stats", s.ccBaseURL, appId, appType))
+	appURL, err := url.Parse(fmt.Sprintf("%s/apps/%s/processes/%s/stats", s.ccBaseURL, appId, appType))
 
 	if err != nil {
 		return "", err
 	}
 	req := &http.Request{
 		Method: "GET",
-		URL:    appUrl,
+		URL:    appURL,
 		Header: map[string][]string{
 			"Authorization": {authToken},
 		},
 	}
 
-	r, err := httpClient.Do(req)
+	res, err := httpClient.Do(req)
 
 	if err != nil {
 		return "", err
 	}
+	if res.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
+	}
 
 	var appStatsResponse *cfAppStatsResponse
-	data, err := ioutil.ReadAll(r.Body)
+	data, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return "", err
 	}
@@ -238,30 +266,32 @@ func (s *server) getAppLocation(appId string, appIndex int, appType string, auth
 	return "", fmt.Errorf("could not find process with index %d of type %s for app %s", appIndex, appType, appId)
 }
 
-func (s *server) isAppVisibleByToken(appId string, authToken string) (bool, error) {
+func (s *Server) isAppVisibleByToken(appId string, authToken string) (bool, error) {
 	log.Debugf("Checking at %s if app %s can be seen by token %s", s.ccBaseURL, appId, authToken)
 	httpClient := http.DefaultClient
-	appUrl, err := url.Parse(fmt.Sprintf("%s/apps/%s", s.ccBaseURL, appId))
+	appURL, err := url.Parse(fmt.Sprintf("%s/apps/%s", s.ccBaseURL, appId))
 
 	if err != nil {
 		return false, err
 	}
 	req := &http.Request{
 		Method: "GET",
-		URL:    appUrl,
+		URL:    appURL,
 		Header: map[string][]string{
 			"Authorization": {authToken},
 		},
 	}
 
-	r, err := httpClient.Do(req)
-
+	res, err := httpClient.Do(req)
 	if err != nil {
 		return false, err
 	}
+	if res.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
+	}
 
 	var appResponse *cfAppResponse
-	data, err := ioutil.ReadAll(r.Body)
+	data, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return false, err
 	}
@@ -277,7 +307,7 @@ func (s *server) isAppVisibleByToken(appId string, authToken string) (bool, erro
 	return true, nil
 }
 
-func (s *server) setup() {
+func (s *Server) setup() {
 	log.Info("Discovering CF API endpoints...")
 	response, err := http.Get(s.config.CfAPI)
 
@@ -300,25 +330,42 @@ func (s *server) setup() {
 	log.Info("Done.")
 }
 
-func (s *server) run() {
+func (s *Server) Run() {
 	log.Info("PcapServer-API starting...")
 	s.setup()
 
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/capture", s.handleCapture)
-	log.Info("Starting CLI file server at root " + s.config.CLIDownloadRoot)
+	log.Info("Starting CLI file Server at root " + s.config.CLIDownloadRoot)
 	mux.Handle("/cli/", http.StripPrefix("/cli/", http.FileServer(http.Dir(s.config.CLIDownloadRoot))))
 
-	server := &http.Server{
+	s.httpServer = &http.Server{
 		Addr:    s.config.Listen,
 		Handler: mux,
 	}
 
 	log.Infof("Listening on %s ...", s.config.Listen)
 	if s.config.EnableServerTLS {
-		log.Fatal(server.ListenAndServeTLS(s.config.Cert, s.config.Key))
+		log.Info(s.httpServer.ListenAndServeTLS(s.config.Cert, s.config.Key))
 	} else {
-		log.Fatal(server.ListenAndServe())
+		log.Info(s.httpServer.ListenAndServe())
 	}
+}
+
+func (s *Server) Stop() {
+	log.Info("PcapServer-API stopping...")
+	_ = s.httpServer.Close()
+}
+
+func NewServer(c *config.Config) (*Server, error) {
+	if c == nil {
+		return nil, fmt.Errorf("config required")
+	}
+	server := &Server{
+		config: c,
+	}
+
+	return server, nil
 }
