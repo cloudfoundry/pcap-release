@@ -136,11 +136,11 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 	for _, index := range appIndices {
 		go func(appIndex int, packets chan gopacket.Packet, packetsWg *sync.WaitGroup) {
 			packetsWg.Add(1)
+			defer packetsWg.Done()
 			// App is visible? Great! Let's find out where it lives
 			appLocation, err := s.getAppLocation(appId, appIndex, appType, authToken)
 			if err != nil {
 				log.Errorf("could not get location of app %s index %d of type %s (%s)", appId, appIndex, appType, err)
-				packetsWg.Done()
 				return
 			}
 			// We found the app's location? Nice! Let's contact the pcap-Server on that VM (index only needed for testing)
@@ -150,7 +150,6 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 			if err != nil {
 				log.Errorf("could not get pcap stream from URL %s (%s)", pcapServerURL, err)
 				response.WriteHeader(http.StatusBadGateway)
-				packetsWg.Done()
 				return
 			}
 
@@ -159,14 +158,12 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 			if err != nil {
 				log.Errorf("could not create pcap reader from pcap stream %s (%s)", pcapStream, err)
 				response.WriteHeader(http.StatusBadGateway)
-				packetsWg.Done()
 				return
 			}
 			for {
 				data, capInfo, err := pcapReader.ReadPacketData()
 				if err != nil {
 					handleIOError(err)
-					packetsWg.Done()
 					return
 				}
 				log.Debugf("Read packet: Time %s Length %d Captured %d", capInfo.Timestamp, capInfo.Length, capInfo.CaptureLength)
