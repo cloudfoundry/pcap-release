@@ -16,8 +16,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
-	"time"
 )
 
 type Server struct {
@@ -129,14 +127,20 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 		}
 	}
 
-	packets := make(chan gopacket.Packet, 1000)
-	packetsDone := make(chan bool, 1)
-	packetsWg := sync.WaitGroup{}
+	type packetMessage struct {
+		packet gopacket.Packet
+		done   bool
+	}
+	packets := make(chan packetMessage, 1000)
 
 	for _, index := range appIndices {
-		go func(appIndex int, packets chan gopacket.Packet, packetsWg *sync.WaitGroup) {
-			packetsWg.Add(1)
-			defer packetsWg.Done()
+		go func(appIndex int, packets chan packetMessage) {
+			defer func() {
+				packets <- packetMessage{
+					packet: nil,
+					done:   true,
+				}
+			}()
 			// App is visible? Great! Let's find out where it lives
 			appLocation, err := s.getAppLocation(appId, appIndex, appType, authToken)
 			if err != nil {
@@ -169,17 +173,13 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 				log.Debugf("Read packet: Time %s Length %d Captured %d", capInfo.Timestamp, capInfo.Length, capInfo.CaptureLength)
 				packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.Default)
 				packet.Metadata().CaptureInfo = capInfo
-				packets <- packet
+				packets <- packetMessage{
+					packet: packet,
+					done:   false,
+				}
 			}
-		}(index, packets, &packetsWg)
+		}(index, packets)
 	}
-
-	// Wait for all app instances to finish capturing
-	go func() {
-		time.Sleep(1 * time.Second)
-		packetsWg.Wait()
-		packetsDone <- true
-	}()
 
 	// Collect all packets from multiple input streams and merge them into one output stream
 	w := pcapgo.NewWriter(response)
@@ -190,21 +190,25 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 	}
 
 	bytesTotal := 24 // pcap header is 24 bytes
-	for {
-		select {
-		case packet := <-packets:
-			err = w.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
+	done := 0
+	for msg := range packets {
+		if msg.packet != nil {
+			err = w.WritePacket(msg.packet.Metadata().CaptureInfo, msg.packet.Data())
 			if err != nil {
 				handleIOError(err)
 				return
 			}
-			bytesTotal += packet.Metadata().Length
+			bytesTotal += msg.packet.Metadata().Length
 			if f, ok := response.(http.Flusher); ok {
 				f.Flush()
 			}
-		case <-packetsDone:
-			log.Infof("Done capturing. Wrote %d bytes from %s to %s", bytesTotal, request.URL, request.RemoteAddr)
-			return
+		}
+		if msg.done {
+			done++
+			if done == len(appIndices) {
+				log.Infof("Done capturing. Wrote %d bytes from %s to %s", bytesTotal, request.URL, request.RemoteAddr)
+				return
+			}
 		}
 	}
 }
