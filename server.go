@@ -33,7 +33,7 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 
 	appId := request.URL.Query().Get("appid")
 	filter := request.URL.Query().Get("filter")
-	device := request.URL.Query().Get("interface")
+	device := request.URL.Query().Get("device")
 
 	if appId == "" {
 		response.WriteHeader(http.StatusBadRequest)
