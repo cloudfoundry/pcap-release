@@ -42,5 +42,8 @@ properties:
   pcap-server-api.client_skip_verify:
     description: "skip server verification for connection to pcap-server"
     default: false
+  pcap-server-api.cli_download_root:
+    description: "Root directory of CLI downloads"
+    default: "cli/build"
 
 

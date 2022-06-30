@@ -30,7 +30,7 @@ instance_groups:
   - name: pcap-server-api
     azs:
       - z1
-    instances: 1
+    instances: 2
     vm_type: ((pcap_server_api.vm_type))
     stemcell: default
     networks: ((pcap_server_api.networks))
@@ -84,7 +84,7 @@ releases:
     url: https://bosh.io/d/github.com/cloudfoundry/bpm-release?v=1.1.8
     sha1: c956394fce7e74f741e4ae8c256b480904ad5942
   - name: pcap-server
-    version: 0+dev.2
+    version: 0+dev.4
     url: https://github.com/domdom82/pcap-server-release/releases/download/v0.0.1/pcap-server-0.0.1.tgz
     sha1: a1655c1992b911fef3ad0b46c5abb8a0217ef0a2
   - name: bosh-dns-aliases
