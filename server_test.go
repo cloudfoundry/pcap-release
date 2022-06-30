@@ -68,7 +68,7 @@ var _ = Describe("Single Target Capture Tests", func() {
 	var server *Server
 	var err error
 	pcapResponses := map[string]string{
-		"/capture?appid=1234&index=0&filter=": "test/sample-1.pcap",
+		"/capture?appid=1234&index=0&device=eth0&filter=": "test/sample-1.pcap",
 	}
 	pcapServer := test.NewMockPcapServer(pcapResponses)
 	responses := map[string]string{
@@ -122,7 +122,7 @@ var _ = Describe("Single Target Capture Tests", func() {
 			Expect(err).To(BeNil())
 			Expect(location).To(Equal(pcapServer.Host))
 			pcapStream, err := server.getPcapStream(
-				fmt.Sprintf("https://%s:%s/capture?appid=1234&index=0&filter=", location, pcapServer.Port))
+				fmt.Sprintf("https://%s:%s/capture?appid=1234&index=0&device=eth0&filter=", location, pcapServer.Port))
 			Expect(err).To(BeNil())
 			Expect(pcapStream).NotTo(BeNil())
 		})
@@ -177,8 +177,8 @@ var _ = Describe("Multiple Target Capture Tests", func() {
 	var server *Server
 	var err error
 	pcapResponses := map[string]string{
-		"/capture?appid=1234&index=0&filter=": "test/sample-1.pcap",
-		"/capture?appid=1234&index=1&filter=": "test/sample-2.pcap",
+		"/capture?appid=1234&index=0&device=eth0&filter=": "test/sample-1.pcap",
+		"/capture?appid=1234&index=1&device=eth0&filter=": "test/sample-2.pcap",
 	}
 	pcapServer := test.NewMockPcapServer(pcapResponses)
 	responses := map[string]string{

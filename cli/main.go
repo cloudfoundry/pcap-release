@@ -30,6 +30,7 @@ func (cli *PcapServerCLI) Run(cliConnection plugin.CliConnection, args []string)
 	var opts struct {
 		File       string     `short:"o" long:"file" description:"The output file. Written in binary pcap format." required:"true"`
 		Filter     string     `short:"f" long:"filter" description:"Allows to provide a filter expression in pcap filter format." required:"false"`
+		Device     string     `short:"d" long:"device" description:"Specifies the network device to listen on." default:"eth0" required:"false"`
 		Index      string     `short:"i" long:"index" description:"Specifies the instance index of the app to capture."  default:"0" required:"false"`
 		Type       string     `short:"t" long:"type" description:"Specifies the type of process to capture for the app." default:"web" required:"false"`
 		Positional positional `positional-args:"true" required:"true"`
@@ -76,7 +77,7 @@ func (cli *PcapServerCLI) Run(cliConnection plugin.CliConnection, args []string)
 	tp.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //TODO remove before putting into production
 	httpClient := &http.Client{Transport: tp}
 
-	reqUrl, err := url.Parse(fmt.Sprintf("%s/capture?appid=%s&index=%s&type=%s&filter=%s", pcapAPI, app.Guid, opts.Index, opts.Type, opts.Filter))
+	reqUrl, err := url.Parse(fmt.Sprintf("%s/capture?appid=%s&index=%s&type=%s&device=%s&filter=%s", pcapAPI, app.Guid, opts.Index, opts.Type, opts.Device, opts.Filter))
 
 	if err != nil {
 		fmt.Printf("Could not parse URL: %s\n", err)
@@ -162,12 +163,13 @@ func (cli *PcapServerCLI) GetMetadata() plugin.PluginMetadata {
 				Alias:    "tcpdump",
 				HelpText: "Pcap captures network traffic of your apps. To obtain more information use --help",
 				UsageDetails: plugin.Usage{
-					Usage: "pcap - stream pcap data from your app to disk\n   cf pcap <app> --file <file.pcap> [--filter <expression>] [--index <index>] [--type <type>]",
+					Usage: "pcap - stream pcap data from your app to disk\n   cf pcap <app> --file <file.pcap> [--filter <expression>] [--index <index>] [--type <type>] [--device <device>]",
 					Options: map[string]string{
 						"file":   "The output file. Written in binary pcap format.",
 						"filter": "Allows to provide a filter expression in pcap filter format. See https://linux.die.net/man/7/pcap-filter",
 						"index":  "Specifies the instance index of the app to capture. Default: 0",
 						"type":   "Specifies the type of process to capture for the app. Default: web",
+						"device": "Specifies the network device to listen on. Default: eth0",
 					},
 				},
 			},

@@ -13,3 +13,4 @@ linters:
     - tagliatelle
     - exhaustivestruct
     - gci
+    - lll
