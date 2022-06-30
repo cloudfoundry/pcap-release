@@ -33,7 +33,7 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 
 	appId := request.URL.Query().Get("appid")
 	filter := request.URL.Query().Get("filter")
-	device := "eth0"
+	device := request.URL.Query().Get("interface")
 
 	if appId == "" {
 		response.WriteHeader(http.StatusBadRequest)
@@ -41,8 +41,13 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
+	if device == "" {
+		device = "eth0"
+	}
+
 	log.Debugf("Appid = %s", appId)
 	log.Debugf("Filter = %s", filter)
+	log.Debugf("Device = %s", device)
 
 	// CF-SPECIFIC PARTS BEGIN
 	type ContainerConfig struct {
