@@ -31,12 +31,12 @@ func (cli *PcapServerCLI) Run(cliConnection plugin.CliConnection, args []string)
 		File       string     `short:"o" long:"file" description:"The output file. Written in binary pcap format." required:"true"`
 		Filter     string     `short:"f" long:"filter" description:"Allows to provide a filter expression in pcap filter format." required:"false"`
 		Device     string     `short:"d" long:"device" description:"Specifies the network device to listen on." default:"eth0" required:"false"`
-		Index      string     `short:"i" long:"index" description:"Specifies the instance index of the app to capture."  default:"0" required:"false"`
+		Instance   string     `short:"i" long:"instance" description:"Specifies the instances of the app to capture."  default:"all" required:"false"`
 		Type       string     `short:"t" long:"type" description:"Specifies the type of process to capture for the app." default:"web" required:"false"`
 		Positional positional `positional-args:"true" required:"true"`
 	}
 
-	args, err := flags.ParseArgs(&opts, args[1:])
+	_, err := flags.ParseArgs(&opts, args[1:])
 
 	if err != nil {
 		return
@@ -49,21 +49,21 @@ func (cli *PcapServerCLI) Run(cliConnection plugin.CliConnection, args []string)
 		return
 	}
 
-	ccApi, err := cliConnection.ApiEndpoint()
+	ccAPI, err := cliConnection.ApiEndpoint()
 
 	if err != nil {
 		fmt.Printf("Could not get CF API endpoint: %s\n", err)
 		return
 	}
 
-	pcapAPI := strings.Replace(ccApi, "api.", "pcap.", 1)
+	pcapAPI := strings.Replace(ccAPI, "api.", "pcap.", 1)
 
-	//DEBUG
+	// DEBUG
 	pcapAPIEnv, present := os.LookupEnv("PCAP_API")
 	if present {
 		pcapAPI = pcapAPIEnv
 	}
-	//DEBUG END
+	// DEBUG END
 
 	appName := opts.Positional.AppName
 	app, err := cliConnection.GetApp(appName)
@@ -73,11 +73,27 @@ func (cli *PcapServerCLI) Run(cliConnection plugin.CliConnection, args []string)
 		return
 	}
 
+	var indices []string
+
+	if opts.Instance == "all" {
+		// special case: all instances
+		for index := 0; index < app.InstanceCount; index++ {
+			indices = append(indices, fmt.Sprintf("%d", index))
+		}
+	} else {
+		indices = strings.Split(opts.Instance, ",")
+	}
+
 	tp := http.DefaultTransport.(*http.Transport).Clone()
-	tp.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //TODO remove before putting into production
+	tp.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // TODO remove before putting into production
 	httpClient := &http.Client{Transport: tp}
 
-	reqUrl, err := url.Parse(fmt.Sprintf("%s/capture?appid=%s&index=%s&type=%s&device=%s&filter=%s", pcapAPI, app.Guid, opts.Index, opts.Type, opts.Device, opts.Filter))
+	urlStr := fmt.Sprintf("%s/capture?appid=%s&type=%s&device=%s&filter=%s", pcapAPI, app.Guid, opts.Type, opts.Device, opts.Filter)
+	for _, index := range indices {
+		urlStr = fmt.Sprintf("%s&index=%s", urlStr, index)
+	}
+
+	reqURL, err := url.Parse(urlStr)
 
 	if err != nil {
 		fmt.Printf("Could not parse URL: %s\n", err)
@@ -93,23 +109,23 @@ func (cli *PcapServerCLI) Run(cliConnection plugin.CliConnection, args []string)
 
 	req := &http.Request{
 		Method: "GET",
-		URL:    reqUrl,
+		URL:    reqURL,
 		Header: map[string][]string{
 			"Authorization": {authToken},
 		},
 	}
-	fmt.Printf("Capturing traffic of app %s (%s) into file %s ...\n", appName, opts.Index, opts.File)
-	r, err := httpClient.Do(req)
+	fmt.Printf("Capturing traffic of app %s %s into file %s ...\n", appName, indices, opts.File)
+	resp, err := httpClient.Do(req)
 
 	if err != nil {
 		fmt.Printf("Could not receive pcap stream: %s\n", err)
 		return
 	}
-	defer r.Body.Close()
+	defer resp.Body.Close()
 
-	if r.StatusCode != 200 {
-		fmt.Printf("Unexpected status code from pcap api server: %d\n", r.StatusCode)
-		msg, _ := io.ReadAll(r.Body)
+	if resp.StatusCode != 200 {
+		fmt.Printf("Unexpected status code from pcap api server: %d\n", resp.StatusCode)
+		msg, _ := io.ReadAll(resp.Body)
 		fmt.Printf("Details: %s\n", msg)
 		return
 	}
@@ -129,7 +145,7 @@ func (cli *PcapServerCLI) Run(cliConnection plugin.CliConnection, args []string)
 	updateProgress(0)
 	for {
 		buffer := make([]byte, 4096)
-		n, err := r.Body.Read(buffer)
+		n, err := resp.Body.Read(buffer)
 		updateProgress(n)
 		if n > 0 {
 			file.Write(buffer[:n])
@@ -163,13 +179,13 @@ func (cli *PcapServerCLI) GetMetadata() plugin.PluginMetadata {
 				Alias:    "tcpdump",
 				HelpText: "Pcap captures network traffic of your apps. To obtain more information use --help",
 				UsageDetails: plugin.Usage{
-					Usage: "pcap - stream pcap data from your app to disk\n   cf pcap <app> --file <file.pcap> [--filter <expression>] [--index <index>] [--type <type>] [--device <device>]",
+					Usage: "pcap - stream pcap data from your app to disk\n   cf pcap <app> --file <file.pcap> [--filter <expression>] [--instance <index>[,index]...] [--type <type>] [--device <device>]",
 					Options: map[string]string{
-						"file":   "The output file. Written in binary pcap format.",
-						"filter": "Allows to provide a filter expression in pcap filter format. See https://linux.die.net/man/7/pcap-filter",
-						"index":  "Specifies the instance index of the app to capture. Default: 0",
-						"type":   "Specifies the type of process to capture for the app. Default: web",
-						"device": "Specifies the network device to listen on. Default: eth0",
+						"file":     "The output file. Written in binary pcap format.",
+						"filter":   "Allows to provide a filter expression in pcap filter format. See https://linux.die.net/man/7/pcap-filter",
+						"instance": "Specifies the instances of the app to capture. Possible values: n | 0,1,..n | all Default: all",
+						"type":     "Specifies the type of process to capture for the app. Default: web",
+						"device":   "Specifies the network device to listen on. Default: eth0",
 					},
 				},
 			},

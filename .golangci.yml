@@ -14,3 +14,5 @@ linters:
     - exhaustivestruct
     - gci
     - lll
+    - nlreturn
+    - exhaustruct
