@@ -44,6 +44,6 @@ properties:
     default: false
   pcap-server-api.cli_download_root:
     description: "Root directory of CLI downloads"
-    default: "cli/build"
+    default: "/var/vcap/packages/pcap-server-api/bin/cli/build/"
 
 
