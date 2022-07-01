@@ -34,6 +34,7 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	appId := request.URL.Query().Get("appid")
 	filter := request.URL.Query().Get("filter")
 	device := request.URL.Query().Get("device")
+	snaplen := uint32(65535)
 
 	if appId == "" {
 		response.WriteHeader(http.StatusBadRequest)
@@ -143,17 +144,9 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	defer netns.Set(origns)
 
 	// Start capturing packets
-	log.Debugf("Starting capture of eth0 in netns %s of pid %d", newns, pid)
-	w := pcapgo.NewWriter(response)
-	err = w.WriteFileHeader(65535, layers.LinkTypeEthernet)
-	if err != nil {
-		response.WriteHeader(http.StatusInternalServerError)
-		log.Errorln(err)
-		return
-	}
-	flush(response)
+	log.Debugf("Starting capture of device %s in netns %s of pid %d", device, newns, pid)
 
-	if handle, err := pcap.OpenLive(device, 65535, true, pcap.BlockForever); err != nil {
+	if handle, err := pcap.OpenLive(device, int32(snaplen), true, pcap.BlockForever); err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		log.Errorln(err)
 		return
@@ -162,6 +155,15 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 		log.Errorln(err)
 		return
 	} else {
+		w := pcapgo.NewWriter(response)
+		err = w.WriteFileHeader(snaplen, layers.LinkTypeEthernet)
+		if err != nil {
+			response.WriteHeader(http.StatusInternalServerError)
+			log.Errorln(err)
+			return
+		}
+		flush(response)
+
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 		for packet := range packetSource.Packets() {
 			log.Debugf("Pid: %d Packet: %s\n", pid, packet.String())
