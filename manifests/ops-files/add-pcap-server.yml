@@ -3,7 +3,7 @@
   path: /releases/-
   value:
     name: pcap-server
-    version: 0+dev.4
+    version: 0+dev.6
     url: https://github.com/domdom82/pcap-server-release/releases/download/v0.0.1/pcap-server-0.0.1.tgz
     sha1: a1655c1992b911fef3ad0b46c5abb8a0217ef0a2
 
