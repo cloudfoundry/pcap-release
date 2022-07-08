@@ -48,3 +48,9 @@ cp manifests/vars-template.yml manifests/vars.yml
 vim manifests/vars.yml (adjust as needed)
 bosh -d pcap-server deploy -l manifests/vars.yml manifests/pcap-server.yml
 ```
+### Step 3 - Install CF CLI plugin
+```
+wget https://pcap.cf.cfapp.com/cli/pcap-server-cli-[linux|mac]-amd64 (adjust URL as needed) -O pcap-cli
+cf install-plugin pcap-cli
+cf pcap ...
+```
