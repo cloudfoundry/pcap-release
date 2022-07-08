@@ -44,5 +44,7 @@ This assumes your BOSH deployment name of cf-deployment is called `cf`
 
 ### Step 2 - Deploy pcap-server-api
 ```
-tbd
+cp manifests/vars-template.yml manifests/vars.yml
+vim manifests/vars.yml (adjust as needed)
+bosh -d pcap-server deploy -l manifests/vars.yml manifests/pcap-server.yml
 ```
