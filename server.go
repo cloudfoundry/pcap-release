@@ -6,7 +6,9 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/containerd/go-runc"
+	"github.com/domdom82/pcap-server/config"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -19,11 +21,12 @@ import (
 	"runtime"
 )
 
-type server struct {
-	config *Config
+type Server struct {
+	httpServer *http.Server
+	config     *config.Config
 }
 
-func (s *server) handleCapture(response http.ResponseWriter, request *http.Request) {
+func (s *Server) handleCaptureCF(response http.ResponseWriter, request *http.Request) {
 	log.Debugf("Accepted connection from %s", request.RemoteAddr)
 
 	if request.Method != http.MethodGet {
@@ -144,8 +147,35 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 	defer netns.Set(origns)
 
 	// Start capturing packets
-	log.Debugf("Starting capture of device %s in netns %s of pid %d", device, newns, pid)
+	log.Debugf("Starting capture of device %s in netns %s of pid %d using filter '%s'", device, newns, pid, filter)
+	doCapture(device, filter, snaplen, response)
+}
 
+func (s *Server) handleCaptureBOSH(response http.ResponseWriter, request *http.Request) {
+	log.Debugf("Accepted connection from %s", request.RemoteAddr)
+
+	if request.Method != http.MethodGet {
+		response.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	filter := request.URL.Query().Get("filter")
+	device := request.URL.Query().Get("device")
+	snaplen := uint32(65535)
+
+	if device == "" {
+		device = "eth0"
+	}
+
+	log.Debugf("Filter = %s", filter)
+	log.Debugf("Device = %s", device)
+
+	// Start capturing packets
+	log.Debugf("Starting capture of device %s using filter '%s'", device, filter)
+	doCapture(device, filter, snaplen, response)
+}
+
+func doCapture(device string, filter string, snaplen uint32, response http.ResponseWriter) {
 	if handle, err := pcap.OpenLive(device, int32(snaplen), true, pcap.BlockForever); err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		log.Errorln(err)
@@ -166,7 +196,7 @@ func (s *server) handleCapture(response http.ResponseWriter, request *http.Reque
 
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 		for packet := range packetSource.Packets() {
-			log.Debugf("Pid: %d Packet: %s\n", pid, packet.String())
+			log.Debugf("Packet: %s\n", packet.String())
 			err = w.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
 			if err != nil {
 				if errors.Is(err, io.EOF) {
@@ -188,28 +218,33 @@ func flush(writer io.Writer) {
 	}
 }
 
-func (s *server) run() {
+func (s *Server) Run() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/capture", s.handleCapture)
+	mux.HandleFunc("/capture", s.handleCaptureCF) // backwards compatibility
+	mux.HandleFunc("/capture/cf", s.handleCaptureCF)
+	mux.HandleFunc("/capture/bosh", s.handleCaptureBOSH)
 
-	// Create a CA certificate pool and add cert.pem to it
-	caCert, err := ioutil.ReadFile(s.config.CaCert)
-	if err != nil {
-		log.Fatal(err)
-	}
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
+	var tlsConfig *tls.Config
+	if s.config.EnableServerTLS {
+		// Create a CA certificate pool and add cert.pem to it
+		caCert, err := ioutil.ReadFile(s.config.CaCert)
+		if err != nil {
+			log.Fatal(err)
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
 
-	// Create the TLS Config with the CA pool and enable Client certificate validation
-	tlsConfig := &tls.Config{
-		ClientCAs:  caCertPool,
-		ClientAuth: tls.RequireAndVerifyClientCert,
+		// Create the TLS Config with the CA pool and enable Client certificate validation
+		tlsConfig = &tls.Config{
+			ClientCAs:  caCertPool,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+		}
 	}
 
 	// Create a Server instance to listen on port 8443 with the TLS config
-	server := &http.Server{
+	s.httpServer = &http.Server{
 		Addr:      s.config.Listen,
 		TLSConfig: tlsConfig,
 		Handler:   mux,
@@ -217,6 +252,21 @@ func (s *server) run() {
 
 	// Listen to HTTPS connections with the server certificate and wait
 	log.Infof("Listening on %s ...", s.config.Listen)
-	log.Fatal(server.ListenAndServeTLS(s.config.Cert, s.config.Key))
+	if s.config.EnableServerTLS {
+		log.Info(s.httpServer.ListenAndServeTLS(s.config.Cert, s.config.Key))
+	} else {
+		log.Info(s.httpServer.ListenAndServe())
+	}
 
+}
+
+func NewServer(c *config.Config) (*Server, error) {
+	if c == nil {
+		return nil, fmt.Errorf("config required")
+	}
+	server := &Server{
+		config: c,
+	}
+
+	return server, nil
 }
