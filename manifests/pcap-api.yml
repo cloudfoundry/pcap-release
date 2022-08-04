@@ -38,7 +38,7 @@ instance_groups:
       - name: pcap-api
         release: pcap
         properties:
-          pcap-server-api:
+          pcap-api:
             enable_server_tls: false
             client_skip_verify: true
             cf_api: ((pcap_api.cf_api))
@@ -54,7 +54,7 @@ instance_groups:
         properties:
           route_registrar:
             routes:
-              - name: pcap-server-public-endpoint
+              - name: pcap-api-public-endpoint
                 registration_interval: 20s
                 port: 8080
                 uris:

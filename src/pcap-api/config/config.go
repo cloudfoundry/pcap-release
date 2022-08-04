@@ -7,35 +7,35 @@ import (
 )
 
 type Config struct { //nolint:maligned
-	LogLevel                   string `yaml:"log_level"`
-	Listen                     string `yaml:"listen"`
-	EnableServerTLS            bool   `yaml:"enable_server_tls"`
-	Cert                       string `yaml:"cert"`
-	Key                        string `yaml:"key"`
-	CfAPI                      string `yaml:"cf_api"`
-	PcapServerPort             string `yaml:"pcap_server_port"`
-	PcapServerClientCert       string `yaml:"pcap_server_client_cert"`
-	PcapServerClientKey        string `yaml:"pcap_server_client_key"`
-	PcapServerCaCert           string `yaml:"pcap_server_ca_cert"`
-	PcapServerName             string `yaml:"pcap_server_name"`
-	PcapServerClientSkipVerify bool   `yaml:"pcap_server_client_skip_verify"`
-	CLIDownloadRoot            string `yaml:"cli_download_root"`
+	LogLevel           string `yaml:"log_level"`
+	Listen             string `yaml:"listen"`
+	EnableServerTLS    bool   `yaml:"enable_server_tls"`
+	Cert               string `yaml:"cert"`
+	Key                string `yaml:"key"`
+	CfAPI              string `yaml:"cf_api"`
+	AgentPort          string `yaml:"agent_port"`
+	ClientCert         string `yaml:"client_cert"`
+	ClientCertKey      string `yaml:"client_cert_key"`
+	AgentCa            string `yaml:"agent_ca"`
+	AgentCommonName    string `yaml:"agent_common_name"`
+	AgentTlsSkipVerify bool   `yaml:"agent_tls_skip_verify"`
+	CLIDownloadRoot    string `yaml:"cli_download_root"`
 }
 
 var DefaultConfig = Config{
-	LogLevel:                   "debug",
-	Listen:                     ":8080",
-	EnableServerTLS:            false,
-	Cert:                       "test/server.crt",
-	Key:                        "test/server.key",
-	CfAPI:                      "https://api.cf.aws-cfn02.aws.cfi.sapcloud.io",
-	PcapServerPort:             "9494",
-	PcapServerClientCert:       "test/client.crt",
-	PcapServerClientKey:        "test/client.key",
-	PcapServerCaCert:           "test/cacert.pem",
-	PcapServerName:             "",
-	PcapServerClientSkipVerify: true,
-	CLIDownloadRoot:            "cli/build",
+	LogLevel:           "debug",
+	Listen:             ":8080",
+	EnableServerTLS:    false,
+	Cert:               "test/server.crt",
+	Key:                "test/server.key",
+	CfAPI:              "https://api.cf.aws-cfn02.aws.cfi.sapcloud.io",
+	AgentPort:          "9494",
+	ClientCert:         "test/client.crt",
+	ClientCertKey:      "test/client.key",
+	AgentCa:            "test/cacert.pem",
+	AgentCommonName:    "",
+	AgentTlsSkipVerify: true,
+	CLIDownloadRoot:    "cli/build",
 }
 
 func NewConfigFromFile(filename string) (*Config, error) {
@@ -58,6 +58,6 @@ func NewConfigFromFile(filename string) (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	//TODO implement
+	// TODO implement
 	return nil
 }

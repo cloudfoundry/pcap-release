@@ -7,6 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"runtime"
+
 	"github.com/containerd/go-runc"
 	"github.com/domdom82/pcap-server/config"
 	"github.com/google/gopacket"
@@ -15,10 +20,6 @@ import (
 	"github.com/google/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netns"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"runtime"
 )
 
 type Server struct {
@@ -41,7 +42,7 @@ func (s *Server) handleCaptureCF(response http.ResponseWriter, request *http.Req
 
 	if appId == "" {
 		response.WriteHeader(http.StatusBadRequest)
-		//TODO: add some nice error message
+		// TODO: add some nice error message
 		return
 	}
 

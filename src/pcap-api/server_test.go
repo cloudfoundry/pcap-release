@@ -2,16 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/domdom82/pcap-server-api/config"
-	"github.com/domdom82/pcap-server-api/test"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/domdom82/pcap-server-api/config"
+	"github.com/domdom82/pcap-server-api/test"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 func TestPcapServerApi(t *testing.T) {
@@ -70,7 +71,7 @@ var _ = Describe("Single Target Capture Tests", func() {
 	pcapResponses := map[string]string{
 		"/capture?appid=1234&index=0&device=eth0&filter=": "test/sample-1.pcap",
 	}
-	pcapServer := test.NewMockPcapServer(pcapResponses)
+	pcapServer := test.NewMockPcapAgent(pcapResponses)
 	responses := map[string]string{
 		"/v3/apps/1234": "{\n\"guid\": \"1234\",\n  \"name\": \"my-app\",\n  \"state\": \"STARTED\" \n}",
 		"/v3/apps/1234/processes/web/stats": fmt.Sprintf("{\n\"resources\": [\n {\n \"type\": \"web\",\n \"index\": 0,"+
@@ -80,7 +81,7 @@ var _ = Describe("Single Target Capture Tests", func() {
 	cfAPI := test.MockCfAPI(responses)
 	cfg := config.DefaultConfig
 	cfg.CfAPI = cfAPI.URL
-	cfg.PcapServerPort = pcapServer.Port
+	cfg.AgentPort = pcapServer.Port
 
 	BeforeEach(func() {
 		server, err = NewServer(&cfg)
@@ -180,7 +181,7 @@ var _ = Describe("Multiple Target Capture Tests", func() {
 		"/capture?appid=1234&index=0&device=eth0&filter=": "test/sample-1.pcap",
 		"/capture?appid=1234&index=1&device=eth0&filter=": "test/sample-2.pcap",
 	}
-	pcapServer := test.NewMockPcapServer(pcapResponses)
+	pcapServer := test.NewMockPcapAgent(pcapResponses)
 	responses := map[string]string{
 		"/v3/apps/1234": "{\n\"guid\": \"1234\",\n  \"name\": \"my-app\",\n  \"state\": \"STARTED\" \n}",
 		"/v3/apps/1234/processes/web/stats": fmt.Sprintf(
@@ -197,7 +198,7 @@ var _ = Describe("Multiple Target Capture Tests", func() {
 	cfAPI := test.MockCfAPI(responses)
 	cfg := config.DefaultConfig
 	cfg.CfAPI = cfAPI.URL
-	cfg.PcapServerPort = pcapServer.Port
+	cfg.AgentPort = pcapServer.Port
 
 	BeforeEach(func() {
 		server, err = NewServer(&cfg)
@@ -236,7 +237,7 @@ var _ = Describe("Multiple Target Capture Tests", func() {
 			Expect(err).To(BeNil())
 			infoDst, err := os.Stat(tempFile.Name())
 			Expect(err).To(BeNil())
-			//have to subtract 1 pcap file header as it is written only once but read twice
+			// have to subtract 1 pcap file header as it is written only once but read twice
 			Expect(infoDst.Size()).To(Equal(infoSrc1.Size() + infoSrc2.Size() - 24))
 		})
 	})

@@ -6,16 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/domdom82/pcap-server-api/config"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcapgo"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/domdom82/pcap-server-api/config"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcapgo"
+	log "github.com/sirupsen/logrus"
 )
 
 type Server struct {
@@ -153,11 +154,11 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 				return
 			}
 			// We found the app's location? Nice! Let's contact the pcap-Server on that VM (index only needed for testing)
-			pcapServerURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&index=%d&device=%s&filter=%s", appLocation, s.config.PcapServerPort, appId, appIndex, device, filter)
-			pcapStream, err := s.getPcapStream(pcapServerURL)
+			agentURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&index=%d&device=%s&filter=%s", appLocation, s.config.AgentPort, appId, appIndex, device, filter)
+			pcapStream, err := s.getPcapStream(agentURL)
 			defer pcapStream.Close()
 			if err != nil {
-				log.Errorf("could not get pcap stream from URL %s (%s)", pcapServerURL, err)
+				log.Errorf("could not get pcap stream from URL %s (%s)", agentURL, err)
 				response.WriteHeader(http.StatusBadGateway)
 				return
 			}
@@ -221,12 +222,12 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 func (s *Server) getPcapStream(pcapServerURL string) (io.ReadCloser, error) {
 	// TODO possibly move this into a pcapServerClient type
 	log.Debugf("Getting pcap stream from %s", pcapServerURL)
-	cert, err := tls.LoadX509KeyPair(s.config.PcapServerClientCert, s.config.PcapServerClientKey)
+	cert, err := tls.LoadX509KeyPair(s.config.ClientCert, s.config.ClientCertKey)
 	if err != nil {
 		return nil, err
 	}
 
-	caCert, err := ioutil.ReadFile(s.config.PcapServerCaCert)
+	caCert, err := ioutil.ReadFile(s.config.AgentCa)
 	if err != nil {
 		return nil, err
 	}
@@ -238,8 +239,8 @@ func (s *Server) getPcapStream(pcapServerURL string) (io.ReadCloser, error) {
 			TLSClientConfig: &tls.Config{
 				RootCAs:            caCertPool,
 				Certificates:       []tls.Certificate{cert},
-				ServerName:         s.config.PcapServerName,
-				InsecureSkipVerify: s.config.PcapServerClientSkipVerify, //nolint:gosec
+				ServerName:         s.config.AgentCommonName,
+				InsecureSkipVerify: s.config.AgentTlsSkipVerify, //nolint:gosec
 			},
 		},
 	}
@@ -373,7 +374,7 @@ func (s *Server) setup() {
 }
 
 func (s *Server) Run() {
-	log.Info("PcapServer-API starting...")
+	log.Info("Pcap-API starting...")
 	s.setup()
 
 	mux := http.NewServeMux()
@@ -397,7 +398,7 @@ func (s *Server) Run() {
 }
 
 func (s *Server) Stop() {
-	log.Info("PcapServer-API stopping...")
+	log.Info("Pcap-API stopping...")
 	_ = s.httpServer.Close()
 }
 

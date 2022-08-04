@@ -27,19 +27,19 @@ properties:
     description: "Key for the TLS certificate"
   pcap-api.cf_api:
     description: "Endpoint of the cf API"
-  pcap-api.pcap_agent_port:
+  pcap-api.agent_port:
     description: "Port of the pcap-agent that runs on the diego cells"
     default: "9494"
   pcap-api.client_cert:
     description: "mTLS client certificate to talk to the pcap-agent"
-  pcap-api.client_key:
+  pcap-api.client_cert_key:
     description: "Key for mTLS client certificate"
-  pcap-api.client_ca_cert:
+  pcap-api.agent_ca:
     description: "CA of the pcap-agent cert"
-  pcap-api.client_server_name:
+  pcap-api.agent_common_name:
     description: "CN of the pcap-agent"
     default: "pcap-agent.service.cf.internal"
-  pcap-api.client_skip_verify:
+  pcap-api.agent_tls_skip_verify:
     description: "skip server verification for connection to pcap-agent"
     default: false
   pcap-api.cli_download_root:
