@@ -24,6 +24,6 @@ ln -s /usr/lib/x86_64-linux-gnu/libpcap.so.1.8.1 /usr/lib/x86_64-linux-gnu/libpc
 
 export CGO_CFLAGS="-I$BOSH_COMPILE_TARGET/libpcap"
 
-pushd pcap-server
-  $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/pcap-server
+pushd pcap-agent
+  $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/pcap-agent
 popd

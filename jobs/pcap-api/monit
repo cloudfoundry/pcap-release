@@ -1,0 +1,5 @@
+check process pcap-api
+  with pidfile /var/vcap/sys/run/pcap-api/pid
+  start program "/var/vcap/jobs/pcap-api/bin/ctl start"
+  stop program "/var/vcap/jobs/pcap-api/bin/ctl stop"
+  group vcap

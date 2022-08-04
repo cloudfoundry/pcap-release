@@ -1,6 +1,0 @@
-[submodule "src/pcap-server"]
-	path = src/pcap-server
-	url = https://github.com/domdom82/pcap-server
-[submodule "src/pcap-server-api"]
-	path = src/pcap-server-api
-	url = https://github.com/domdom82/pcap-server-api

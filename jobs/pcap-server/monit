@@ -1,5 +1,0 @@
-check process pcap-server
-  with pidfile /var/vcap/sys/run/pcap-server/pid
-  start program "/var/vcap/jobs/pcap-server/bin/ctl start"
-  stop program "/var/vcap/jobs/pcap-server/bin/ctl stop"
-  group vcap

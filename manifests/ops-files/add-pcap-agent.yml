@@ -2,40 +2,40 @@
 - type: replace
   path: /releases/-
   value:
-    name: pcap-server
+    name: pcap
     version: 0+dev.7
-    url: https://github.com/domdom82/pcap-server-release/releases/download/v0.0.1/pcap-server-0.0.1.tgz
+    url: https://github.com/cloudfoundry/pcap-release/releases/download/v0.0.1/pcap-0.0.1.tgz
     sha1: a1655c1992b911fef3ad0b46c5abb8a0217ef0a2
 
 - type: replace
   path: /variables/-
   value:
-    name: pcap_server_mtls_ca
+    name: pcap_agent_mtls_ca
     type: certificate
     options:
-      common_name: pcap_server_mtls_ca
+      common_name: pcap_agent_mtls_ca
       is_ca: true
 
 - type: replace
   path: /variables/-
   value:
-    name: pcap_server_mtls
+    name: pcap_agent_mtls
     type: certificate
     update_mode: converge
     options:
-      ca: pcap_server_mtls_ca
-      common_name: pcap_server_mtls
+      ca: pcap_agent_mtls_ca
+      common_name: pcap_agent_mtls
       alternative_names:
-        - pcap-server.service.cf.internal
+        - pcap-agent.service.cf.internal
       extended_key_usage:
         - client_auth
         - server_auth
 
 - type: replace
-  path: /instance_groups/name=diego-cell/jobs/name=pcap-server?
+  path: /instance_groups/name=diego-cell/jobs/name=pcap-agent?
   value:
-    name: pcap-server
-    release: pcap-server
+    name: pcap-agent
+    release: pcap-agent
     properties:
       pcap-server:
         cert: ((pcap_server_mtls.certificate))

@@ -17,12 +17,12 @@ mkdir $BOSH_INSTALL_TARGET/gocache
 export GOPATH=$BOSH_COMPILE_TARGET/gopath
 export GOCACHE=$BOSH_COMPILE_TARGET/gocache
 
-pushd pcap-server-api
-  $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/pcap-server-api
+pushd pcap-api
+  $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/pcap-api
 popd
-pushd pcap-server-api/cli
-  GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-server-cli-linux-amd64
+pushd pcap-api/cli
+  GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-cli-linux-amd64
 popd
-pushd pcap-server-api/cli
-  GOOS=darwin GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-server-cli-mac-amd64
+pushd pcap-api/cli
+  GOOS=darwin GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-cli-mac-amd64
 popd

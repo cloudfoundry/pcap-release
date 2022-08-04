@@ -1,0 +1,31 @@
+---
+name: pcap-agent
+
+templates:
+  ctl.erb: bin/ctl
+  pcap-agent.yml.erb: config/pcap-agent.yml
+  pcap-server-private.key.erb: config/certs/pcap-server_private.key
+  pcap-server.crt.erb: config/certs/pcap-server.crt
+  client-ca.crt.erb: config/certs/client_ca.crt
+
+packages: 
+- pcap-agent
+
+properties:
+  pcap-agent.listen:
+    description: "Listen address for the pcap agent"
+    default: ":9494"
+  pcap-agent.log_level:
+    default: "info"
+  pcap-agent.container_store:
+    default: "/var/vcap/data/container-metadata/store.json"
+  pcap-agent.runc:
+    default: "/var/vcap/packages/runc/bin/runc"
+  pcap-agent.runc_root:
+    default: "/run/containerd/runc/garden"
+  pcap-agent.cert:
+    description: "TLS certificate for this server"
+  pcap-agent.key:
+    description: "Key for the TLS certificate"
+  pcap-agent.ca_cert:
+    description: "CA to validate client certificates"

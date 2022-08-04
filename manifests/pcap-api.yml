@@ -27,24 +27,24 @@ addons:
                   network: cf
                   query: _
 instance_groups:
-  - name: pcap-server-api
+  - name: pcap-api
     azs:
       - z1
     instances: 2
-    vm_type: ((pcap_server_api.vm_type))
+    vm_type: ((pcap_api.vm_type))
     stemcell: default
-    networks: ((pcap_server_api.networks))
+    networks: ((pcap_api.networks))
     jobs:
-      - name: pcap-server-api
-        release: pcap-server
+      - name: pcap-api
+        release: pcap
         properties:
           pcap-server-api:
             enable_server_tls: false
             client_skip_verify: true
-            cf_api: ((pcap_server_api.cf_api))
-            client_cert: ((pcap_server_api_mtls.certificate))
-            client_key: ((pcap_server_api_mtls.private_key))
-            ca_cert: ((pcap_server_api_mtls.ca))
+            cf_api: ((pcap_api.cf_api))
+            client_cert: ((pcap_api_mtls.certificate))
+            client_key: ((pcap_api_mtls.private_key))
+            ca_cert: ((pcap_api_mtls.ca))
       - name: route_registrar
         release: routing
         consumes:
@@ -97,14 +97,14 @@ releases:
     sha1: 1150a7c89a04db07145c906ccdbfda7424e6dfc6
 
 variables:
-  - name: pcap_server_api_mtls
+  - name: pcap_api_mtls
     type: certificate
     update_mode: converge
     options:
-      ca: ((pcap_server_api.ca_path))
-      common_name: pcap_server_api_mtls
+      ca: ((pcap_api.ca_path))
+      common_name: pcap_api_mtls
       alternative_names:
-        - pcap-server-api.service.cf.internal
+        - pcap-api.service.cf.internal
       extended_key_usage:
         - client_auth
         - server_auth

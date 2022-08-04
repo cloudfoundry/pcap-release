@@ -1,9 +1,9 @@
 ---
-name: pcap-server
+name: pcap-agent
 
 dependencies: []
 
 files:
 - golang/go1.17.8.linux-amd64.tar.gz
-- pcap-server/**/*
+- pcap-agent/**/*
 - libpcap-1.8.tgz
