@@ -1,8 +1,8 @@
-golang/go1.17.8.linux-amd64.tar.gz:
-  size: 134902354
-  object_id: b0cf5947-b9f6-486d-657e-d1745bb48c2c
-  sha: sha256:980e65a863377e69fd9b67df9d8395fd8e93858e7a24c9f55803421e453f4f99
-libpcap-1.8.tgz:
-  size: 18243822
-  object_id: 3b1e853e-d01a-4248-790d-59e4c82c073f
-  sha: sha256:90d833e80ded01404276d6e661120a6875c4c0d7ba68268c18c387b1204eae77
+golang/go1.18.5.linux-amd64.tar.gz:
+  size: 141855946
+  object_id: 7d98c4d6-993b-4c84-4e83-8067ebfbfc36
+  sha: sha256:9e5de37f9c49942c601b191ac5fba404b868bfc21d446d6960acc12283d6e5f2
+libpcap-1.10.1.tgz:
+  size: 935221
+  object_id: 4e263031-d90a-4193-6b6d-e52e99f1b61a
+  sha: sha256:ed285f4accaf05344f90975757b3dbfe772ba41d1c401c2648b7fa45b711bdd4
