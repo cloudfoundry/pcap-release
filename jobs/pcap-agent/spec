@@ -4,8 +4,8 @@ name: pcap-agent
 templates:
   ctl.erb: bin/ctl
   pcap-agent.yml.erb: config/pcap-agent.yml
-  pcap-server-private.key.erb: config/certs/pcap-server_private.key
-  pcap-server.crt.erb: config/certs/pcap-server.crt
+  pcap-agent-private.key.erb: config/certs/pcap_agent_private.key
+  pcap-agent.crt.erb: config/certs/pcap_agent.crt
   client-ca.crt.erb: config/certs/client_ca.crt
 
 packages: 

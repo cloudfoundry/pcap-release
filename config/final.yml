@@ -1,5 +1,5 @@
 ---
-name: pcap-server
+name: pcap
 blobstore:
   provider: s3
   options:

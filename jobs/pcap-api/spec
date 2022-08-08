@@ -6,9 +6,9 @@ templates:
   pcap-api.yml.erb: config/pcap-api.yml
   pcap-api.crt.erb: config/pcap-api.crt
   pcap-api.key.erb: config/pcap-api.key
-  pcap-server-client.crt.erb: config/pcap-api-client.crt
-  pcap-server-client.key.erb: config/pcap-api-client.key
-  pcap-server-client.ca.erb: config/pcap-api-client.ca
+  pcap-api-client.crt.erb: config/pcap-api-client.crt
+  pcap-api-client.key.erb: config/pcap-api-client.key
+  pcap-api-client.ca.erb: config/pcap-api-client.ca
 
 packages:
 - pcap-api
