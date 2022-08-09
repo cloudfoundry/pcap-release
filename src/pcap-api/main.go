@@ -1,9 +1,10 @@
 package main
 
 import (
+	"os"
+
 	"github.com/domdom82/pcap-server-api/config"
 	log "github.com/sirupsen/logrus"
-	"os"
 )
 
 func main() {

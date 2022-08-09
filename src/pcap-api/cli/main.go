@@ -1,17 +1,18 @@
 package main
 
 import (
-	"code.cloudfoundry.org/bytefmt"
-	"code.cloudfoundry.org/cli/plugin"
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/jessevdk/go-flags"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+
+	"code.cloudfoundry.org/bytefmt"
+	"code.cloudfoundry.org/cli/plugin"
+	"github.com/jessevdk/go-flags"
 )
 
 type PcapServerCLI struct {

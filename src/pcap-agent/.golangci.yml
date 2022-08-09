@@ -5,11 +5,11 @@ linters:
   # Disable specific linter
   # https://golangci-lint.run/usage/linters/#disabled-by-default-linters--e--enable
   disable:
-    - forbidigo
-    - gofumpt
-    - goimports
-    - gomnd
-    - wsl
-    - tagliatelle
-    - exhaustivestruct
-    - gci
+  - forbidigo
+  - gofumpt
+  - goimports
+  - gomnd
+  - wsl
+  - tagliatelle
+  - exhaustivestruct
+  - gci
