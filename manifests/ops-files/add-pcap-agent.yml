@@ -35,7 +35,7 @@
   path: /instance_groups/name=diego-cell/jobs/name=pcap-agent?
   value:
     name: pcap-agent
-    release: pcap-agent
+    release: pcap
     properties:
       pcap-server:
         cert: ((pcap_server_mtls.certificate))

@@ -32,7 +32,7 @@
 ## How to deploy
 The release provides two files to integrate with an 
 existing [cf-deployment](https://github.com/cloudfoundry/cf-deployment):
-* `manifests/ops-files/add-pcap-server.yml` This provides a shared CA between pcap-server and pcap-server-api. It also adds the pcap-server job to all diego cells.
+* `manifests/ops-files/add-pcap-agent.yml` This provides a shared CA between pcap-agent and pcap-api. It also adds the pcap-server job to all diego cells.
 * `manifests/pcap-server.yml` This is an example BOSH manifest to deploy the pcap-server-api
 
 ### Step 1 - Add pcap-agent to cf-deployment

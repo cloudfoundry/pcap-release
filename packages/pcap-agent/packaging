@@ -5,25 +5,26 @@ set -e
 # $BOSH_INSTALL_TARGET - where you copy/install files to be included in package
 
 tar xzf golang/go1.18.5.linux-amd64.tar.gz
-export GOROOT=$BOSH_COMPILE_TARGET/go
+export GOROOT="${BOSH_COMPILE_TARGET}/go"
 
-# TODO: maybe these are not needed? Where does this get executed?
-#       if this is executed on some VM we don't care about we could just use the
-#       go default values and ignore the directories since we won't need them after
-#       compilation anyways. we should NOT place them in the BOSH_INSTALL_TARGET
-#       since we don't want that stuff in the final package.
-mkdir $BOSH_INSTALL_TARGET/gopath
-mkdir $BOSH_INSTALL_TARGET/gocache
+mkdir $BOSH_COMPILE_TARGET/gopath
+mkdir $BOSH_COMPILE_TARGET/gocache
 export GOPATH=$BOSH_COMPILE_TARGET/gopath
 export GOCACHE=$BOSH_COMPILE_TARGET/gocache
 
-echo "Installing libpcap..."
-LIBPCAP_VERSION=1.10.1
-tar xzf libpcap-${LIBPCAP_VERSION}.tgz
-ln -s /usr/lib/x86_64-linux-gnu/libpcap.so.1.10.1 /usr/lib/x86_64-linux-gnu/libpcap.so
+echo "Build libpcap"
+LIBPCAP_VERSION="1.10.1"
+mkdir "${BOSH_COMPILE_TARGET}/libpcap"
+tar xzf libpcap-${LIBPCAP_VERSION}.tgz --strip-components 1 -C "${BOSH_COMPILE_TARGET}/libpcap"
 
-export CGO_CFLAGS="-I$BOSH_COMPILE_TARGET/libpcap"
+pushd "${BOSH_COMPILE_TARGET}/libpcap"
+  ./configure
+  make
+popd
 
+echo "Build pcap-agent"
 pushd pcap-agent
-  $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/pcap-agent
+  # -I/-L adds the local libpcap to the search directory for compiler and linker
+  # -ldflags makes the linker link all libraries statically to avoid relying on some local library to be present
+  CGO_CFLAGS="-I${BOSH_COMPILE_TARGET}/libpcap" CGO_LDFLAGS="-L${BOSH_COMPILE_TARGET}/libpcap" "${GOROOT}/bin/go" build -a -ldflags '-linkmode external -extldflags -static' -o "${BOSH_INSTALL_TARGET}/bin/pcap-agent"
 popd
