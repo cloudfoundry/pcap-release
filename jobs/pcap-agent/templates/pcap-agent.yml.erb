@@ -5,9 +5,10 @@ config = {
   "container_store" => p("pcap-agent.container_store"),
   "runc" => p("pcap-agent.runc"),
   "runc_root" => p("pcap-agent.runc_root"),
-  "cert" => "/var/vcap/jobs/pcap-agent/config/certs/pcap-agent.crt",
-  "key" => "/var/vcap/jobs/pcap-agent/config/certs/pcap-agent_private.key",
+  "cert" => "/var/vcap/jobs/pcap-agent/config/certs/pcap_agent.crt",
+  "key" => "/var/vcap/jobs/pcap-agent/config/certs/pcap_agent.key",
   "ca_cert" => "/var/vcap/jobs/pcap-agent/config/certs/client_ca.crt",
+  "enable_tls" => p("pcap-agent.enable_tls"),
 }
 YAML.dump(config)
 %>

@@ -4,7 +4,7 @@ name: pcap-agent
 templates:
   ctl.erb: bin/ctl
   pcap-agent.yml.erb: config/pcap-agent.yml
-  pcap-agent-private.key.erb: config/certs/pcap_agent_private.key
+  pcap-agent.key.erb: config/certs/pcap_agent.key
   pcap-agent.crt.erb: config/certs/pcap_agent.crt
   client-ca.crt.erb: config/certs/client_ca.crt
 
@@ -29,3 +29,5 @@ properties:
     description: "Key for the TLS certificate"
   pcap-agent.ca_cert:
     description: "CA to validate client certificates"
+  pcap-agent.enable_tls:
+    default: true

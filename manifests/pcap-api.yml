@@ -1,5 +1,5 @@
 ---
-name: pcap-server
+name: pcap
 
 addons:
   - name: bpm
@@ -39,12 +39,13 @@ instance_groups:
         release: pcap
         properties:
           pcap-api:
+            agent_tls_skip_verify: true
             enable_server_tls: false
-            client_skip_verify: true
             cf_api: ((pcap_api.cf_api))
             client_cert: ((pcap_api_mtls.certificate))
             client_key: ((pcap_api_mtls.private_key))
-            ca_cert: ((pcap_api_mtls.ca))
+            agent_ca: ((pcap_api_mtls.ca))
+            agent_common_name: pcap-agent.service.cf.internal
       - name: route_registrar
         release: routing
         consumes:
@@ -83,7 +84,7 @@ releases:
     version: 1.1.8
     url: https://bosh.io/d/github.com/cloudfoundry/bpm-release?v=1.1.8
     sha1: c956394fce7e74f741e4ae8c256b480904ad5942
-  - name: pcap-server
+  - name: pcap
     version: 0+dev.7
     url: https://github.com/domdom82/pcap-server-release/releases/download/v0.0.1/pcap-server-0.0.1.tgz
     sha1: a1655c1992b911fef3ad0b46c5abb8a0217ef0a2

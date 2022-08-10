@@ -32,7 +32,7 @@ properties:
     default: "9494"
   pcap-api.client_cert:
     description: "mTLS client certificate to talk to the pcap-agent"
-  pcap-api.client_cert_key:
+  pcap-api.client_key:
     description: "Key for mTLS client certificate"
   pcap-api.agent_ca:
     description: "CA of the pcap-agent cert"

@@ -1,6 +1,6 @@
 ---
 - type: replace
-  path: /releases/-
+  path: /releases/name=pcap?
   value:
     name: pcap
     version: 0+dev.7
@@ -8,22 +8,22 @@
     sha1: a1655c1992b911fef3ad0b46c5abb8a0217ef0a2
 
 - type: replace
-  path: /variables/-
+  path: /variables/name=pcap_ca?
   value:
-    name: pcap_agent_mtls_ca
+    name: pcap_ca
     type: certificate
     options:
-      common_name: pcap_agent_mtls_ca
+      common_name: pcap_ca
       is_ca: true
 
 - type: replace
-  path: /variables/-
+  path: /variables/name=pcap_agent_mtls?
   value:
     name: pcap_agent_mtls
     type: certificate
     update_mode: converge
     options:
-      ca: pcap_agent_mtls_ca
+      ca: pcap_ca
       common_name: pcap_agent_mtls
       alternative_names:
         - pcap-agent.service.cf.internal
@@ -37,7 +37,7 @@
     name: pcap-agent
     release: pcap
     properties:
-      pcap-server:
-        cert: ((pcap_server_mtls.certificate))
-        key: ((pcap_server_mtls.private_key))
-        ca_cert: ((pcap_server_mtls.ca))
+      pcap-agent:
+        cert: ((pcap_agent_mtls.certificate))
+        key: ((pcap_agent_mtls.private_key))
+        ca_cert: ((pcap_agent_mtls.ca))

@@ -1,6 +1,6 @@
 ---
 name: pcap
 blobstore:
-  provider: s3
+  provider: gcs
   options:
-    bucket_name: cf-haproxy-boshrelease
+    bucket_name: pcap-release

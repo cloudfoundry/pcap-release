@@ -156,12 +156,14 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 			// We found the app's location? Nice! Let's contact the pcap-Server on that VM (index only needed for testing)
 			agentURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&index=%d&device=%s&filter=%s", appLocation, s.config.AgentPort, appId, appIndex, device, filter)
 			pcapStream, err := s.getPcapStream(agentURL)
-			defer pcapStream.Close()
 			if err != nil {
 				log.Errorf("could not get pcap stream from URL %s (%s)", agentURL, err)
+				// FIXME(max): we see 'http: superfluous response.WriteHeader call' if errors occur in this loop because there is only one response but each routine can fail on it's own.
+				//             there is more than one occurrence.
 				response.WriteHeader(http.StatusBadGateway)
 				return
 			}
+			defer pcapStream.Close()
 
 			// Stream the pcap back to the client
 			pcapReader, err := pcapgo.NewReader(pcapStream)

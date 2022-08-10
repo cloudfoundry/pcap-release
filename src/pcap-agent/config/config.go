@@ -9,7 +9,7 @@ import (
 type Config struct {
 	LogLevel        string `yaml:"log_level"`
 	Listen          string `yaml:"listen"`
-	EnableServerTLS bool   `yaml:"enable_server_tls"`
+	EnableServerTLS bool   `yaml:"enable_tls"`
 	ContainerStore  string `yaml:"container_store"`
 	RunC            string `yaml:"runc"`
 	RunCRoot        string `yaml:"runc_root"`

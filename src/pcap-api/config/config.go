@@ -15,7 +15,7 @@ type Config struct { //nolint:maligned
 	CfAPI              string `yaml:"cf_api"`
 	AgentPort          string `yaml:"agent_port"`
 	ClientCert         string `yaml:"client_cert"`
-	ClientCertKey      string `yaml:"client_cert_key"`
+	ClientCertKey      string `yaml:"client_key"`
 	AgentCa            string `yaml:"agent_ca"`
 	AgentCommonName    string `yaml:"agent_common_name"`
 	AgentTlsSkipVerify bool   `yaml:"agent_tls_skip_verify"`
