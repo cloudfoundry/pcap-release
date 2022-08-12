@@ -1,0 +1,31 @@
+#!/bin/bash
+
+RUN_DIR=/var/vcap/sys/run/pcap-agent
+LOG_DIR=/var/vcap/sys/log/pcap-agent
+PACKAGE_DIR=/var/vcap/packages/pcap-agent
+PIDFILE=${RUN_DIR}/pid
+
+case $1 in
+
+  start)
+    mkdir -p $RUN_DIR $LOG_DIR
+    chown -R vcap:vcap $RUN_DIR $LOG_DIR
+
+    echo $$ > $PIDFILE
+
+    exec /var/vcap/packages/pcap-agent/bin/pcap-agent \
+      /var/vcap/jobs/pcap-agent/config/pcap-agent.yml \
+      >> $LOG_DIR/pcap-agent.stdout.log \
+      2>> $LOG_DIR/pcap-agent.stderr.log
+    ;;
+
+  stop)
+    kill -9 `cat $PIDFILE`
+    rm -f $PIDFILE
+    ;;
+
+  *)
+    echo "Usage: ctl {start|stop}"
+    ;;
+
+esac

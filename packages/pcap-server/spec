@@ -1,9 +1,0 @@
----
-name: pcap-server
-
-dependencies: []
-
-files:
-- golang/go1.17.8.linux-amd64.tar.gz
-- pcap-server/**/*
-- libpcap-1.8.tgz

@@ -1,10 +1,10 @@
 ---
 
-pcap_server_api:
+pcap_api:
   vm_type: default
   networks: [{name: default}]
   cf_api: https://api.cf.cfapp.com
-  ca_path: /cf/pcap_server_mtls_ca
+  ca_path: /cf/pcap_ca
 route_registrar:
   public_route: pcap.cf.cfapp.com
 nats:

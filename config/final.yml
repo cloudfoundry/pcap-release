@@ -1,5 +1,6 @@
-name: pcap-server
+---
+name: pcap
 blobstore:
-  provider: s3
+  provider: gcs
   options:
-    bucket_name: cfi-boshrelease-blobstore
+    bucket_name: pcap-release

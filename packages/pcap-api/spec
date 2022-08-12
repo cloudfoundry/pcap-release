@@ -1,0 +1,8 @@
+---
+name: pcap-api
+
+dependencies: []
+
+files:
+- golang/go1.18.5.linux-amd64.tar.gz
+- pcap-api/**/*

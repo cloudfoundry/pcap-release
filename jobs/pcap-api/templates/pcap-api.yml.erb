@@ -1,0 +1,18 @@
+<%=
+config = {
+  "listen" => p("pcap-api.listen"),
+  "log_level" => p("pcap-api.log_level"),
+  "enable_server_tls" => p("pcap-api.enable_server_tls"),
+  "cert" => "/var/vcap/jobs/pcap-api/config/pcap-api.crt",
+  "key" => "/var/vcap/jobs/pcap-api/config/pcap-api.key",
+  "cf_api" => p("pcap-api.cf_api"),
+  "agent_port" => p("pcap-api.agent_port"),
+  "client_cert" => "/var/vcap/jobs/pcap-api/config/pcap-api-client.crt",
+  "client_key" => "/var/vcap/jobs/pcap-api/config/pcap-api-client.key",
+  "agent_ca" => "/var/vcap/jobs/pcap-api/config/pcap-api-client.ca",
+  "agent_common_name" => p("pcap-api.agent_common_name"),
+  "agent_tls_skip_verify" => p("pcap-api.agent_tls_skip_verify"),
+  "cli_download_root" => p("pcap-api.cli_download_root")
+}
+YAML.dump(config)
+%>

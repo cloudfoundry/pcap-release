@@ -1,0 +1,47 @@
+---
+name: pcap-api
+
+templates:
+  ctl.erb: bin/ctl
+  pcap-api.yml.erb: config/pcap-api.yml
+  pcap-api.crt.erb: config/pcap-api.crt
+  pcap-api.key.erb: config/pcap-api.key
+  pcap-api-client.crt.erb: config/pcap-api-client.crt
+  pcap-api-client.key.erb: config/pcap-api-client.key
+  pcap-api-client.ca.erb: config/pcap-api-client.ca
+
+packages:
+- pcap-api
+
+properties:
+  pcap-api.listen:
+    description: "Listen address for the pcap-api"
+    default: ":8080"
+  pcap-api.log_level:
+    default: "info"
+  pcap-api.enable_server_tls:
+    default: true
+  pcap-api.cert:
+    description: "TLS certificate for this server"
+  pcap-api.key:
+    description: "Key for the TLS certificate"
+  pcap-api.cf_api:
+    description: "Endpoint of the cf API"
+  pcap-api.agent_port:
+    description: "Port of the pcap-agent that runs on the diego cells"
+    default: "9494"
+  pcap-api.client_cert:
+    description: "mTLS client certificate to talk to the pcap-agent"
+  pcap-api.client_key:
+    description: "Key for mTLS client certificate"
+  pcap-api.agent_ca:
+    description: "CA of the pcap-agent cert"
+  pcap-api.agent_common_name:
+    description: "CN of the pcap-agent"
+    default: "pcap-agent.service.cf.internal"
+  pcap-api.agent_tls_skip_verify:
+    description: "skip server verification for connection to pcap-agent"
+    default: false
+  pcap-api.cli_download_root:
+    description: "Root directory of CLI downloads"
+    default: "/var/vcap/packages/pcap-api/bin/cli/build/"
