@@ -1,5 +1,9 @@
 set -e
 
+# builds libpcap and pcap-agent. libpcap is statically linked into the pcap-agent
+# binary to avoid any runtime dependencies that might cause incompatibilities
+# or other issues. see comments below for more details.
+
 # Available variables:
 # $BOSH_COMPILE_TARGET - where this package & spec'd source files are available
 # $BOSH_INSTALL_TARGET - where you copy/install files to be included in package
