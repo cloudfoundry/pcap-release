@@ -1,3 +1,3 @@
-# pcap-server-cli
+# pcap-cli
 
-CLI plugin for pcap server API
+CLI plugin for pcap API
