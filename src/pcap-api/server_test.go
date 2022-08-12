@@ -21,7 +21,7 @@ func TestPcapApi(t *testing.T) {
 
 var _ = Describe("Basic Tests", func() {
 	cfAPI := test.MockCfAPI(nil)
-	var server *Api
+	var pcapApi *Api
 	var err error
 
 	Context("When the Pcap API is started without any config", func() {
@@ -35,13 +35,13 @@ var _ = Describe("Basic Tests", func() {
 		cfg := DefaultConfig
 		cfg.CfAPI = cfAPI.URL
 		BeforeEach(func() {
-			server, err = NewApi(&cfg)
+			pcapApi, err = NewApi(&cfg)
 			Expect(err).To(BeNil())
-			go server.Run()
+			go pcapApi.Run()
 			time.Sleep(100 * time.Millisecond)
 		})
 		AfterEach(func() {
-			server.Stop()
+			pcapApi.Stop()
 		})
 
 		It("can be created", func() {
@@ -52,12 +52,12 @@ var _ = Describe("Basic Tests", func() {
 			r, err := http.Get("http://localhost:8080/health")
 			Expect(err).To(BeNil())
 			Expect(r.StatusCode).To(Equal(200))
-			Expect(server.ccBaseURL).To(Equal(cfAPI.URL + "/v3"))
+			Expect(pcapApi.ccBaseURL).To(Equal(cfAPI.URL + "/v3"))
 		})
 		It("can be stopped again", func() {
 			_, err := http.Get("http://localhost:8080/health")
 			Expect(err).To(BeNil())
-			server.Stop()
+			pcapApi.Stop()
 			_, err = http.Get("http://localhost:8080/health")
 			Expect(err).To(Not(BeNil()))
 		})
@@ -65,73 +65,73 @@ var _ = Describe("Basic Tests", func() {
 })
 
 var _ = Describe("Single Target Capture Tests", func() {
-	var server *Api
+	var pcapApi *Api
 	var err error
 	pcapResponses := map[string]string{
 		"/capture?appid=1234&index=0&device=eth0&filter=": "test/sample-1.pcap",
 	}
-	pcapServer := test.NewMockPcapAgent(pcapResponses)
+	pcapAgent := test.NewMockPcapAgent(pcapResponses)
 	responses := map[string]string{
 		"/v3/apps/1234": "{\n\"guid\": \"1234\",\n  \"name\": \"my-app\",\n  \"state\": \"STARTED\" \n}",
 		"/v3/apps/1234/processes/web/stats": fmt.Sprintf("{\n\"resources\": [\n {\n \"type\": \"web\",\n \"index\": 0,"+
 			"\n \"state\": \"RUNNING\","+
-			"\n \"host\": \"%s\"\n}]}", pcapServer.Host),
+			"\n \"host\": \"%s\"\n}]}", pcapAgent.Host),
 	}
 	cfAPI := test.MockCfAPI(responses)
 	cfg := DefaultConfig
 	cfg.CfAPI = cfAPI.URL
-	cfg.AgentPort = pcapServer.Port
+	cfg.AgentPort = pcapAgent.Port
 
 	BeforeEach(func() {
-		server, err = NewApi(&cfg)
+		pcapApi, err = NewApi(&cfg)
 		Expect(err).To(BeNil())
-		go server.Run()
+		go pcapApi.Run()
 		time.Sleep(100 * time.Millisecond)
 	})
 	AfterEach(func() {
-		server.Stop()
+		pcapApi.Stop()
 	})
 
 	Context("Checking if token can see an app", func() {
 		It("Can see apps that belong to the token", func() {
-			visible, err := server.isAppVisibleByToken("1234", "mytoken")
+			visible, err := pcapApi.isAppVisibleByToken("1234", "mytoken")
 			Expect(err).To(BeNil())
 			Expect(visible).To(BeTrue())
 		})
 		It("Can't see apps that do not belong to the token", func() {
-			visible, err := server.isAppVisibleByToken("9999", "mytoken")
+			visible, err := pcapApi.isAppVisibleByToken("9999", "mytoken")
 			Expect(err).NotTo(BeNil())
 			Expect(visible).To(BeFalse())
 		})
 	})
 	Context("Getting app location", func() {
 		It("Returns an address that hosts the target app", func() {
-			location, err := server.getAppLocation("1234", 0, "web", "mytoken")
+			location, err := pcapApi.getAppLocation("1234", 0, "web", "mytoken")
 			Expect(err).To(BeNil())
-			Expect(location).To(Equal(pcapServer.Host))
+			Expect(location).To(Equal(pcapAgent.Host))
 		})
 		It("Returns an error for invisible apps", func() {
-			location, err := server.getAppLocation("9999", 0, "web", "mytoken")
+			location, err := pcapApi.getAppLocation("9999", 0, "web", "mytoken")
 			Expect(err).NotTo(BeNil())
 			Expect(location).To(Equal(""))
 		})
 	})
 	Context("Getting pcap stream for an app", func() {
 		It("Returns an stream for the target app", func() {
-			location, err := server.getAppLocation("1234", 0, "web", "mytoken")
+			location, err := pcapApi.getAppLocation("1234", 0, "web", "mytoken")
 			Expect(err).To(BeNil())
-			Expect(location).To(Equal(pcapServer.Host))
-			pcapStream, err := server.getPcapStream(
-				fmt.Sprintf("https://%s:%s/capture?appid=1234&index=0&device=eth0&filter=", location, pcapServer.Port))
+			Expect(location).To(Equal(pcapAgent.Host))
+			pcapStream, err := pcapApi.getPcapStream(
+				fmt.Sprintf("https://%s:%s/capture?appid=1234&index=0&device=eth0&filter=", location, pcapAgent.Port))
 			Expect(err).To(BeNil())
 			Expect(pcapStream).NotTo(BeNil())
 		})
 		It("Returns an error for streams of invisible apps", func() {
-			location, err := server.getAppLocation("9999", 0, "web", "mytoken")
+			location, err := pcapApi.getAppLocation("9999", 0, "web", "mytoken")
 			Expect(err).NotTo(BeNil())
 			Expect(location).To(Equal(""))
-			pcapStream, err := server.getPcapStream(
-				fmt.Sprintf("https://%s:%s/capture?appid=9999&index=0&filter=", pcapServer.Host, pcapServer.Port))
+			pcapStream, err := pcapApi.getPcapStream(
+				fmt.Sprintf("https://%s:%s/capture?appid=9999&index=0&filter=", pcapAgent.Host, pcapAgent.Port))
 			Expect(err).NotTo(BeNil())
 			Expect(pcapStream).To(Equal(http.NoBody))
 		})
@@ -174,13 +174,13 @@ var _ = Describe("Single Target Capture Tests", func() {
 })
 
 var _ = Describe("Multiple Target Capture Tests", func() {
-	var server *Api
+	var pcapApi *Api
 	var err error
 	pcapResponses := map[string]string{
 		"/capture?appid=1234&index=0&device=eth0&filter=": "test/sample-1.pcap",
 		"/capture?appid=1234&index=1&device=eth0&filter=": "test/sample-2.pcap",
 	}
-	pcapServer := test.NewMockPcapAgent(pcapResponses)
+	pcapAgent := test.NewMockPcapAgent(pcapResponses)
 	responses := map[string]string{
 		"/v3/apps/1234": "{\n\"guid\": \"1234\",\n  \"name\": \"my-app\",\n  \"state\": \"STARTED\" \n}",
 		"/v3/apps/1234/processes/web/stats": fmt.Sprintf(
@@ -192,21 +192,21 @@ var _ = Describe("Multiple Target Capture Tests", func() {
 				"{\n \"type\": \"web\",\n \"index\": 1,"+
 				"\n \"state\": \"RUNNING\","+
 				"\n \"host\": \"%s\"\n}"+
-				"]}", pcapServer.Host, pcapServer.Host),
+				"]}", pcapAgent.Host, pcapAgent.Host),
 	}
 	cfAPI := test.MockCfAPI(responses)
 	cfg := DefaultConfig
 	cfg.CfAPI = cfAPI.URL
-	cfg.AgentPort = pcapServer.Port
+	cfg.AgentPort = pcapAgent.Port
 
 	BeforeEach(func() {
-		server, err = NewApi(&cfg)
+		pcapApi, err = NewApi(&cfg)
 		Expect(err).To(BeNil())
-		go server.Run()
+		go pcapApi.Run()
 		time.Sleep(100 * time.Millisecond)
 	})
 	AfterEach(func() {
-		server.Stop()
+		pcapApi.Stop()
 	})
 
 	Context("Streaming pcap to disk for an app with multiple instances", func() {
