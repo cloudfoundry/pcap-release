@@ -95,9 +95,9 @@ func NewMockPcapAgent(responses map[string]string) *MockPcapAgent {
 
 	mockup := MockPcapAgent{Server: httptest.NewTLSServer(mux)}
 
-	pcapServerURL, _ := url.Parse(mockup.URL)
-	mockup.Host = pcapServerURL.Hostname()
-	mockup.Port = pcapServerURL.Port()
+	pcapAgentUrl, _ := url.Parse(mockup.URL)
+	mockup.Host = pcapAgentUrl.Hostname()
+	mockup.Port = pcapAgentUrl.Port()
 
 	return &mockup
 }
