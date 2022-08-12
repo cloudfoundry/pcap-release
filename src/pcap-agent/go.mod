@@ -1,4 +1,4 @@
-module github.com/cloudfoundry/pcap-relase/src/pcap-agent
+module github.com/cloudfoundry/pcap-release/src/pcap-agent
 
 go 1.16
 
