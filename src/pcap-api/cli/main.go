@@ -15,14 +15,14 @@ import (
 	"github.com/jessevdk/go-flags"
 )
 
-type PcapServerCLI struct {
+type PcapCli struct {
 }
 
 func main() {
-	plugin.Start(new(PcapServerCLI))
+	plugin.Start(new(PcapCli))
 }
 
-func (cli *PcapServerCLI) Run(cliConnection plugin.CliConnection, args []string) {
+func (cli *PcapCli) Run(cliConnection plugin.CliConnection, args []string) {
 	// Initialize flags
 	type positional struct {
 		AppName string `positional-arg-name:"app" description:"The app to capture." required:"true"`
@@ -166,9 +166,9 @@ func handleIOError(err error) {
 	}
 }
 
-func (cli *PcapServerCLI) GetMetadata() plugin.PluginMetadata {
+func (cli *PcapCli) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
-		Name: "PcapServerCLI",
+		Name: "PcapCli",
 		Version: plugin.VersionType{
 			Major: 0,
 			Minor: 1,

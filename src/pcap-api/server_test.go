@@ -9,34 +9,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/domdom82/pcap-server-api/config"
-	"github.com/domdom82/pcap-server-api/test"
+	"github.com/cloudfoundry/pcap-release/src/pcap-api/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-func TestPcapServerApi(t *testing.T) {
+func TestPcapApi(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Pcap Server API")
+	RunSpecs(t, "Pcap Api API")
 }
 
 var _ = Describe("Basic Tests", func() {
 	cfAPI := test.MockCfAPI(nil)
-	var server *Server
+	var server *Api
 	var err error
 
-	Context("When the Pcap API Server is started without any config", func() {
-		_, err := NewServer(nil)
+	Context("When the Pcap API is started without any config", func() {
+		_, err := NewApi(nil)
 		It("can't be created", func() {
 			Expect(err).NotTo(BeNil())
 		})
 	})
 
-	Context("When the Pcap API Server is started with the default config", func() {
-		cfg := config.DefaultConfig
+	Context("When the Pcap API is started with the default config", func() {
+		cfg := DefaultConfig
 		cfg.CfAPI = cfAPI.URL
 		BeforeEach(func() {
-			server, err = NewServer(&cfg)
+			server, err = NewApi(&cfg)
 			Expect(err).To(BeNil())
 			go server.Run()
 			time.Sleep(100 * time.Millisecond)
@@ -46,7 +45,7 @@ var _ = Describe("Basic Tests", func() {
 		})
 
 		It("can be created", func() {
-			_, err := NewServer(&cfg)
+			_, err := NewApi(&cfg)
 			Expect(err).To(BeNil())
 		})
 		It("can be started", func() {
@@ -66,7 +65,7 @@ var _ = Describe("Basic Tests", func() {
 })
 
 var _ = Describe("Single Target Capture Tests", func() {
-	var server *Server
+	var server *Api
 	var err error
 	pcapResponses := map[string]string{
 		"/capture?appid=1234&index=0&device=eth0&filter=": "test/sample-1.pcap",
@@ -79,12 +78,12 @@ var _ = Describe("Single Target Capture Tests", func() {
 			"\n \"host\": \"%s\"\n}]}", pcapServer.Host),
 	}
 	cfAPI := test.MockCfAPI(responses)
-	cfg := config.DefaultConfig
+	cfg := DefaultConfig
 	cfg.CfAPI = cfAPI.URL
 	cfg.AgentPort = pcapServer.Port
 
 	BeforeEach(func() {
-		server, err = NewServer(&cfg)
+		server, err = NewApi(&cfg)
 		Expect(err).To(BeNil())
 		go server.Run()
 		time.Sleep(100 * time.Millisecond)
@@ -175,7 +174,7 @@ var _ = Describe("Single Target Capture Tests", func() {
 })
 
 var _ = Describe("Multiple Target Capture Tests", func() {
-	var server *Server
+	var server *Api
 	var err error
 	pcapResponses := map[string]string{
 		"/capture?appid=1234&index=0&device=eth0&filter=": "test/sample-1.pcap",
@@ -196,12 +195,12 @@ var _ = Describe("Multiple Target Capture Tests", func() {
 				"]}", pcapServer.Host, pcapServer.Host),
 	}
 	cfAPI := test.MockCfAPI(responses)
-	cfg := config.DefaultConfig
+	cfg := DefaultConfig
 	cfg.CfAPI = cfAPI.URL
 	cfg.AgentPort = pcapServer.Port
 
 	BeforeEach(func() {
-		server, err = NewServer(&cfg)
+		server, err = NewApi(&cfg)
 		Expect(err).To(BeNil())
 		go server.Run()
 		time.Sleep(100 * time.Millisecond)

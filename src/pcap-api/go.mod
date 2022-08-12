@@ -1,4 +1,4 @@
-module github.com/domdom82/pcap-server-api
+module github.com/cloudfoundry/pcap-release/src/pcap-api
 
 go 1.18
 

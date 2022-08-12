@@ -12,16 +12,15 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/domdom82/pcap-server-api/config"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
 )
 
-type Server struct {
+type Api struct {
 	httpServer *http.Server
-	config     *config.Config
+	config     *Config
 	ccBaseURL  string
 	uaaBaseURL string
 }
@@ -53,11 +52,11 @@ type cfAppStatsResponse struct {
 	} `json:"resources"`
 }
 
-func (s *Server) handleHealth(response http.ResponseWriter, request *http.Request) {
+func (a *Api) handleHealth(response http.ResponseWriter, _ *http.Request) {
 	response.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) handleCapture(response http.ResponseWriter, request *http.Request) {
+func (a *Api) handleCapture(response http.ResponseWriter, request *http.Request) {
 
 	if request.Method != http.MethodGet {
 		response.WriteHeader(http.StatusMethodNotAllowed)
@@ -111,7 +110,7 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 	}
 
 	// Check if app can be seen by token
-	appVisible, err := s.isAppVisibleByToken(appId, authToken)
+	appVisible, err := a.isAppVisibleByToken(appId, authToken)
 	if err != nil {
 		log.Errorf("could not check if app %s can be seen by token %s (%s)", appId, authToken, err)
 		response.WriteHeader(http.StatusInternalServerError)
@@ -148,14 +147,14 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 				}
 			}()
 			// App is visible? Great! Let's find out where it lives
-			appLocation, err := s.getAppLocation(appId, appIndex, appType, authToken)
+			appLocation, err := a.getAppLocation(appId, appIndex, appType, authToken)
 			if err != nil {
 				log.Errorf("could not get location of app %s index %d of type %s (%s)", appId, appIndex, appType, err)
 				return
 			}
-			// We found the app's location? Nice! Let's contact the pcap-Server on that VM (index only needed for testing)
-			agentURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&index=%d&device=%s&filter=%s", appLocation, s.config.AgentPort, appId, appIndex, device, filter)
-			pcapStream, err := s.getPcapStream(agentURL)
+			// We found the app's location? Nice! Let's contact the pcap-agent on that VM (index only needed for testing)
+			agentURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&index=%d&device=%s&filter=%s", appLocation, a.config.AgentPort, appId, appIndex, device, filter)
+			pcapStream, err := a.getPcapStream(agentURL)
 			if err != nil {
 				log.Errorf("could not get pcap stream from URL %s (%s)", agentURL, err)
 				// FIXME(max): we see 'http: superfluous response.WriteHeader call' if errors occur in this loop because there is only one response but each routine can fail on it's own.
@@ -221,15 +220,15 @@ func (s *Server) handleCapture(response http.ResponseWriter, request *http.Reque
 	}
 }
 
-func (s *Server) getPcapStream(pcapServerURL string) (io.ReadCloser, error) {
+func (a *Api) getPcapStream(pcapAgentURL string) (io.ReadCloser, error) {
 	// TODO possibly move this into a pcapServerClient type
-	log.Debugf("Getting pcap stream from %s", pcapServerURL)
-	cert, err := tls.LoadX509KeyPair(s.config.ClientCert, s.config.ClientCertKey)
+	log.Debugf("Getting pcap stream from %s", pcapAgentURL)
+	cert, err := tls.LoadX509KeyPair(a.config.ClientCert, a.config.ClientCertKey)
 	if err != nil {
 		return nil, err
 	}
 
-	caCert, err := ioutil.ReadFile(s.config.AgentCa)
+	caCert, err := ioutil.ReadFile(a.config.AgentCa)
 	if err != nil {
 		return nil, err
 	}
@@ -241,13 +240,13 @@ func (s *Server) getPcapStream(pcapServerURL string) (io.ReadCloser, error) {
 			TLSClientConfig: &tls.Config{
 				RootCAs:            caCertPool,
 				Certificates:       []tls.Certificate{cert},
-				ServerName:         s.config.AgentCommonName,
-				InsecureSkipVerify: s.config.AgentTlsSkipVerify, //nolint:gosec
+				ServerName:         a.config.AgentCommonName,
+				InsecureSkipVerify: a.config.AgentTlsSkipVerify, //nolint:gosec
 			},
 		},
 	}
 
-	res, err := client.Get(pcapServerURL)
+	res, err := client.Get(pcapAgentURL)
 
 	if err != nil {
 		return nil, err
@@ -259,11 +258,11 @@ func (s *Server) getPcapStream(pcapServerURL string) (io.ReadCloser, error) {
 	return res.Body, nil
 }
 
-func (s *Server) getAppLocation(appId string, appIndex int, appType string, authToken string) (string, error) {
+func (a *Api) getAppLocation(appId string, appIndex int, appType string, authToken string) (string, error) {
 	// FIXME refactor with isAppVisibleByToken into common cf client that uses authToken
 	log.Debugf("Trying to get location of app %s with index %d of type %s", appId, appIndex, appType)
 	httpClient := http.DefaultClient
-	appURL, err := url.Parse(fmt.Sprintf("%s/apps/%s/processes/%s/stats", s.ccBaseURL, appId, appType))
+	appURL, err := url.Parse(fmt.Sprintf("%s/apps/%s/processes/%s/stats", a.ccBaseURL, appId, appType))
 
 	if err != nil {
 		return "", err
@@ -311,10 +310,10 @@ func (s *Server) getAppLocation(appId string, appIndex int, appType string, auth
 	return "", fmt.Errorf("could not find process with index %d of type %s for app %s", appIndex, appType, appId)
 }
 
-func (s *Server) isAppVisibleByToken(appId string, authToken string) (bool, error) {
-	log.Debugf("Checking at %s if app %s can be seen by token %s", s.ccBaseURL, appId, authToken)
+func (a *Api) isAppVisibleByToken(appId string, authToken string) (bool, error) {
+	log.Debugf("Checking at %s if app %s can be seen by token %s", a.ccBaseURL, appId, authToken)
 	httpClient := http.DefaultClient
-	appURL, err := url.Parse(fmt.Sprintf("%s/apps/%s", s.ccBaseURL, appId))
+	appURL, err := url.Parse(fmt.Sprintf("%s/apps/%s", a.ccBaseURL, appId))
 
 	if err != nil {
 		return false, err
@@ -352,12 +351,12 @@ func (s *Server) isAppVisibleByToken(appId string, authToken string) (bool, erro
 	return true, nil
 }
 
-func (s *Server) setup() {
+func (a *Api) setup() {
 	log.Info("Discovering CF API endpoints...")
-	response, err := http.Get(s.config.CfAPI)
+	response, err := http.Get(a.config.CfAPI)
 
 	if err != nil {
-		log.Fatalf("Could not fetch CF API from %s (%s)", s.config.CfAPI, err)
+		log.Fatalf("Could not fetch CF API from %s (%s)", a.config.CfAPI, err)
 	}
 
 	var apiResponse *cfAPIResponse
@@ -370,47 +369,46 @@ func (s *Server) setup() {
 		log.Fatalf("Could not parse CF API response: %s", err)
 	}
 
-	s.ccBaseURL = apiResponse.Links.CCv3.Href
-	s.uaaBaseURL = apiResponse.Links.UAA.Href
+	a.ccBaseURL = apiResponse.Links.CCv3.Href
+	a.uaaBaseURL = apiResponse.Links.UAA.Href
 	log.Info("Done.")
 }
 
-func (s *Server) Run() {
+func (a *Api) Run() {
 	log.Info("Pcap-API starting...")
-	s.setup()
+	a.setup()
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/health", s.handleHealth)
-	mux.HandleFunc("/capture", s.handleCapture)
-	log.Info("Starting CLI file Server at root " + s.config.CLIDownloadRoot)
-	mux.Handle("/cli/", http.StripPrefix("/cli/", http.FileServer(http.Dir(s.config.CLIDownloadRoot))))
+	mux.HandleFunc("/health", a.handleHealth)
+	mux.HandleFunc("/capture", a.handleCapture)
+	log.Info("Starting CLI file Api at root " + a.config.CLIDownloadRoot)
+	mux.Handle("/cli/", http.StripPrefix("/cli/", http.FileServer(http.Dir(a.config.CLIDownloadRoot))))
 
-	s.httpServer = &http.Server{
-		Addr:    s.config.Listen,
+	a.httpServer = &http.Server{
+		Addr:    a.config.Listen,
 		Handler: mux,
 	}
 
-	log.Infof("Listening on %s ...", s.config.Listen)
-	if s.config.EnableServerTLS {
-		log.Info(s.httpServer.ListenAndServeTLS(s.config.Cert, s.config.Key))
+	log.Infof("Listening on %s ...", a.config.Listen)
+	if a.config.EnableServerTLS {
+		log.Info(a.httpServer.ListenAndServeTLS(a.config.Cert, a.config.Key))
 	} else {
-		log.Info(s.httpServer.ListenAndServe())
+		log.Info(a.httpServer.ListenAndServe())
 	}
 }
 
-func (s *Server) Stop() {
+func (a *Api) Stop() {
 	log.Info("Pcap-API stopping...")
-	_ = s.httpServer.Close()
+	_ = a.httpServer.Close()
 }
 
-func NewServer(c *config.Config) (*Server, error) {
+func NewApi(c *Config) (*Api, error) {
 	if c == nil {
 		return nil, fmt.Errorf("config required")
 	}
-	server := &Server{
-		config: c,
-	}
 
-	return server, nil
+	return &Api{
+		config: c,
+	}, nil
 }

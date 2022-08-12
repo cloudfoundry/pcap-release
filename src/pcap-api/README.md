@@ -1,3 +1,3 @@
-# pcap-server-api
+# pcap-api
 
-Frontend API for the pcap-server backend
+Frontend API for the pcap-agent backend
