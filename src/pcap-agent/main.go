@@ -3,26 +3,25 @@ package main
 import (
 	"os"
 
-	"github.com/domdom82/pcap-server/config"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
 	log.SetFormatter(&log.JSONFormatter{TimestampFormat: "2006-01-02 15:04:05.0000"})
 
-	var cfg *config.Config
+	var cfg *Config
 	var err error
 	if len(os.Args) > 1 {
 		configFile := os.Args[1]
 		log.Infof("Loading config from %q\n", configFile)
 
-		cfg, err = config.NewConfigFromFile(configFile)
+		cfg, err = NewConfigFromFile(configFile)
 
 		if err != nil {
 			log.Fatal(err)
 		}
 	} else {
-		cfg = &config.DefaultConfig
+		cfg = &DefaultConfig
 	}
 
 	lv, err := log.ParseLevel(cfg.LogLevel)
@@ -30,8 +29,8 @@ func main() {
 		log.Fatal(err)
 	}
 	log.SetLevel(lv)
-	log.Info("Starting the Server...")
-	srv, err := NewServer(cfg)
+	log.Info("Starting the Agent...")
+	srv, err := NewAgent(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -13,7 +13,6 @@ import (
 	"runtime"
 
 	"github.com/containerd/go-runc"
-	"github.com/domdom82/pcap-server/config"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -22,12 +21,12 @@ import (
 	"github.com/vishvananda/netns"
 )
 
-type Server struct {
+type Agent struct {
 	httpServer *http.Server
-	config     *config.Config
+	config     *Config
 }
 
-func (s *Server) handleCaptureCF(response http.ResponseWriter, request *http.Request) {
+func (a *Agent) handleCaptureCF(response http.ResponseWriter, request *http.Request) {
 	log.Debugf("Accepted connection from %s", request.RemoteAddr)
 
 	if request.Method != http.MethodGet {
@@ -73,7 +72,7 @@ func (s *Server) handleCaptureCF(response http.ResponseWriter, request *http.Req
 
 	// Load container store
 	var store ContainerKeys
-	storeFile := s.config.ContainerStore
+	storeFile := a.config.ContainerStore
 	storeData, err := ioutil.ReadFile(storeFile)
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
@@ -108,8 +107,8 @@ func (s *Server) handleCaptureCF(response http.ResponseWriter, request *http.Req
 	// Get pid from runc container state
 	ctx := context.Background()
 	runcClient := &runc.Runc{
-		Command: s.config.RunC,
-		Root:    s.config.RunCRoot,
+		Command: a.config.RunC,
+		Root:    a.config.RunCRoot,
 	}
 
 	container, err := runcClient.State(ctx, containerId)
@@ -152,7 +151,7 @@ func (s *Server) handleCaptureCF(response http.ResponseWriter, request *http.Req
 	doCapture(device, filter, snaplen, response)
 }
 
-func (s *Server) handleCaptureBOSH(response http.ResponseWriter, request *http.Request) {
+func (a *Agent) handleCaptureBOSH(response http.ResponseWriter, request *http.Request) {
 	log.Debugf("Accepted connection from %s", request.RemoteAddr)
 
 	if request.Method != http.MethodGet {
@@ -219,18 +218,18 @@ func flush(writer io.Writer) {
 	}
 }
 
-func (s *Server) Run() {
+func (a *Agent) Run() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/capture", s.handleCaptureCF) // backwards compatibility
-	mux.HandleFunc("/capture/cf", s.handleCaptureCF)
-	mux.HandleFunc("/capture/bosh", s.handleCaptureBOSH)
+	mux.HandleFunc("/capture", a.handleCaptureCF) // backwards compatibility
+	mux.HandleFunc("/capture/cf", a.handleCaptureCF)
+	mux.HandleFunc("/capture/bosh", a.handleCaptureBOSH)
 
 	var tlsConfig *tls.Config
-	if s.config.EnableServerTLS {
+	if a.config.EnableServerTLS {
 		// Create a CA certificate pool and add cert.pem to it
-		caCert, err := ioutil.ReadFile(s.config.CaCert)
+		caCert, err := ioutil.ReadFile(a.config.CaCert)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -245,29 +244,28 @@ func (s *Server) Run() {
 	}
 
 	// Create a Server instance to listen on port 8443 with the TLS config
-	s.httpServer = &http.Server{
-		Addr:      s.config.Listen,
+	a.httpServer = &http.Server{
+		Addr:      a.config.Listen,
 		TLSConfig: tlsConfig,
 		Handler:   mux,
 	}
 
 	// Listen to HTTPS connections with the server certificate and wait
-	log.Infof("Listening on %s ...", s.config.Listen)
-	if s.config.EnableServerTLS {
-		log.Info(s.httpServer.ListenAndServeTLS(s.config.Cert, s.config.Key))
+	log.Infof("Listening on %s ...", a.config.Listen)
+	if a.config.EnableServerTLS {
+		log.Info(a.httpServer.ListenAndServeTLS(a.config.Cert, a.config.Key))
 	} else {
-		log.Info(s.httpServer.ListenAndServe())
+		log.Info(a.httpServer.ListenAndServe())
 	}
 
 }
 
-func NewServer(c *config.Config) (*Server, error) {
+func NewAgent(c *Config) (*Agent, error) {
 	if c == nil {
 		return nil, fmt.Errorf("config required")
 	}
-	server := &Server{
-		config: c,
-	}
 
-	return server, nil
+	return &Agent{
+		config: c,
+	}, nil
 }

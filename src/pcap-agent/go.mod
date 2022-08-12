@@ -1,4 +1,4 @@
-module github.com/domdom82/pcap-server
+module github.com/cloudfoundry/pcap-relase/src/pcap-agent
 
 go 1.16
 
