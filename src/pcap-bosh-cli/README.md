@@ -1,3 +1,3 @@
-# pcap-cli
+# pcap-bosh-cli
 
-CLI plugin for pcap API
+CLI for capturing from BOSH VMs using pcap API
