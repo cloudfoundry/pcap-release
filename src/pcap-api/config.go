@@ -1,9 +1,8 @@
 package main
 
 import (
-	"io/ioutil"
-
 	"gopkg.in/yaml.v2"
+	"os"
 )
 
 type Config struct { //nolint:maligned
@@ -39,7 +38,7 @@ var DefaultConfig = Config{
 }
 
 func NewConfigFromFile(filename string) (*Config, error) {
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
