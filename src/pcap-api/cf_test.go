@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/pcap-api/test"
 	"io"
 	"net/http"
 	"net/url"
@@ -9,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap-api/test"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -52,7 +52,7 @@ var _ = Describe("Basic Tests", func() {
 			r, err := http.Get("http://localhost:8080/health")
 			Expect(err).To(BeNil())
 			Expect(r.StatusCode).To(Equal(200))
-			Expect(pcapApi.ccBaseURL).To(Equal(cfAPI.URL + "/v3"))
+			Expect(pcapApi.cf.ccBaseURL).To(Equal(cfAPI.URL + "/v3"))
 		})
 		It("can be stopped again", func() {
 			_, err := http.Get("http://localhost:8080/health")
@@ -94,43 +94,43 @@ var _ = Describe("Single Target Capture Tests", func() {
 
 	Context("Checking if token can see an app", func() {
 		It("Can see apps that belong to the token", func() {
-			visible, err := pcapApi.isAppVisibleByToken("1234", "mytoken")
+			visible, err := pcapApi.cf.isAppVisibleByToken("1234", "mytoken")
 			Expect(err).To(BeNil())
 			Expect(visible).To(BeTrue())
 		})
 		It("Can't see apps that do not belong to the token", func() {
-			visible, err := pcapApi.isAppVisibleByToken("9999", "mytoken")
+			visible, err := pcapApi.cf.isAppVisibleByToken("9999", "mytoken")
 			Expect(err).NotTo(BeNil())
 			Expect(visible).To(BeFalse())
 		})
 	})
 	Context("Getting app location", func() {
 		It("Returns an address that hosts the target app", func() {
-			location, err := pcapApi.getAppLocation("1234", 0, "web", "mytoken")
+			location, err := pcapApi.cf.getAppLocation("1234", 0, "web", "mytoken")
 			Expect(err).To(BeNil())
 			Expect(location).To(Equal(pcapAgent.Host))
 		})
 		It("Returns an error for invisible apps", func() {
-			location, err := pcapApi.getAppLocation("9999", 0, "web", "mytoken")
+			location, err := pcapApi.cf.getAppLocation("9999", 0, "web", "mytoken")
 			Expect(err).NotTo(BeNil())
 			Expect(location).To(Equal(""))
 		})
 	})
 	Context("Getting pcap stream for an app", func() {
 		It("Returns an stream for the target app", func() {
-			location, err := pcapApi.getAppLocation("1234", 0, "web", "mytoken")
+			location, err := pcapApi.cf.getAppLocation("1234", 0, "web", "mytoken")
 			Expect(err).To(BeNil())
 			Expect(location).To(Equal(pcapAgent.Host))
-			pcapStream, err := pcapApi.getPcapStream(
+			pcapStream, err := NewCaptureStreamer(pcapApi.config).getPcapStream(
 				fmt.Sprintf("https://%s:%s/capture?appid=1234&index=0&device=eth0&filter=", location, pcapAgent.Port))
 			Expect(err).To(BeNil())
 			Expect(pcapStream).NotTo(BeNil())
 		})
 		It("Returns an error for streams of invisible apps", func() {
-			location, err := pcapApi.getAppLocation("9999", 0, "web", "mytoken")
+			location, err := pcapApi.cf.getAppLocation("9999", 0, "web", "mytoken")
 			Expect(err).NotTo(BeNil())
 			Expect(location).To(Equal(""))
-			pcapStream, err := pcapApi.getPcapStream(
+			pcapStream, err := NewCaptureStreamer(pcapApi.config).getPcapStream(
 				fmt.Sprintf("https://%s:%s/capture?appid=9999&index=0&filter=", pcapAgent.Host, pcapAgent.Port))
 			Expect(err).NotTo(BeNil())
 			Expect(pcapStream).To(Equal(http.NoBody))

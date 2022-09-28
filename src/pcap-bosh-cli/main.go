@@ -3,18 +3,20 @@ package main
 import (
 	"errors"
 	"fmt"
-	flags "github.com/jessevdk/go-flags"
+	"github.com/jessevdk/go-flags"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 	"io"
 	"os"
 )
 
 type environment struct {
-	AccessToken     string `json:"access_token"`
-	AccessTokenType string `json:"access_token_type"`
-	Alias           string `json:"alias"`
-	CaCert          string `json:"ca_cert"`
-	RefreshToken    string `json:"refresh_token"`
-	Url             string `json:"url"`
+	AccessToken     string `yaml:"access_token"`
+	AccessTokenType string `yaml:"access_token_type"`
+	Alias           string `yaml:"alias"`
+	CaCert          string `yaml:"ca_cert"`
+	RefreshToken    string `yaml:"refresh_token"`
+	Url             string `yaml:"url"`
 }
 
 type boshConfig struct {
@@ -30,11 +32,14 @@ func main() {
 	}
 
 	var opts struct {
-		File       string     `short:"o" long:"file" description:"The output file. Written in binary pcap format." required:"true"`
-		Filter     string     `short:"f" long:"filter" description:"Allows to provide a filter expression in pcap filter format." required:"false"`
-		Device     string     `short:"d" long:"device" description:"Specifies the network device to listen on." default:"eth0" required:"false"`
-		Type       string     `short:"t" long:"type" description:"Specifies the type of process to capture for the app." default:"web" required:"false"`
-		Positional positional `positional-args:"true" required:"true"`
+		File            string     `short:"o" long:"file" description:"The output file. Written in binary pcap format." required:"true"`
+		Filter          string     `short:"f" long:"filter" description:"Allows to provide a filter expression in pcap filter format." required:"false"`
+		Device          string     `short:"d" long:"device" description:"Specifies the network device to listen on." default:"eth0" required:"false"`
+		Type            string     `short:"t" long:"type" description:"Specifies the type of process to capture for the app." default:"web" required:"false"`
+		BoshConfig      string     `short:"c" long:"bosh-config" description:"Path to the BOSH config file, used for the UAA Token" default:"${HOME}/.bosh/config" required:"false"`
+		BoshEnvironment string     `short:"e" long:"bosh-environment" description:"The BOSH environment to use for retrieving the BOSH UAA token from the BOSH config file" default:"bosh" required:"false"`
+		BoshToken       string     `short:"T" long:"token" description:"BOSH UAA Token to use for authentication (instead of BOSH config file)" env:"BOSH_TOKEN" default:"" required:"false"`
+		Positional      positional `positional-args:"true" required:"true"`
 	}
 
 	_, err := flags.ParseArgs(&opts, os.Args[1:])
@@ -43,7 +48,32 @@ func main() {
 		return
 	}
 
-	fmt.Printf("%+v", opts)
+	if opts.BoshToken == "" {
+		boshConfigPath := os.ExpandEnv(opts.BoshConfig)
+		yamlFile, err := os.ReadFile(boshConfigPath)
+
+		if err != nil {
+			log.Printf("error while reading yaml file: %v ", err)
+
+			return
+		}
+
+		bc := boshConfig{}
+
+		err = yaml.Unmarshal(yamlFile, &bc)
+		if err != nil {
+			log.Printf("error while parsing yaml file %s: %v ", boshConfigPath, err)
+			return
+		}
+
+		for _, e := range bc.Environments {
+			if e.Alias == opts.BoshEnvironment {
+				opts.BoshToken = e.AccessToken
+			}
+		}
+	}
+
+	print(opts.BoshToken)
 
 	// log into bosh.
 
