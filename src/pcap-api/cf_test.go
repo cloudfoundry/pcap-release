@@ -121,7 +121,7 @@ var _ = Describe("Single Target Capture Tests", func() {
 			location, err := pcapApi.cf.getAppLocation("1234", 0, "web", "mytoken")
 			Expect(err).To(BeNil())
 			Expect(location).To(Equal(pcapAgent.Host))
-			pcapStream, err := NewCaptureStreamer(pcapApi.config).getPcapStream(
+			pcapStream, err := NewPcapStreamer(pcapApi.config).getPcapStream(
 				fmt.Sprintf("https://%s:%s/capture?appid=1234&index=0&device=eth0&filter=", location, pcapAgent.Port))
 			Expect(err).To(BeNil())
 			Expect(pcapStream).NotTo(BeNil())
@@ -130,7 +130,7 @@ var _ = Describe("Single Target Capture Tests", func() {
 			location, err := pcapApi.cf.getAppLocation("9999", 0, "web", "mytoken")
 			Expect(err).NotTo(BeNil())
 			Expect(location).To(Equal(""))
-			pcapStream, err := NewCaptureStreamer(pcapApi.config).getPcapStream(
+			pcapStream, err := NewPcapStreamer(pcapApi.config).getPcapStream(
 				fmt.Sprintf("https://%s:%s/capture?appid=9999&index=0&filter=", pcapAgent.Host, pcapAgent.Port))
 			Expect(err).NotTo(BeNil())
 			Expect(pcapStream).To(Equal(http.NoBody))

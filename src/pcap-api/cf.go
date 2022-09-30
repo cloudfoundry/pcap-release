@@ -131,8 +131,7 @@ func (cf *CfCaptureHandler) handleCapture(response http.ResponseWriter, request 
 		agentURLs = append(agentURLs, agentURL)
 	}
 
-	streamer := NewCaptureStreamer(cf.config)
-	streamer.captureAndStream(agentURLs, &response, request)
+	NewPcapStreamer(cf.config).captureAndStream(agentURLs, &response, request)
 }
 
 func (cf *CfCaptureHandler) isAppVisibleByToken(appId string, authToken string) (bool, error) {
