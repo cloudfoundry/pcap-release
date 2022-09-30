@@ -222,7 +222,6 @@ func (a *Agent) Run() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/capture", a.handleCaptureCF) // backwards compatibility
 	mux.HandleFunc("/capture/cf", a.handleCaptureCF)
 	mux.HandleFunc("/capture/bosh", a.handleCaptureBOSH)
 
