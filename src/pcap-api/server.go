@@ -25,8 +25,7 @@ func (a *Api) Run() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", a.handleHealth)
-	mux.HandleFunc("/capture", a.cf.handleCapture)
-	mux.HandleFunc("/capture/capture", a.cf.handleCapture)
+	mux.HandleFunc("/capture/cf", a.cf.handleCapture)
 	mux.HandleFunc("/capture/bosh", a.bosh.handleCapture)
 	log.Info("Starting CLI file Api at root " + a.config.CLIDownloadRoot)
 	mux.Handle("/cli/", http.StripPrefix("/cli/", http.FileServer(http.Dir(a.config.CLIDownloadRoot))))
