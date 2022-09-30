@@ -4,8 +4,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -14,8 +12,9 @@ import (
 )
 
 type BoshCaptureHandler struct {
-	config *Config
-	client *http.Client
+	config  *Config
+	client  *http.Client
+	uaaUrls []string
 }
 
 func NewBoshCaptureHandler(config *Config) *BoshCaptureHandler {
@@ -31,6 +30,14 @@ type boshInfo struct {
 	Cpi             string `json:"cpi"`
 	StemcellOs      string `json:"stemcell_os"`
 	StemcellVersion string `json:"stemcell_version"`
+
+	UserAuthentication struct {
+		Type    string `json:"type"`
+		Options struct {
+			Url  string   `json:"url"`
+			Urls []string `json:"urls"`
+		} `json:"options"`
+	} `json:"user_authentication"`
 }
 
 type boshInstance struct {
@@ -59,8 +66,7 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 	deployment := request.URL.Query().Get("deployment")
 	groups := toSet(request.URL.Query()["group"])
 
-	instanceIds := request.URL.Query()["instance"]
-	instanceIdSet := toSet(instanceIds)
+	instanceIds := toSet(request.URL.Query()["instance"])
 
 	device := request.URL.Query().Get("device")
 	filter := request.URL.Query().Get("filter")
@@ -71,6 +77,14 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 	if deployment == "" {
 		response.WriteHeader(http.StatusBadRequest)
 		_, _ = response.Write([]byte("deployment missing"))
+
+		return
+	}
+	// TODO: add check for len groups > 0
+
+	if len(groups) < 1 {
+		response.WriteHeader(http.StatusBadRequest)
+		_, _ = response.Write([]byte("instance group(s) missing"))
 
 		return
 	}
@@ -86,7 +100,7 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 		return
 	}
 
-	err := verifyJwt(authToken, "bosh.admin")
+	err := verifyJwt(authToken, "bosh.admin", bosh.uaaUrls)
 	if err != nil {
 		log.Errorf("could not verify token %s (%s)", authToken, err)
 		response.WriteHeader(http.StatusForbidden)
@@ -114,7 +128,7 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 
 		// select all instance IDs when no explicit one is given.
 		if len(instanceIds) > 0 {
-			if _, hasId := instanceIdSet[instance.Id]; !hasId {
+			if _, hasId := instanceIds[instance.Id]; !hasId {
 				continue
 			}
 		}
@@ -124,89 +138,16 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 
 	log.Debugf("selected instances: %v", selectedInstances)
 
-	//packets := make(chan packetMessage, 1000)
+	agentURLs := make([]string, 0, len(selectedInstances))
 
-	//for _, index := range instances {
-	//	go func(appIndex int, packets chan packetMessage) {
-	//		defer func() {
-	//			packets <- packetMessage{
-	//				packet: nil,
-	//				done:   true,
-	//              // TODO: should this not be a waitgroup instead?
-	//			}
-	//		}()
-	//		// App is visible? Great! Let's find out where it lives
-	//		appLocation, err := bosh.getAppLocation(appId, appIndex, appType, authToken)
-	//		if err != nil {
-	//			log.Errorf("could not get location of app %s index %d of type %s (%s)", appId, appIndex, appType, err)
-	//			return
-	//		}
-	//		// We found the app's location? Nice! Let's contact the pcap-agent on that VM (index only needed for testing)
-	//		agentURL := fmt.Sprintf("https://%s:%s/capture?appid=%s&index=%d&device=%s&filter=%s", appLocation, bosh.config.AgentPort, appId, appIndex, device, filter)
-	//		pcapStream, err := bosh.getPcapStream(agentURL)
-	//		if err != nil {
-	//			log.Errorf("could not get pcap stream from URL %s (%s)", agentURL, err)
-	//			// FIXME(max): we see 'http: superfluous response.WriteHeader call' if errors occur in this loop because there is only one response but each routine can fail on it's own.
-	//			//             there is more than one occurrence.
-	//			response.WriteHeader(http.StatusBadGateway)
-	//			return
-	//		}
-	//		defer pcapStream.Close()
-	//
-	//		// Stream the pcap back to the client
-	//		pcapReader, err := pcapgo.NewReader(pcapStream)
-	//		if err != nil {
-	//			log.Errorf("could not create pcap reader from pcap stream %s (%s)", pcapStream, err)
-	//			response.WriteHeader(http.StatusBadGateway)
-	//			return
-	//		}
-	//		for {
-	//			data, capInfo, err := pcapReader.ReadPacketData()
-	//			if err != nil {
-	//				handleIOError(err)
-	//				return
-	//			}
-	//			log.Debugf("Read packet: Time %s Length %d Captured %d", capInfo.Timestamp, capInfo.Length, capInfo.CaptureLength)
-	//			packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.Default)
-	//			packet.Metadata().CaptureInfo = capInfo
-	//			packets <- packetMessage{
-	//				packet: packet,
-	//				done:   false,
-	//			}
-	//		}
-	//	}(index, packets)
-	//}
+	for _, instance := range selectedInstances {
+		ip := instance.Ips[0]
 
-	// Collect all packets from multiple input streams and merge them into one output stream
-	w := pcapgo.NewWriter(response)
-	err = w.WriteFileHeader(65535, layers.LinkTypeEthernet)
-	if err != nil {
-		log.Error(err)
-		return
+		agentURL := fmt.Sprintf("https://%s:%s/capture/bosh?device=%s&filter=%s", ip, bosh.config.AgentPort, device, filter)
+		agentURLs = append(agentURLs, agentURL)
 	}
 
-	//bytesTotal := 24 // pcap header is 24 bytes
-	//done := 0
-	//for msg := range packets {
-	//	if msg.packet != nil {
-	//		err = w.WritePacket(msg.packet.Metadata().CaptureInfo, msg.packet.Data())
-	//		if err != nil {
-	//			handleIOError(err)
-	//			return
-	//		}
-	//		bytesTotal += msg.packet.Metadata().Length
-	//		if f, ok := response.(http.Flusher); ok {
-	//			f.Flush()
-	//		}
-	//	}
-	//	if msg.done {
-	//		done++
-	//		if done == len(appIndices) {
-	//			log.Infof("Done capturing. Wrote %d bytes from %s to %s", bytesTotal, request.URL, request.RemoteAddr)
-	//			return
-	//		}
-	//	}
-	//}
+	NewPcapStreamer(bosh.config).captureAndStream(agentURLs, &response, request)
 }
 
 type StringSet map[string]struct{}
@@ -286,56 +227,7 @@ func (bosh *BoshCaptureHandler) setup() {
 		log.Fatalf("Could not parse BOSH Director API response: %s", err)
 	}
 
-	log.Infof("Connected to BOSH Director '%s' (%s), version %s on %s", apiResponse.Name, apiResponse.Uuid, apiResponse.Version, apiResponse.Cpi)
-}
+	bosh.uaaUrls = apiResponse.UserAuthentication.Options.Urls
 
-func (bosh *BoshCaptureHandler) getAppLocation(appId string, appIndex int, appType string, authToken string) (string, error) {
-	// FIXME refactor with getInstances into common bosh client that uses authToken
-	log.Debugf("Trying to get location of app %s with index %d of type %s", appId, appIndex, appType)
-	appURL, err := url.Parse(fmt.Sprintf("%s/apps/%s/processes/%s/stats", bosh.config.BoshDirectorAPI, appId, appType))
-
-	if err != nil {
-		return "", err
-	}
-	req := &http.Request{
-		Method: "GET",
-		URL:    appURL,
-		Header: map[string][]string{
-			"Authorization": {authToken},
-		},
-	}
-
-	res, err := bosh.client.Do(req)
-
-	if err != nil {
-		return "", err
-	}
-	if res.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
-	}
-
-	var appStatsResponse *cfAppStatsResponse
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", err
-	}
-	err = json.Unmarshal(data, &appStatsResponse)
-	if err != nil {
-		return "", err
-	}
-
-	if len(appStatsResponse.Resources) < appIndex+1 {
-		return "", fmt.Errorf("expected at least %d elements in stats array for app %s with index %d of type %s but got %d",
-			appIndex+1, appId, appIndex, appType, len(appStatsResponse.Resources))
-	}
-
-	for _, process := range appStatsResponse.Resources {
-		if process.Index == appIndex {
-			if process.Type == appType {
-				return process.Host, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("could not find process with index %d of type %s for app %s", appIndex, appType, appId)
+	log.Infof("Connected to BOSH Director '%s' (%s), version %s on %s. UAA URLs: %v", apiResponse.Name, apiResponse.Uuid, apiResponse.Version, apiResponse.Cpi, bosh.uaaUrls)
 }

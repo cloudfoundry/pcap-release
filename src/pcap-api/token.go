@@ -7,6 +7,7 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -28,7 +29,7 @@ type UaaKeyInfo struct {
 //   - that there is a claim 'scope' that contains one entry that matches neededScope.
 //
 // Limitations: only RSA signed tokens are supported.
-func verifyJwt(tokenString string, neededScope string) error {
+func verifyJwt(tokenString string, neededScope string, issuers []string) error {
 
 	tokenString = strings.Replace(tokenString, "Bearer ", "", 1)
 
@@ -36,6 +37,29 @@ func verifyJwt(tokenString string, neededScope string) error {
 
 	if !token.Valid {
 		return err
+	}
+
+	if jku, ok := token.Header["jku"]; ok {
+		jkuUrl, err := url.Parse(jku.(string))
+		if err != nil {
+			return err
+		}
+
+		for _, issuer := range issuers {
+			issuerUrl, err := url.Parse(issuer)
+			if err != nil {
+				return err
+
+			}
+
+			if strings.HasPrefix(jkuUrl.String(), issuerUrl.String()) {
+				return nil
+			}
+
+		}
+		return fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, issuers)
+	} else {
+		return fmt.Errorf("header 'jku' missing from token, cannot verify signature")
 	}
 
 	if claims, claimsOk := token.Claims.(jwt.MapClaims); claimsOk {
@@ -73,6 +97,9 @@ func parseRsaToken(token *jwt.Token) (interface{}, error) {
 					return nil, fmt.Errorf("signature algorithm %q does not match expected token key information %q", rsa.Alg(), key.Alg)
 				}
 
+				// the RSA public key returned here is used to check the JWT token signature.
+				// It is provided by the URL encoded in the token (in the 'jku' header).
+				// For valid tokens, this URL is verified against the UAA URLs reported by BOSH Director later.
 				return jwt.ParseRSAPublicKeyFromPEM([]byte(key.Value))
 			}
 		}
