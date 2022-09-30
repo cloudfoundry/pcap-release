@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/pcap-api/test"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/cloudfoundry/pcap-release/pcap-api/test"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -33,6 +34,7 @@ var _ = Describe("Basic Tests", func() {
 
 	Context("When the Pcap API is started with the default config", func() {
 		cfg := DefaultConfig
+		cfg.BoshDirectorAPI = ""
 		cfg.CfAPI = cfAPI.URL
 		BeforeEach(func() {
 			pcapApi, err = NewApi(&cfg)
@@ -79,6 +81,7 @@ var _ = Describe("Single Target Capture Tests", func() {
 	}
 	cfAPI := test.MockCfAPI(responses)
 	cfg := DefaultConfig
+	cfg.BoshDirectorAPI = ""
 	cfg.CfAPI = cfAPI.URL
 	cfg.AgentPort = pcapAgent.Port
 
@@ -138,7 +141,7 @@ var _ = Describe("Single Target Capture Tests", func() {
 	})
 	Context("Streaming pcap to disk for an app", func() {
 		client := http.DefaultClient
-		appURL, _ := url.Parse("http://localhost:8080/capture?appid=1234&filter=")
+		appURL, _ := url.Parse("http://localhost:8080/capture/cf?appid=1234&filter=")
 		req := &http.Request{
 			URL: appURL,
 			Header: map[string][]string{
@@ -196,6 +199,7 @@ var _ = Describe("Multiple Target Capture Tests", func() {
 	}
 	cfAPI := test.MockCfAPI(responses)
 	cfg := DefaultConfig
+	cfg.BoshDirectorAPI = ""
 	cfg.CfAPI = cfAPI.URL
 	cfg.AgentPort = pcapAgent.Port
 
@@ -211,7 +215,7 @@ var _ = Describe("Multiple Target Capture Tests", func() {
 
 	Context("Streaming pcap to disk for an app with multiple instances", func() {
 		client := http.DefaultClient
-		appURL, _ := url.Parse("http://localhost:8080/capture?appid=1234&index=0&index=1&filter=")
+		appURL, _ := url.Parse("http://localhost:8080/capture/cf?appid=1234&index=0&index=1&filter=")
 		req := &http.Request{
 			URL: appURL,
 			Header: map[string][]string{

@@ -1,8 +1,9 @@
 package main
 
 import (
-	"gopkg.in/yaml.v2"
 	"os"
+
+	"gopkg.in/yaml.v2"
 )
 
 // TODO: Consider splitting this into pcap-api, cf and bosh parts. cf and bosh could then be
@@ -28,14 +29,14 @@ var DefaultConfig = Config{
 	LogLevel:           "debug",
 	Listen:             ":8080",
 	EnableServerTLS:    false,
-	Cert:               "pcap-api/test/server.crt",
-	Key:                "pcap-api/test/server.key",
+	Cert:               "test/server.crt",
+	Key:                "test/server.key",
 	CfAPI:              "https://api.cf.azure-cfn01.cfn-azure.sapcloud.io",
 	BoshDirectorAPI:    "https://192.168.1.11:25555",
 	AgentPort:          "9494",
-	ClientCert:         "pcap-api/test/client.crt",
-	ClientCertKey:      "pcap-api/test/client.key",
-	AgentCa:            "pcap-api/test/cacert.pem",
+	ClientCert:         "test/client.crt",
+	ClientCertKey:      "test/client.key",
+	AgentCa:            "test/cacert.pem",
 	AgentCommonName:    "",
 	AgentTlsSkipVerify: true,
 	CLIDownloadRoot:    "cli/build",
