@@ -1,21 +1,21 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type BoshCaptureHandler struct {
-	config      *Config
-	directorURL string
+	config *Config
+	client *http.Client
 }
 
 func NewBoshCaptureHandler(config *Config) *BoshCaptureHandler {
@@ -33,6 +33,22 @@ type boshInfo struct {
 	StemcellVersion string `json:"stemcell_version"`
 }
 
+type boshInstance struct {
+	AgentId     string    `json:"agent_id"`
+	Cid         string    `json:"cid"`
+	Job         string    `json:"job"`
+	Index       int       `json:"index"`
+	Id          string    `json:"id"`
+	Az          string    `json:"az"`
+	Ips         []string  `json:"ips"`
+	VmCreatedAt time.Time `json:"vm_created_at"`
+	ExpectsVm   bool      `json:"expects_vm"`
+}
+
+func (b *boshInstance) String() string {
+	return fmt.Sprintf("%s/%s %s", b.Job, b.Id, b.Ips)
+}
+
 func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		response.WriteHeader(http.StatusMethodNotAllowed)
@@ -41,14 +57,20 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 	}
 
 	deployment := request.URL.Query().Get("deployment")
-	// instances := request.URL.Query()["instance"]
+	groups := toSet(request.URL.Query()["group"])
+
+	instanceIds := request.URL.Query()["instance"]
+	instanceIdSet := toSet(instanceIds)
+
 	device := request.URL.Query().Get("device")
-	// filter := request.URL.Query().Get("filter")
+	filter := request.URL.Query().Get("filter")
 	authToken := request.Header.Get("Authorization")
+
+	log.Debugf("bosh capture request for deployment: %s, group(s): %v, instance(s): %v, filter: %q, device: %q", deployment, groups, instanceIds, filter, device)
 
 	if deployment == "" {
 		response.WriteHeader(http.StatusBadRequest)
-		response.Write([]byte("deployment missing"))
+		_, _ = response.Write([]byte("deployment missing"))
 
 		return
 	}
@@ -59,7 +81,7 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 
 	if authToken == "" {
 		response.WriteHeader(http.StatusUnauthorized)
-		response.Write([]byte("authentication required"))
+		_, _ = response.Write([]byte("authentication required"))
 
 		return
 	}
@@ -68,38 +90,40 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 	if err != nil {
 		log.Errorf("could not verify token %s (%s)", authToken, err)
 		response.WriteHeader(http.StatusForbidden)
-		response.Write([]byte(fmt.Sprintf("could not verify token: %v", err)))
+		_, _ = response.Write([]byte(fmt.Sprintf("could not verify token: %v", err)))
 
 		return
 	}
 
 	// Check if app can be seen by token
-	appVisible, err := bosh.getInstances(deployment, authToken)
+	instances, err := bosh.getInstances(deployment, authToken)
 	if err != nil {
+		// FIXME: This could be an auth error as well.
 		log.Errorf("could not check if app %s can be seen by token %s (%s)", deployment, authToken, err)
 		response.WriteHeader(http.StatusInternalServerError)
 
 		return
 	}
-	if appVisible == false {
-		log.Infof("deployment %s cannot be seen by token %s", deployment, authToken)
-		response.WriteHeader(http.StatusForbidden)
 
-		return
+	var selectedInstances []boshInstance
+
+	for _, instance := range instances {
+		if _, hasGroup := groups[instance.Job]; !hasGroup {
+			continue
+		}
+
+		// select all instance IDs when no explicit one is given.
+		if len(instanceIds) > 0 {
+			if _, hasId := instanceIdSet[instance.Id]; !hasId {
+				continue
+			}
+		}
+
+		selectedInstances = append(selectedInstances, instance)
 	}
 
-	//handleIOError := func(err error) {
-	//	if errors.Is(err, io.EOF) {
-	//		log.Debug("Done capturing.")
-	//	} else {
-	//		log.Errorf("Error during capture: %s", err)
-	//	}
-	//}
+	log.Debugf("selected instances: %v", selectedInstances)
 
-	type packetMessage struct {
-		packet gopacket.Packet
-		done   bool
-	}
 	//packets := make(chan packetMessage, 1000)
 
 	//for _, index := range instances {
@@ -185,13 +209,22 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 	//}
 }
 
-func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string) (bool, error) {
-	log.Debugf("Checking at %s if deployment %s can be seen by token %s", bosh.directorURL, deployment, authToken)
-	httpClient := http.DefaultClient
-	appURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", bosh.directorURL, deployment))
+type StringSet map[string]struct{}
+
+func toSet(strings []string) StringSet {
+	set := make(StringSet, len(strings))
+	for _, s := range strings {
+		set[s] = struct{}{}
+	}
+	return set
+}
+
+func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string) ([]boshInstance, error) {
+	log.Debugf("Checking at %s if deployment %s can be seen by token %s", bosh.config.BoshDirectorAPI, deployment, authToken)
+	appURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", bosh.config.BoshDirectorAPI, deployment))
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	req := &http.Request{
 		Method: "GET",
@@ -201,58 +234,65 @@ func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string
 		},
 	}
 
-	res, err := httpClient.Do(req)
+	res, err := bosh.client.Do(req)
 	if err != nil {
-		return false, err
-	}
-	if res.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
+		return nil, err
 	}
 
-	var appResponse *cfAppResponse
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
+	}
+
+	var appResponse []boshInstance
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	err = json.Unmarshal(data, &appResponse)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	if appResponse.GUID != deployment {
-		return false, fmt.Errorf("expected app id %s but got app id %s (%s)", deployment, appResponse.GUID, appResponse.Name)
-	}
-
-	return true, nil
+	return appResponse, nil
 }
 
 func (bosh *BoshCaptureHandler) setup() {
-	log.Info("Discovering CF API endpoints...")
-	response, err := http.Get(bosh.config.CfAPI)
+	log.Info("Discovering BOSH Director endpoint...")
 
-	if err != nil {
-		log.Fatalf("Could not fetch CF API from %s (%s)", bosh.config.CfAPI, err)
+	bosh.client = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				// FIXME: add BOSH director CA
+				InsecureSkipVerify: true,
+			},
+		},
 	}
 
-	var apiResponse *cfAPIResponse
+	response, err := bosh.client.Get(bosh.config.BoshDirectorAPI + "/info")
+
+	if err != nil {
+		log.Fatalf("Could not fetch BOSH Director API from %s (%s)", bosh.config.BoshDirectorAPI, err)
+	}
+
+	var apiResponse *boshInfo
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
-		log.Fatalf("Could not read CF API response: %s", err)
+		log.Fatalf("Could not read BOSH Director API response: %s", err)
 	}
 	err = json.Unmarshal(data, &apiResponse)
 	if err != nil {
-		log.Fatalf("Could not parse CF API response: %s", err)
+		log.Fatalf("Could not parse BOSH Director API response: %s", err)
 	}
 
-	bosh.directorURL = apiResponse.Links.CCv3.Href
-	log.Info("Done.")
+	log.Infof("Connected to BOSH Director '%s' (%s), version %s on %s", apiResponse.Name, apiResponse.Uuid, apiResponse.Version, apiResponse.Cpi)
 }
 
 func (bosh *BoshCaptureHandler) getAppLocation(appId string, appIndex int, appType string, authToken string) (string, error) {
 	// FIXME refactor with getInstances into common bosh client that uses authToken
 	log.Debugf("Trying to get location of app %s with index %d of type %s", appId, appIndex, appType)
-	httpClient := http.DefaultClient
-	appURL, err := url.Parse(fmt.Sprintf("%s/apps/%s/processes/%s/stats", bosh.directorURL, appId, appType))
+	appURL, err := url.Parse(fmt.Sprintf("%s/apps/%s/processes/%s/stats", bosh.config.BoshDirectorAPI, appId, appType))
 
 	if err != nil {
 		return "", err
@@ -265,7 +305,7 @@ func (bosh *BoshCaptureHandler) getAppLocation(appId string, appIndex int, appTy
 		},
 	}
 
-	res, err := httpClient.Do(req)
+	res, err := bosh.client.Do(req)
 
 	if err != nil {
 		return "", err
@@ -275,7 +315,7 @@ func (bosh *BoshCaptureHandler) getAppLocation(appId string, appIndex int, appTy
 	}
 
 	var appStatsResponse *cfAppStatsResponse
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", err
 	}
