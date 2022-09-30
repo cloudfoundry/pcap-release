@@ -5,6 +5,8 @@ import (
 	"os"
 )
 
+// TODO: Consider splitting this into pcap-api, cf and bosh parts. cf and bosh could then be
+// used to _not_ enable a specific capture endpoint when there's no configuration for it.
 type Config struct { //nolint:maligned
 	LogLevel           string `yaml:"log_level"`
 	Listen             string `yaml:"listen"`
@@ -12,6 +14,7 @@ type Config struct { //nolint:maligned
 	Cert               string `yaml:"cert"`
 	Key                string `yaml:"key"`
 	CfAPI              string `yaml:"cf_api"`
+	BoshDirectorAPI    string `yaml:"bosh_director_api"`
 	AgentPort          string `yaml:"agent_port"`
 	ClientCert         string `yaml:"client_cert"`
 	ClientCertKey      string `yaml:"client_key"`
@@ -23,11 +26,12 @@ type Config struct { //nolint:maligned
 
 var DefaultConfig = Config{
 	LogLevel:           "debug",
-	Listen:             "0.0.0.0:8080",
+	Listen:             ":8080",
 	EnableServerTLS:    false,
 	Cert:               "test/server.crt",
 	Key:                "test/server.key",
 	CfAPI:              "https://api.cf.azure-cfn01.cfn-azure.sapcloud.io",
+	BoshDirectorAPI:    "https://192.168.1.11:25555",
 	AgentPort:          "9494",
 	ClientCert:         "test/client.crt",
 	ClientCertKey:      "test/client.key",
