@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"net/http"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Api struct {
@@ -20,13 +21,18 @@ func (a *Api) handleHealth(response http.ResponseWriter, _ *http.Request) {
 func (a *Api) Run() {
 	log.Info("Pcap-API starting...")
 	a.cf.setup()
-	a.bosh.setup()
-
+	
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", a.handleHealth)
+	
 	mux.HandleFunc("/capture/cf", a.cf.handleCapture)
-	mux.HandleFunc("/capture/bosh", a.bosh.handleCapture)
+	
+	if a.config.BoshDirectorAPI != "" {
+		a.bosh.setup()
+		mux.HandleFunc("/capture/bosh", a.bosh.handleCapture)
+	}
+	
 	log.Info("Starting CLI file Api at root " + a.config.CLIDownloadRoot)
 	mux.Handle("/cli/", http.StripPrefix("/cli/", http.FileServer(http.Dir(a.config.CLIDownloadRoot))))
 
