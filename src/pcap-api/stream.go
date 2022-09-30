@@ -18,7 +18,7 @@ type PcapStreamer struct {
 	config *Config
 }
 
-func NewCaptureStreamer(config *Config) *PcapStreamer {
+func NewPcapStreamer(config *Config) *PcapStreamer {
 	return &PcapStreamer{config: config}
 }
 
@@ -87,6 +87,10 @@ func (s *PcapStreamer) captureAndStream(captureURLs []string, response *http.Res
 	bytesTotal := 24 // pcap header is 24 bytes
 	done := 0
 	for msg := range packets {
+		if msg.err != nil {
+			log.Errorf("error while capturing: %v", err)
+			return
+		}
 		if msg.packet != nil {
 			err = w.WritePacket(msg.packet.Metadata().CaptureInfo, msg.packet.Data())
 			if err != nil {
