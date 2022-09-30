@@ -22,6 +22,8 @@ func NewCaptureStreamer(config *Config) *PcapStreamer {
 	return &PcapStreamer{config: config}
 }
 
+// getPcapStream requests and retrieves a pcap capture from the agent using the pcapAgentURL.
+// the pcapAgentURL contains information on what to capture.
 func (s *PcapStreamer) getPcapStream(pcapAgentURL string) (io.ReadCloser, error) {
 	log.Debugf("Getting pcap stream from %s", pcapAgentURL)
 	cert, err := tls.LoadX509KeyPair(s.config.ClientCert, s.config.ClientCertKey)
@@ -65,7 +67,7 @@ type packetMessage struct {
 	err    error
 }
 
-// captureAndStream invokes the pcap-agents in captureURLs in parallel and multiplexes the results into the response writer.
+// captureAndStream invokes the pcap-agents in captureURLs in parallel (using captureFromAgent()) and multiplexes the results into the response writer.
 func (s *PcapStreamer) captureAndStream(captureURLs []string, response *http.ResponseWriter, request *http.Request) {
 
 	packets := make(chan packetMessage, 1000)
@@ -106,6 +108,7 @@ func (s *PcapStreamer) captureAndStream(captureURLs []string, response *http.Res
 	}
 }
 
+// captureFromAgent retrieves the pcap data from the agent using agentURL via getPcapStream() and sends the received pcap data into the channel packets.
 func (s *PcapStreamer) captureFromAgent(agentURL string, packets chan packetMessage) {
 	defer func() {
 		packets <- packetMessage{

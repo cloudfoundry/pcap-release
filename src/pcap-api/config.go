@@ -23,11 +23,11 @@ type Config struct { //nolint:maligned
 
 var DefaultConfig = Config{
 	LogLevel:           "debug",
-	Listen:             ":8080",
+	Listen:             "0.0.0.0:8080",
 	EnableServerTLS:    false,
 	Cert:               "test/server.crt",
 	Key:                "test/server.key",
-	CfAPI:              "https://api.cf.aws-cfn02.aws.cfi.sapcloud.io",
+	CfAPI:              "https://api.cf.azure-cfn01.cfn-azure.sapcloud.io",
 	AgentPort:          "9494",
 	ClientCert:         "test/client.crt",
 	ClientCertKey:      "test/client.key",

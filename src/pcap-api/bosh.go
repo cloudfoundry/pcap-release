@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	jwt "github.com/golang-jwt/jwt/v4"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
@@ -12,7 +11,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strings"
 )
 
 type BoshCaptureHandler struct {
@@ -66,7 +64,14 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 		return
 	}
 
-	err := verifyToken(authToken)
+	err := verifyJwt(authToken, "bosh.admin")
+	if err != nil {
+		log.Errorf("could not verify token %s (%s)", authToken, err)
+		response.WriteHeader(http.StatusForbidden)
+		response.Write([]byte(fmt.Sprintf("could not verify token: %v", err)))
+
+		return
+	}
 
 	// Check if app can be seen by token
 	appVisible, err := bosh.getInstances(deployment, authToken)
@@ -178,24 +183,6 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 	//		}
 	//	}
 	//}
-}
-
-func verifyToken(tokenString string) error {
-
-	tokenString = strings.Replace(tokenString, "Bearer ", "", 1)
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Don't forget to validate the alg is what you expect:
-
-		// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
-		return token.Header["kid"], nil
-	})
-
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		fmt.Println(claims["foo"], claims["nbf"])
-	} else {
-		fmt.Println(err)
-	}
-	return nil
 }
 
 func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string) (bool, error) {
