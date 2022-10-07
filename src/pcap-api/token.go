@@ -35,7 +35,7 @@ func verifyJwt(tokenString string, neededScope string, issuers []string) error {
 
 	token, err := jwt.Parse(tokenString, parseRsaToken)
 
-	if !token.Valid {
+	if err != nil || !token.Valid {
 		return err
 	}
 

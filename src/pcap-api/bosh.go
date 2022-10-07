@@ -162,14 +162,14 @@ func toSet(strings []string) StringSet {
 
 func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string) ([]boshInstance, error) {
 	log.Debugf("Checking at %s if deployment %s can be seen by token %s", bosh.config.BoshDirectorAPI, deployment, authToken)
-	appURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", bosh.config.BoshDirectorAPI, deployment))
+	url, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", bosh.config.BoshDirectorAPI, deployment))
 
 	if err != nil {
 		return nil, err
 	}
 	req := &http.Request{
 		Method: "GET",
-		URL:    appURL,
+		URL:    url,
 		Header: map[string][]string{
 			"Authorization": {authToken},
 		},
@@ -186,17 +186,17 @@ func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string
 		return nil, fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
 	}
 
-	var appResponse []boshInstance
+	var response []boshInstance
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(data, &appResponse)
+	err = json.Unmarshal(data, &response)
 	if err != nil {
 		return nil, err
 	}
 
-	return appResponse, nil
+	return response, nil
 }
 
 func (bosh *BoshCaptureHandler) setup() {
