@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/golang-jwt/jwt/v4"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
@@ -29,50 +30,48 @@ type UaaKeyInfo struct {
 //   - that there is a claim 'scope' that contains one entry that matches neededScope.
 //
 // Limitations: only RSA signed tokens are supported.
-func verifyJwt(tokenString string, neededScope string, issuers []string) error {
+func verifyJwt(tokenString string, neededScope string, issuers []string) (bool, error) {
 
 	tokenString = strings.Replace(tokenString, "Bearer ", "", 1)
 
-	token, err := jwt.Parse(tokenString, parseRsaToken)
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if jku, ok := token.Header["jku"]; ok {
+			jkuUrl, err := url.Parse(jku.(string))
+			if err != nil {
+				return nil, err
+			}
+
+			for _, issuer := range issuers {
+				issuerUrl, err := url.Parse(issuer)
+				if err != nil {
+					log.Warnf("could not parse URL %s: %v", issuer, err)
+					continue
+				}
+
+				if strings.HasPrefix(jkuUrl.String(), issuerUrl.String()) {
+					return parseRsaToken(token)
+				}
+			}
+			return nil, fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, issuers)
+		}
+		return nil, fmt.Errorf("header 'jku' missing from token, cannot verify signature")
+	})
 
 	if err != nil || !token.Valid {
-		return err
-	}
-
-	if jku, ok := token.Header["jku"]; ok {
-		jkuUrl, err := url.Parse(jku.(string))
-		if err != nil {
-			return err
-		}
-
-		for _, issuer := range issuers {
-			issuerUrl, err := url.Parse(issuer)
-			if err != nil {
-				return err
-
-			}
-
-			if strings.HasPrefix(jkuUrl.String(), issuerUrl.String()) {
-				return nil
-			}
-
-		}
-		return fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, issuers)
-	} else {
-		return fmt.Errorf("header 'jku' missing from token, cannot verify signature")
+		return false, err
 	}
 
 	if claims, claimsOk := token.Claims.(jwt.MapClaims); claimsOk {
 		if scopes, ok := claims["scope"].([]interface{}); ok {
 			for _, scope := range scopes {
 				if scope.(string) == neededScope {
-					return nil
+					return true, nil
 				}
 			}
 		}
 	}
 
-	return fmt.Errorf("could not find scope %q in token claims", neededScope)
+	return false, fmt.Errorf("could not find scope %q in token claims", neededScope)
 }
 
 // parseRsaToken uses the token information for RSA signed JWT tokens and retrieves
