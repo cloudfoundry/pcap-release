@@ -100,11 +100,19 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 		return
 	}
 
-	err := verifyJwt(authToken, "bosh.admin", bosh.uaaUrls)
+	allowed, err := verifyJwt(authToken, "bosh.admin", bosh.uaaUrls)
 	if err != nil {
 		log.Errorf("could not verify token %s (%s)", authToken, err)
 		response.WriteHeader(http.StatusForbidden)
 		_, _ = response.Write([]byte(fmt.Sprintf("could not verify token: %v", err)))
+
+		return
+	}
+
+	if !allowed {
+		log.Errorf("token %s does not have the permissions or is not supported", authToken)
+		response.WriteHeader(http.StatusForbidden)
+		_, _ = response.Write([]byte(fmt.Sprintf("token does not have the necessary permission or is not supported")))
 
 		return
 	}
