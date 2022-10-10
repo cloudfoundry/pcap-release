@@ -39,7 +39,7 @@ var _ = Describe("Bosh api basic Tests", func() {
 		It("can be started", func() {
 			r, err := http.Get("http://localhost:8080/health")
 			Expect(err).To(BeNil())
-			Expect(r.StatusCode).To(Equal(200))
+			Expect(r.StatusCode).To(Equal(http.StatusOK))
 		})
 		It("can be stopped again", func() {
 			_, err := http.Get("http://localhost:8080/health")
@@ -74,20 +74,20 @@ var _ = Describe("Single Instances capture validation errors", func() {
 		It("requires deployment parameter to start capturing", func() {
 			r, err := http.Get("http://localhost:8080/capture/bosh")
 			Expect(err).To(BeNil())
-			Expect(r.StatusCode).To(Equal(400))
+			Expect(r.StatusCode).To(Equal(http.StatusBadRequest))
 		})
 		It("requires group parameter to start capturing", func() {
 
 			r, err := http.Get("http://localhost:8080/capture/bosh?deployment=haproxy")
 			Expect(err).To(BeNil())
-			Expect(r.StatusCode).To(Equal(400))
+			Expect(r.StatusCode).To(Equal(http.StatusBadRequest))
 		})
 
 		It("requires authorization header to contain the auth token", func() {
 
 			r, err := http.Get("http://localhost:8080/capture/bosh?deployment=haproxy&group=ha_proxy_z1")
 			Expect(err).To(BeNil())
-			Expect(r.StatusCode).To(Equal(401))
+			Expect(r.StatusCode).To(Equal(http.StatusUnauthorized))
 		})
 
 		It("requires authorization header to contain a valid token", func() {
@@ -102,7 +102,7 @@ var _ = Describe("Single Instances capture validation errors", func() {
 
 			r, err := client.Do(req)
 			Expect(err).To(BeNil())
-			Expect(r.StatusCode).To(Equal(403))
+			Expect(r.StatusCode).To(Equal(http.StatusUnauthorized))
 		})
 	})
 })
