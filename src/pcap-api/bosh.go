@@ -117,12 +117,16 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 		return
 	}
 
-	// Check if app can be seen by token
-	instances, err := bosh.getInstances(deployment, authToken)
+	// Get all instances in the requested BOSH deployment
+	instances, status, err := bosh.getInstances(deployment, authToken)
 	if err != nil {
-		// FIXME: This could be an auth error as well.
 		log.Errorf("could not check if app %s can be seen by token %s (%s)", deployment, authToken, err)
-		response.WriteHeader(http.StatusInternalServerError)
+
+		if status > 0 {
+			response.WriteHeader(status)
+		} else {
+			response.WriteHeader(http.StatusInternalServerError)
+		}
 
 		return
 	}
@@ -168,16 +172,16 @@ func toSet(strings []string) StringSet {
 	return set
 }
 
-func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string) ([]boshInstance, error) {
+func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string) ([]boshInstance, int, error) {
 	log.Debugf("Checking at %s if deployment %s can be seen by token %s", bosh.config.BoshDirectorAPI, deployment, authToken)
-	url, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", bosh.config.BoshDirectorAPI, deployment))
+	instancesUrl, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", bosh.config.BoshDirectorAPI, deployment))
 
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req := &http.Request{
 		Method: "GET",
-		URL:    url,
+		URL:    instancesUrl,
 		Header: map[string][]string{
 			"Authorization": {authToken},
 		},
@@ -185,26 +189,26 @@ func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string
 
 	res, err := bosh.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
+		return nil, res.StatusCode, fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
 	}
 
 	var response []boshInstance
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	err = json.Unmarshal(data, &response)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return response, nil
+	return response, res.StatusCode, nil
 }
 
 func (bosh *BoshCaptureHandler) setup() {
