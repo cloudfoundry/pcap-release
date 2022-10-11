@@ -89,7 +89,7 @@ func (cli *PcapCli) Run(cliConnection plugin.CliConnection, args []string) {
 	tp.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // TODO remove before putting into production
 	httpClient := &http.Client{Transport: tp}
 
-	urlStr := fmt.Sprintf("%s/capture?appid=%s&type=%s&device=%s&filter=%s", pcapAPI, app.Guid, opts.Type, opts.Device, opts.Filter)
+	urlStr := fmt.Sprintf("%s/capture/cf?appid=%s&type=%s&device=%s&filter=%s", pcapAPI, app.Guid, opts.Type, opts.Device, opts.Filter)
 	for _, index := range indices {
 		urlStr = fmt.Sprintf("%s&index=%s", urlStr, index)
 	}

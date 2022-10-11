@@ -3,16 +3,18 @@ listen: ":8080"
 enable_server_tls: true
 cert: "test/server.crt"
 key: "test/server.key"
-cf:
-  api: "https://api.cf.sap.hana.ondemand.com"
-  ca: test/cf-ca.
-bosh:
-  api: "https://192.168.1.11:25555"
-  ca:
+cf_api: "https://api.cf.sap.hana.ondemand.com"
+bosh_director_api: "https://192.168.1.11:25555"
+#cf:
+#  api: "https://api.cf.sap.hana.ondemand.com"
+#  ca: test/cf-cacert.pem
+#bosh:
+#  api: "https://192.168.1.11:25555"
+#  ca: test/bosh-cacert.pem
 agent_port: "9494"
 client_cert: "test/client.crt"
 client_key: "test/client.key"
 agent_ca: "test/cacert.pem"
 agent_common_name: "pcap-server.service.cf.internal"
-agent_tls_skip_verify: "false"
+agent_tls_skip_verify: false
 cli_download_root: "cli/build"

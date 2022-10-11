@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -93,9 +94,9 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 		device = "eth0" // default value
 	}
 
-	if authToken == "" {
+	if authToken == "" || !strings.HasPrefix(authToken, "Bearer") {
 		response.WriteHeader(http.StatusUnauthorized)
-		_, _ = response.Write([]byte("authentication required"))
+		_, _ = response.Write([]byte("Bearer authentication token required"))
 
 		return
 	}
@@ -127,6 +128,8 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 		} else {
 			response.WriteHeader(http.StatusInternalServerError)
 		}
+
+		response.Write([]byte(fmt.Sprintf("Could not verify instances with BOSH director: %v", err)))
 
 		return
 	}
@@ -194,15 +197,17 @@ func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string
 
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
-		return nil, res.StatusCode, fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
-	}
-
-	var response []boshInstance
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, 0, err
 	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, res.StatusCode, fmt.Errorf("expected status code %d but got status code %d: %s", http.StatusOK, res.StatusCode, string(data))
+	}
+
+	var response []boshInstance
+
 	err = json.Unmarshal(data, &response)
 	if err != nil {
 		return nil, 0, err

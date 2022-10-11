@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/pcap-api/api"
 	"net/http"
 
 	log "github.com/sirupsen/logrus"
@@ -15,22 +16,13 @@ type Api struct {
 	bosh       *BoshCaptureHandler
 }
 
-type status struct {
-	Up       bool `json:"Up"`
-	Handlers struct {
-		Bosh bool `json:"bosh"`
-		Cf   bool `json:"cf"`
-	} `json:"handlers"`
-}
-
 func (a *Api) handleHealth(response http.ResponseWriter, _ *http.Request) {
 
-	status := map[string]interface{}{
-		"up": true,
-		"handlers": map[string]bool{
-			"bosh": a.bosh != nil,
-			"cf":   a.cf != nil,
-		},
+	status := api.Status{
+		Up: true,
+		Handlers: api.Handlers{
+			Bosh: a.bosh != nil,
+			Cf:   a.cf != nil},
 	}
 
 	data, err := json.Marshal(status)
