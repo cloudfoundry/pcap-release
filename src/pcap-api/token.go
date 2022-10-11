@@ -30,6 +30,9 @@ type UaaKeyInfo struct {
 //   - that there is a claim 'scope' that contains one entry that matches neededScope.
 //
 // Limitations: only RSA signed tokens are supported.
+//
+// returns a boolean that confirms that the token is valid, from a valid issuer and has the needed scope,
+// and an error in case anything went wrong while verifying the token and its scopes.
 func verifyJwt(tokenString string, neededScope string, issuers []string) (bool, error) {
 
 	tokenString = strings.Replace(tokenString, "Bearer ", "", 1)
@@ -84,10 +87,10 @@ func parseRsaToken(token *jwt.Token) (interface{}, error) {
 	if rsa, ok := token.Method.(*jwt.SigningMethodRSA); ok {
 		// with the RSA signing method, the key is a public key / certificate that can be
 		// retrieved from the JKU endpoint (among other places).
-		if url, ok := token.Header["jku"].(string); ok {
+		if keyInfoUrl, ok := token.Header["jku"].(string); ok {
 			if kid, ok := token.Header["kid"].(string); ok {
 
-				key, err := fetchPublicKey(url, kid)
+				key, err := fetchPublicKey(keyInfoUrl, kid)
 				if err != nil {
 					return nil, err
 				}
