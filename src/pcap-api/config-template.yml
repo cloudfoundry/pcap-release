@@ -3,7 +3,12 @@ listen: ":8080"
 enable_server_tls: true
 cert: "test/server.crt"
 key: "test/server.key"
-cf_api: "https://api.cf.sap.hana.ondemand.com"
+cf:
+  api: "https://api.cf.sap.hana.ondemand.com"
+  ca: test/cf-ca.
+bosh:
+  api: "https://192.168.1.11:25555"
+  ca:
 agent_port: "9494"
 client_cert: "test/client.crt"
 client_key: "test/client.key"
