@@ -1,12 +1,14 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"github.com/jessevdk/go-flags"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io"
+	"net/http"
 	"os"
 )
 
@@ -25,27 +27,24 @@ type boshConfig struct {
 
 func main() {
 
-	// Initialize flags
-	type positional struct {
-		Deployment  string   `positional-arg-name:"deployment" description:"The name of the deployment in which you would like to capture." required:"true"`
-		InstanceIds []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." default:"all" required:"false"`
-	}
-
 	var opts struct {
-		File            string     `short:"o" long:"file" description:"The output file. Written in binary pcap format." required:"true"`
-		Filter          string     `short:"f" long:"filter" description:"Allows to provide a filter expression in pcap filter format." required:"false"`
-		Device          string     `short:"d" long:"device" description:"Specifies the network device to listen on." default:"eth0" required:"false"`
-		Type            string     `short:"t" long:"type" description:"Specifies the type of process to capture for the app." default:"web" required:"false"`
-		BoshConfig      string     `short:"c" long:"bosh-config" description:"Path to the BOSH config file, used for the UAA Token" default:"${HOME}/.bosh/config" required:"false"`
-		BoshEnvironment string     `short:"e" long:"bosh-environment" description:"The BOSH environment to use for retrieving the BOSH UAA token from the BOSH config file" default:"bosh" required:"false"`
-		BoshToken       string     `short:"T" long:"token" description:"BOSH UAA Token to use for authentication (instead of BOSH config file)" env:"BOSH_TOKEN" default:"" required:"false"`
-		Positional      positional `positional-args:"true" required:"true"`
+		File            string   `short:"o" long:"file" description:"The output file. Written in binary pcap format." required:"true"`
+		PcapApiUrl      string   `short:"u" long:"pcap-api-url" description:"The URL of the PCAP API, e.g. pcap.cf.$LANDSCAPE_DOMAIN" env:"PCAP_API" required:"true"`
+		Filter          string   `short:"f" long:"filter" description:"Allows to provide a filter expression in pcap filter format." required:"false"`
+		Device          string   `short:"i" long:"device" description:"Specifies the network device to listen on." default:"eth0" required:"false"`
+		Type            string   `short:"t" long:"type" description:"Specifies the type of process to capture for the app." default:"web" required:"false"`
+		BoshConfig      string   `short:"c" long:"bosh-config" description:"Path to the BOSH config file, used for the UAA Token" default:"${HOME}/.bosh/config" required:"false"`
+		BoshEnvironment string   `short:"e" long:"bosh-environment" description:"The BOSH environment to use for retrieving the BOSH UAA token from the BOSH config file" default:"bosh" required:"false"`
+		BoshToken       string   `short:"T" long:"token" description:"BOSH UAA Token to use for authentication (instead of BOSH config file)" env:"BOSH_TOKEN" default:"" required:"false"`
+		Deployment      string   `short:"d" long:"deployment" description:"The name of the deployment in which you would like to capture." required:"true"`
+		InstanceGroups  []string `short:"g" long:"instance-group" description:"The name of an instance group in the deployment in which you would like to capture. Can be defined multiple times." required:"true"`
+		InstanceIds     []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"`
 	}
 
 	_, err := flags.ParseArgs(&opts, os.Args[1:])
 
 	if err != nil {
-		return
+		panic(err)
 	}
 
 	if opts.BoshToken == "" {
@@ -74,6 +73,22 @@ func main() {
 	}
 
 	print(opts.BoshToken)
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				// FIXME: add BOSH director CA
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+
+	res, err := client.Get(opts.PcapApiUrl)
+	if err != nil {
+		panic(err)
+	}
+
+	defer res.Body.Close()
 
 	// log into bosh.
 
