@@ -1,15 +1,21 @@
 package main
 
 import (
+	"code.cloudfoundry.org/bytefmt"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/jessevdk/go-flags"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
+
+	"github.com/cloudfoundry/pcap-release/pcap-api/api"
 )
 
 type environment struct {
@@ -31,7 +37,7 @@ func main() {
 		File            string   `short:"o" long:"file" description:"The output file. Written in binary pcap format." required:"true"`
 		PcapApiUrl      string   `short:"u" long:"pcap-api-url" description:"The URL of the PCAP API, e.g. pcap.cf.$LANDSCAPE_DOMAIN" env:"PCAP_API" required:"true"`
 		Filter          string   `short:"f" long:"filter" description:"Allows to provide a filter expression in pcap filter format." required:"false"`
-		Device          string   `short:"i" long:"device" description:"Specifies the network device to listen on." default:"eth0" required:"false"`
+		Interface       string   `short:"i" long:"interface" description:"Specifies the network interface to listen on." default:"eth0" required:"false"`
 		Type            string   `short:"t" long:"type" description:"Specifies the type of process to capture for the app." default:"web" required:"false"`
 		BoshConfig      string   `short:"c" long:"bosh-config" description:"Path to the BOSH config file, used for the UAA Token" default:"${HOME}/.bosh/config" required:"false"`
 		BoshEnvironment string   `short:"e" long:"bosh-environment" description:"The BOSH environment to use for retrieving the BOSH UAA token from the BOSH config file" default:"bosh" required:"false"`
@@ -72,139 +78,105 @@ func main() {
 		}
 	}
 
-	print(opts.BoshToken)
+	tp := http.DefaultTransport.(*http.Transport).Clone()
+	tp.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // TODO remove before putting into production
+	httpClient := &http.Client{Transport: tp}
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				// FIXME: add BOSH director CA
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-
-	res, err := client.Get(opts.PcapApiUrl)
+	res, err := httpClient.Get(fmt.Sprintf("%s/health", opts.PcapApiUrl))
 	if err != nil {
 		panic(err)
 	}
 
 	defer res.Body.Close()
 
-	// log into bosh.
+	status := &api.Status{}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Errorf("could not read status: %v", err)
+		return
+	}
 
-	//loggedIn, err := cliConnection.IsLoggedIn()
-	//
-	//if !loggedIn || err != nil {
-	//	fmt.Println("Please log in first.")
-	//	return
-	//}
+	err = json.Unmarshal(body, status)
 
-	//ccAPI, err := cliConnection.ApiEndpoint()
-	//
-	//if err != nil {
-	//	fmt.Printf("Could not get CF API endpoint: %s\n", err)
-	//	return
-	//}
-	//
-	//pcapAPI := strings.Replace(ccAPI, "api.", "pcap.", 1)
-	//
-	//// DEBUG
-	//pcapAPIEnv, present := os.LookupEnv("PCAP_API")
-	//if present {
-	//	pcapAPI = pcapAPIEnv
-	//}
-	//// DEBUG END
-	//
-	//appName := opts.Positional.AppName
-	//app, err := cliConnection.GetApp(appName)
-	//
-	//if err != nil {
-	//	fmt.Printf("Could not get app id for app %s: %s\n", appName, err)
-	//	return
-	//}
-	//
-	//var indices []string
-	//
-	//if opts.Instance == "all" {
-	//	// special case: all instances
-	//	for index := 0; index < app.InstanceCount; index++ {
-	//		indices = append(indices, fmt.Sprintf("%d", index))
-	//	}
-	//} else {
-	//	indices = strings.Split(opts.Instance, ",")
-	//}
-	//
-	//tp := http.DefaultTransport.(*http.Transport).Clone()
-	//tp.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // TODO remove before putting into production
-	//httpClient := &http.Client{Transport: tp}
-	//
-	//urlStr := fmt.Sprintf("%s/capture?appid=%s&type=%s&device=%s&filter=%s", pcapAPI, app.Guid, opts.Type, opts.Device, opts.Filter)
-	//for _, index := range indices {
-	//	urlStr = fmt.Sprintf("%s&index=%s", urlStr, index)
-	//}
-	//
-	//reqURL, err := url.Parse(urlStr)
-	//
-	//if err != nil {
-	//	fmt.Printf("Could not parse URL: %s\n", err)
-	//	return
-	//}
-	//
-	//authToken, err := cliConnection.AccessToken()
-	//
-	//if err != nil {
-	//	fmt.Printf("Could not get access token: %s\n", err)
-	//	return
-	//}
-	//
-	//req := &http.Request{
-	//	Method: "GET",
-	//	URL:    reqURL,
-	//	Header: map[string][]string{
-	//		"Authorization": {authToken},
-	//	},
-	//}
-	//fmt.Printf("Capturing traffic of app %s %s into file %s ...\n", appName, indices, opts.File)
-	//resp, err := httpClient.Do(req)
-	//
-	//if err != nil {
-	//	fmt.Printf("Could not receive pcap stream: %s\n", err)
-	//	return
-	//}
-	//defer resp.Body.Close()
-	//
-	//if resp.StatusCode != 200 {
-	//	fmt.Printf("Unexpected status code from pcap api server: %d\n", resp.StatusCode)
-	//	msg, _ := io.ReadAll(resp.Body)
-	//	fmt.Printf("Details: %s\n", msg)
-	//	return
-	//}
-	//
-	//file, err := os.Create(opts.File)
-	//defer file.Close()
-	//
-	//if err != nil {
-	//	fmt.Printf("Could not open %s for writing: %s\n", opts.File, err)
-	//	return
-	//}
-	//totalBytes := uint64(0)
-	//updateProgress := func(nBytes int) {
-	//	totalBytes += uint64(nBytes)
-	//	fmt.Printf("\033[2K\rRead %d bytes from stream (%s total)", nBytes, bytefmt.ByteSize(totalBytes))
-	//}
-	//updateProgress(0)
-	//for {
-	//	buffer := make([]byte, 4096)
-	//	n, err := resp.Body.Read(buffer)
-	//	updateProgress(n)
-	//	if n > 0 {
-	//		file.Write(buffer[:n])
-	//	}
-	//	if err != nil {
-	//		handleIOError(err)
-	//		return
-	//	}
-	//}
+	if err != nil {
+		log.Errorf("could not read status: %v", err)
+		return
+	}
+
+	if !status.Handlers.Bosh {
+		log.Fatalf("The PCAP endpoint does not support BOSH capturing")
+	}
+
+	urlStr := fmt.Sprintf("%s/capture/bosh?deployment=%s&device=%s&filter=%s", opts.PcapApiUrl, opts.Deployment, opts.Interface, opts.Filter)
+	log.Infof("Calling: %s", urlStr)
+	for _, index := range opts.InstanceIds {
+		urlStr = fmt.Sprintf("%s&instance_id=%s", urlStr, index)
+	}
+	for _, group := range opts.InstanceGroups {
+		urlStr = fmt.Sprintf("%s&group=%s", urlStr, group)
+	}
+
+	reqURL, err := url.Parse(urlStr)
+
+	if err != nil {
+		fmt.Printf("Could not parse URL: %s\n", err)
+		return
+	}
+
+	req := &http.Request{
+		Method: "GET",
+		URL:    reqURL,
+		Header: map[string][]string{
+			"Authorization": {"Bearer " + opts.BoshToken},
+		},
+	}
+
+	instanceIds := "all"
+	if len(opts.InstanceIds) > 0 {
+		instanceIds = strings.Join(opts.InstanceIds, ", ")
+	}
+
+	fmt.Printf("Capturing traffic of deployment: %s groups: %v instances: %v into file %s ...\n", opts.Deployment, opts.InstanceGroups, instanceIds, opts.File)
+	resp, err := httpClient.Do(req)
+
+	if err != nil {
+		fmt.Printf("Could not receive pcap stream: %s\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		fmt.Printf("Unexpected status code from pcap api server: %d\n", resp.StatusCode)
+		msg, _ := io.ReadAll(resp.Body)
+		fmt.Printf("Details: %s\n", msg)
+		return
+	}
+
+	file, err := os.Create(opts.File)
+	defer file.Close()
+
+	if err != nil {
+		fmt.Printf("Could not open %s for writing: %s\n", opts.File, err)
+		return
+	}
+	totalBytes := uint64(0)
+	updateProgress := func(nBytes int) {
+		totalBytes += uint64(nBytes)
+		fmt.Printf("\033[2K\rRead %d bytes from stream (%s total)", nBytes, bytefmt.ByteSize(totalBytes))
+	}
+	updateProgress(0)
+	for {
+		buffer := make([]byte, 4096)
+		n, err := resp.Body.Read(buffer)
+		updateProgress(n)
+		if n > 0 {
+			file.Write(buffer[:n])
+		}
+		if err != nil {
+			handleIOError(err)
+			return
+		}
+	}
 }
 
 func handleIOError(err error) {
