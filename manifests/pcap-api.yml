@@ -42,6 +42,8 @@ instance_groups:
             agent_tls_skip_verify: true
             enable_server_tls: false
             cf_api: ((pcap_api.cf_api))
+            bosh_director_api: ((pcap_api.bosh_director_api))
+            bosh_director_ca: ((pcap_api.bosh_director_ca))
             client_cert: ((pcap_api_mtls.certificate))
             client_key: ((pcap_api_mtls.private_key))
             agent_ca: ((pcap_api_mtls.ca))

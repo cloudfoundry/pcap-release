@@ -2,15 +2,16 @@ package main
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type BoshCaptureHandler struct {
@@ -82,7 +83,6 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 
 		return
 	}
-	// TODO: add check for len groups > 0
 
 	if len(groups) < 1 {
 		response.WriteHeader(http.StatusBadRequest)
@@ -159,7 +159,7 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 	for _, instance := range selectedInstances {
 		ip := instance.Ips[0]
 
-		agentURL := fmt.Sprintf("https://%s:%s/capture/bosh?deployment=%s&device=%s&filter=%s", ip, bosh.config.AgentPort,deployment, device, filter)
+		agentURL := fmt.Sprintf("https://%s:%s/capture/bosh?device=%s&filter=%s", ip, bosh.config.AgentPort, device, filter)
 		agentURLs = append(agentURLs, agentURL)
 	}
 
@@ -178,7 +178,6 @@ func toSet(strings []string) StringSet {
 
 func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string) ([]boshInstance, int, error) {
 	log.Debugf("Checking at %s if deployment %s can be seen by token %s", bosh.config.BoshDirectorAPI, deployment, authToken)
-	httpClient := http.DefaultClient
 	instancesUrl, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", bosh.config.BoshDirectorAPI, deployment))
 
 	if err != nil {
@@ -192,7 +191,7 @@ func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string
 		},
 	}
 
-	res, err := httpClient.Do(req)
+	res, err := bosh.client.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -219,17 +218,29 @@ func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string
 }
 
 func (bosh *BoshCaptureHandler) setup() {
-	log.Info("Discovering BOSH Director endpoint...")
+	log.Infof("Loading BOSH CA certificate from %s", bosh.config.BoshDirectorCa)
+
+	data, err := os.ReadFile(bosh.config.BoshDirectorCa)
+	if err != nil {
+		log.Fatalf("Could not load BOSH Director CA from %s (%s)", bosh.config.BoshDirectorCa, err)
+	}
+
+	boshCA := x509.NewCertPool()
+	ok := boshCA.AppendCertsFromPEM(data)
+
+	if !ok {
+		log.Fatalf("Could not add BOSH Director CA from %s, adding to the cert pool failed.", bosh.config.BoshDirectorCa)
+	}
 
 	bosh.client = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				// FIXME: add BOSH director CA
-				InsecureSkipVerify: true,
+				RootCAs: boshCA,
 			},
 		},
 	}
 
+	log.Info("Discovering BOSH Director endpoint...")
 	response, err := bosh.client.Get(bosh.config.BoshDirectorAPI + "/info")
 
 	if err != nil {
@@ -237,7 +248,7 @@ func (bosh *BoshCaptureHandler) setup() {
 	}
 
 	var apiResponse *boshInfo
-	data, err := io.ReadAll(response.Body)
+	data, err = io.ReadAll(response.Body)
 	if err != nil {
 		log.Fatalf("Could not read BOSH Director API response: %s", err)
 	}
