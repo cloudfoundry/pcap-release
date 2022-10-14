@@ -88,7 +88,7 @@ func (s *PcapStreamer) captureAndStream(captureURLs []string, response *http.Res
 	done := 0
 	for msg := range packets {
 		if msg.err != nil {
-			log.Errorf("error while capturing: %v", err)
+			log.Errorf("error while capturing: %v", msg.err)
 			return
 		}
 		if msg.packet != nil {
@@ -122,11 +122,11 @@ func (s *PcapStreamer) captureFromAgent(agentURL string, packets chan packetMess
 	}()
 	pcapStream, err := s.getPcapStream(agentURL)
 	if err != nil {
-		log.Errorf("could not get pcap stream from URL %s (%s)", agentURL, err)
+		captureError := fmt.Errorf("could not get pcap stream from URL %s: %v", agentURL, err)
 		packets <- packetMessage{
 			packet: nil,
 			done:   true,
-			err:    err,
+			err:    captureError,
 		}
 		return
 	}
@@ -136,7 +136,7 @@ func (s *PcapStreamer) captureFromAgent(agentURL string, packets chan packetMess
 	// Stream the pcap back to the client
 	pcapReader, err := pcapgo.NewReader(pcapStream)
 	if err != nil {
-		captureError := fmt.Errorf("could not create pcap reader from pcap stream %s (%s)", pcapStream, err)
+		captureError := fmt.Errorf("could not create pcap reader from pcap stream %s (%v)", pcapStream, err)
 		packets <- packetMessage{
 			err: captureError,
 		}
