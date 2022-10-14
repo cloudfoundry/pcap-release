@@ -5,6 +5,8 @@ pcap_api:
   networks: [{name: default}]
   cf_api: https://api.cf.cfapp.com
   ca_path: /cf/pcap_ca
+  bosh_director_ca: /bosh/default_ca.ca
+  bosh_director_api: https://192.168.1.11:25555
 route_registrar:
   public_route: pcap.cf.cfapp.com
 nats:
