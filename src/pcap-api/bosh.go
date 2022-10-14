@@ -4,12 +4,13 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type BoshCaptureHandler struct {
@@ -158,7 +159,7 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 	for _, instance := range selectedInstances {
 		ip := instance.Ips[0]
 
-		agentURL := fmt.Sprintf("https://%s:%s/capture/bosh?device=%s&filter=%s", ip, bosh.config.AgentPort, device, filter)
+		agentURL := fmt.Sprintf("https://%s:%s/capture/bosh?deployment=%s&device=%s&filter=%s", ip, bosh.config.AgentPort,deployment, device, filter)
 		agentURLs = append(agentURLs, agentURL)
 	}
 
@@ -177,6 +178,7 @@ func toSet(strings []string) StringSet {
 
 func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string) ([]boshInstance, int, error) {
 	log.Debugf("Checking at %s if deployment %s can be seen by token %s", bosh.config.BoshDirectorAPI, deployment, authToken)
+	httpClient := http.DefaultClient
 	instancesUrl, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", bosh.config.BoshDirectorAPI, deployment))
 
 	if err != nil {
@@ -190,7 +192,7 @@ func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string
 		},
 	}
 
-	res, err := bosh.client.Do(req)
+	res, err := httpClient.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
