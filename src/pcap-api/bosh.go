@@ -5,13 +5,15 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+
+	log "github.com/sirupsen/logrus"
 )
 
 type BoshCaptureHandler struct {
@@ -220,25 +222,34 @@ func (bosh *BoshCaptureHandler) getInstances(deployment string, authToken string
 func (bosh *BoshCaptureHandler) setup() {
 	log.Infof("Loading BOSH CA certificate from %s", bosh.config.BoshDirectorCa)
 
-	data, err := os.ReadFile(bosh.config.BoshDirectorCa)
-	if err != nil {
-		log.Fatalf("Could not load BOSH Director CA from %s (%s)", bosh.config.BoshDirectorCa, err)
-	}
+	if bosh.config.BoshDirectorCa == "" {
 
-	boshCA := x509.NewCertPool()
-	ok := boshCA.AppendCertsFromPEM(data)
 
-	if !ok {
-		log.Fatalf("Could not add BOSH Director CA from %s, adding to the cert pool failed.", bosh.config.BoshDirectorCa)
-	}
+		bosh.client = http.DefaultClient
+	}else {
+		data, err := os.ReadFile(bosh.config.BoshDirectorCa)
 
-	bosh.client = &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: boshCA,
+		if err != nil {
+			log.Fatalf("Could not load BOSH Director CA from %s (%s)", bosh.config.BoshDirectorCa, err)
+		}
+
+		boshCA := x509.NewCertPool()
+		ok := boshCA.AppendCertsFromPEM(data)
+
+		if !ok {
+			log.Fatalf("Could not add BOSH Director CA from %s, adding to the cert pool failed.", bosh.config.BoshDirectorCa)
+		}
+
+		bosh.client = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					RootCAs: boshCA,
+				},
 			},
-		},
+		}
+
 	}
+
 
 	log.Info("Discovering BOSH Director endpoint...")
 	response, err := bosh.client.Get(bosh.config.BoshDirectorAPI + "/info")
@@ -248,7 +259,7 @@ func (bosh *BoshCaptureHandler) setup() {
 	}
 
 	var apiResponse *boshInfo
-	data, err = io.ReadAll(response.Body)
+	data, err := io.ReadAll(response.Body)
 	if err != nil {
 		log.Fatalf("Could not read BOSH Director API response: %s", err)
 	}
