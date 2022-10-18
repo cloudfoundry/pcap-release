@@ -1,0 +1,186 @@
+---
+
+groups:
+  - name: pcap-release
+    jobs:
+      - unit-tests
+      - unit-tests-pr
+      - acceptance-tests
+      - acceptance-tests-pr
+
+jobs:
+  - name: unit-tests
+    public: true
+    serial: true
+    plan:
+    - do:
+      - get: git
+        trigger: true
+      - task: lint
+        config:
+          platform: linux
+          image_resource:
+            type: docker-image
+            source:
+              repository: iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight
+              tag:        latest
+              username:   ((docker.username))
+              password:   ((docker.password))
+          inputs:
+            - { name: git }
+          caches:
+          - path: git/vendor/cache
+          - path: git/.bundle
+          run:
+            path: ./git/ci/scripts/lint
+            args: []
+          params:
+            REPO_ROOT: git
+      - task: unit-tests
+        config:
+          platform: linux
+          image_resource:
+            type: docker-image
+            source:
+              repository: iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight
+              tag:        latest
+              username:   ((docker.username))
+              password:   ((docker.password))
+          inputs:
+            - { name: git }
+
+          caches:
+          - path: git/vendor/cache
+          - path: git/.bundle
+          run:
+            path: ./git/ci/scripts/unit-tests
+            args: []
+          params:
+            REPO_ROOT: git
+      on_failure: # TODO
+        put: notify
+        params:
+          channel:  "#pcap-release" # TODO: channel doesn't exist (yet?)
+          username: ci-bot
+          icon_url: "((slack.icon))"
+          text:    "((slack.fail_url)) pcap-releae : unit-tests job failed"
+
+  - name: unit-tests-pr
+    public: true
+    serial: true
+    plan:
+    - do:
+      - { get: git-pull-requests, trigger: true, version: every }
+      - put: git-pull-requests
+        params:
+          path: git-pull-requests
+          status: pending
+          context: unit-tests
+      - task: lint
+        config:
+          platform: linux
+          image_resource:
+            type: docker-image
+            source:
+              repository: iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight
+              tag:        latest
+              username:   ((docker.username))
+              password:   ((docker.password))
+          inputs:
+            - { name: git-pull-requests }
+          caches:
+          - path: git-pull-requests/vendor/cache
+          - path: git-pull-requests/.bundle
+          run:
+            path: ./git-pull-requests/ci/scripts/lint
+            args: []
+          params:
+            REPO_ROOT: git-pull-requests
+      - task: unit-tests
+        config:
+          platform: linux
+          image_resource:
+            type: docker-image
+            source:
+              repository: iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight
+              tag:        latest
+              username:   ((docker.username))
+              password:   ((docker.password))
+          inputs:
+            - { name: git-pull-requests }
+          caches:
+          - path: git-pull-requests/vendor/cache
+          - path: git-pull-requests/.bundle
+          run:
+            path: ./git-pull-requests/ci/scripts/unit-tests
+            args: []
+          params:
+            REPO_ROOT: git-pull-requests
+    on_success:
+      put: git-pull-requests
+      params:
+        path: git-pull-requests
+        status: success
+        context: unit-tests
+    on_failure:
+      put: git-pull-requests
+      params:
+        path: git-pull-requests
+        status: failure
+        context: unit-tests
+
+resource_types:
+  - name: slack-notification
+    type: docker-image
+    source:
+      repository: cfcommunity/slack-notification-resource
+
+  - name: pull-request
+    type: docker-image
+    source:
+      repository: teliaoss/github-pr-resource
+
+  # FIXME: Need to use latest version of this resource due to
+  # https://github.com/concourse/github-release-resource/issues/108
+  # https://github.com/concourse/github-release-resource/pull/107
+  # Until Concourse is updated to 7.5.0+
+  - name: github-release-alt
+    type: registry-image
+    source:
+      repository: concourse/github-release-resource
+
+resources:
+  - name: git
+    type: git
+    source:
+      uri:         git@github.com:cloudfoundry/pcap-release.git
+      branch:      master
+      private_key: ((github.private_key))
+
+  - name: git-pull-requests
+    type: pull-request
+    source:
+      access_token: ((github.access_token))
+      repository:   cloudfoundry/pcap-release
+      base_branch:  master
+      labels:       [run-ci]
+
+  - name: notify
+    type: slack-notification
+    source:
+      url: ((slack.webhook))
+
+  - name: github
+    type: github-release-alt
+    source:
+      user:         cloudfoundry
+      repository:   pcap-release
+      access_token: ((github.access_token))
+
+  - name: daily
+    type: time
+    source:
+      start: 7:00 AM
+      stop: 8:00 AM
+      location: Europe/Berlin
+      interval: 24h

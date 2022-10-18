@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -euo pipefail
+
+cd ${REPO_ROOT}
+
+bundle package
+bundle exec rake spec
+
+pushd src/pcap-agent
+  go test
+popd
+
+pushd src/pcap-api
+  go test
+popd

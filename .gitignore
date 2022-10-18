@@ -11,20 +11,28 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-pcap-server.tgz
-config/private.yml
+# Dependency directories & default folders/files
+.bundle
+.dev_builds
 blobs
 dev_releases
-releases/*.tgz
-releases/**/*.tgz
-.dev_builds
+vendor
+
+# private.yml for security reasons
+config/private.yml
+
+# Releases/tarballs
 .final_builds/jobs/**/*.tgz
 .final_builds/packages/**/*.tgz
+pcap-server.tgz
+releases/*.tgz
+releases/**/*.tgz
+
+
+# IDEs & System Files
 .DS_Store
 .idea
+.vscode
 *.swp
 *~
 *#

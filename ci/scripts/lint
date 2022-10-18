@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -euo pipefail
+
+cd ${REPO_ROOT}
+
+bundle package
+bundle exec rake lint
+
+pushd src/pcap-agent
+  go vet
+popd
+
+pushd src/pcap-api
+  go vet
+popd
