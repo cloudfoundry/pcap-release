@@ -90,7 +90,7 @@ func parseRsaToken(token *jwt.Token) (interface{}, error) {
 		if keyInfoUrl, ok := token.Header["jku"].(string); ok {
 			if kid, ok := token.Header["kid"].(string); ok {
 
-				key, err := fetchPublicKey(keyInfoUrl, kid)
+				key, err := FetchPublicKey(keyInfoUrl, kid)
 				if err != nil {
 					return nil, err
 				}
@@ -117,7 +117,7 @@ func parseRsaToken(token *jwt.Token) (interface{}, error) {
 // returns an error if no key can be found with the requested kid or an error arises while communicating with url.
 //
 // Limitation: This will only fetch keys with RSA as signature algorithm.
-func fetchPublicKey(url, kid string) (*UaaKeyInfo, error) {
+func  FetchPublicKey(url, kid string) (*UaaKeyInfo, error) {
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{

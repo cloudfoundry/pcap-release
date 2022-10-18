@@ -11,6 +11,41 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+func MockjwtAPI(responses map[string]string) *httptest.Server{
+
+	type JwtAPIMock struct {
+
+		UAAUrl string
+
+	}
+
+	var JwtApi JwtAPIMock
+
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+
+		response, ok := responses[request.URL.Path]
+		if !ok {
+			writer.WriteHeader(http.StatusNotFound)
+
+			return
+		}
+
+		writer.Write([]byte(response))
+	})
+
+	ts := httptest.NewServer(mux)
+
+	JwtApi.UAAUrl = ts.URL
+
+
+
+	return ts
+}
+
 func MockBoshDirectorAPI(responses map[string]string) *httptest.Server {
 	json := `{
 		"name": "bosh-azure-cfn01",
