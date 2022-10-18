@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-	"os"
-	"io"
 
 	"github.com/cloudfoundry/pcap-release/pcap-api/test"
 
@@ -116,7 +114,7 @@ var _ = Describe("Single deployment Capture Tests", func() {
 	var pcapApi *Api
 	var err error
 	pcapResponses := map[string]string{
-		"/capture/bosh?deployment=haproxy&device=eth0&filter=": "test/sample.pcap",
+		"/capture/bosh?deployment=haproxy&device=eth0&filter=": "test/sample-1.pcap",
 	}
 	pcapAgent := test.NewMockPcapAgent(pcapResponses)
 
@@ -134,7 +132,7 @@ var _ = Describe("Single deployment Capture Tests", func() {
 			Index:       0,
 			Id:          "d8361024-c7bf-4931-b0c9-a152b09510e6",
 			Az:          "z1",
-			Ips:         []string{"10.1.8.0"},
+			Ips:         []string{pcapAgent.Host},
 			VmCreatedAt: timestamp,
 			ExpectsVm:   true,
 		},
@@ -167,43 +165,23 @@ var _ = Describe("Single deployment Capture Tests", func() {
 		pcapApi.Stop()
 	})
 
-	Context("Checking if token can see an app", func() {
-		It("Can see haproxy instances", func() {
-			response, status, err := pcapApi.bosh.getInstances("haproxy", "my-token")
-			if err != nil {
-				fmt.Println(err.Error())
-			}
-			Expect(err).To(BeNil())
-			Expect(status).To(Equal(http.StatusOK))
-			Expect(response).To(Equal(haproxyInstances))
-
-		})
-		It("Can't see apps that do not belong to the token", func() {
-			response, status, err := pcapApi.bosh.getInstances("9999", "mytoken")
-			Expect(err).NotTo(BeNil())
-			Expect(status).To(Equal(http.StatusNotFound))
-			Expect(response).ShouldNot(Equal(haproxyInstances))
-		})
-	})
-
 	Context("Getting pcap stream for an deployment", func() {
 
 		It("Returns an stream for the target instances", func() {
 
-
-			response, status, err := pcapApi.bosh.getInstances("haproxy", "my-token")
+			selectedInstances, status, err := pcapApi.bosh.getInstances("haproxy", "my-token")
 			if err != nil {
 				fmt.Println(err.Error())
 			}
 			Expect(err).To(BeNil())
 			Expect(status).To(Equal(http.StatusOK))
-			Expect(response).To(Equal(haproxyInstances))
-			var selectedInstances []boshInstance
+			Expect(selectedInstances).To(Equal(haproxyInstances))
+
 
 			for _, instance := range selectedInstances {
 				ip := instance.Ips[0]
-				resp, err := NewPcapStreamer(pcapApi.config).getPcapStream(fmt.Sprintf("https://%s:%s/capture/bosh?deployment=haproxy&device=eth0&filter=",ip, pcapAgent.Port))
-			   	if err != nil {
+				resp, err := NewPcapStreamer(pcapApi.config).getPcapStream(fmt.Sprintf("https://%s:%s/capture/bosh?deployment=haproxy&device=eth0&filter=", ip, pcapAgent.Port))
+				if err != nil {
 					fmt.Println(err.Error())
 				}
 
@@ -215,22 +193,10 @@ var _ = Describe("Single deployment Capture Tests", func() {
 
 		It("Returns an error for the wrong instances", func() {
 
-			response, status, err := pcapApi.bosh.getInstances("gorouter", "mytoken")
+			selectedInstances, status, err := pcapApi.bosh.getInstances("gorouter", "mytoken")
 			Expect(err).NotTo(BeNil())
 			Expect(status).To(Equal(http.StatusNotFound))
-			Expect(response).ShouldNot(Equal(haproxyInstances))
-			var selectedInstances []boshInstance
-
-			for _, instance := range selectedInstances {
-				ip := instance.Ips[0]
-				resp, err := NewPcapStreamer(pcapApi.config).getPcapStream(fmt.Sprintf("https://%s:%s/capture/bosh?deployment=haproxy&device=eth0&filter=",ip, pcapAgent.Port))
-				if err != nil {
-					fmt.Println(err.Error())
-				}
-
-				Expect(err).NotTo(BeNil())
-				Expect(resp).To(BeNil())
-			}
+			Expect(selectedInstances).ShouldNot(Equal(haproxyInstances))
 		})
 	})
 
@@ -239,7 +205,7 @@ var _ = Describe("Single deployment Capture Tests", func() {
 		agentURL, _ := url.Parse("http://localhost:8080/capture/bosh?deployment=haproxy&group=ha_proxy_z1")
 		req := &http.Request{
 			URL: agentURL,
-			Header: map[string][]string {
+			Header: map[string][]string{
 				"Authorization": {"my-token"},
 			},
 		}
@@ -250,22 +216,72 @@ var _ = Describe("Single deployment Capture Tests", func() {
 			Expect(err).To(BeNil())
 			Expect(res.StatusCode).To(Equal(http.StatusMethodNotAllowed))
 		})
-		It("Streams the correct pcap data to disk", func() {
-			req.Method = "GET"
-			res, err := client.Do(req)
+	})
+})
+
+var _ = Describe("Capture Tests", func() {
+	var pcapApi *Api
+	var err error
+	pcapResponses := map[string]string{
+		"/capture/bosh?deployment=haproxy&device=eth0&filter=": "test/sample.pcap",
+	}
+	pcapAgent := test.NewMockPcapAgent(pcapResponses)
+
+	keys := struct {
+		Keys []UaaKeyInfo `json:"keys"`
+	}{[]UaaKeyInfo{{
+
+		Kty:   "RSA",
+		E:     "AQAB",
+		Use:   "sig",
+		Kid:   "uaa-jwt-key-1",
+		Alg:   "RS256",
+		Value: "-----BEGIN PUBLIC KEY-----\n-----END PUBLIC KEY-----",
+		N:     "",
+	},}}
+
+
+	jwtresponse, err := json.Marshal(keys)
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	responses := map[string]string{
+		"/token_keys": string(jwtresponse),
+	}
+
+	jwtAPI := test.MockjwtAPI(responses)
+
+	cfg := DefaultConfig
+	cfg.BoshDirectorAPI = ""
+	cfg.CfAPI = ""
+	cfg.AgentPort = pcapAgent.Port
+
+	BeforeEach(func() {
+		pcapApi, err = NewApi(&cfg)
+		Expect(err).To(BeNil())
+		go pcapApi.Run()
+		time.Sleep(100 * time.Millisecond)
+	})
+	AfterEach(func() {
+		pcapApi.Stop()
+	})
+
+	Context("Check token for bosh instance", func() {
+
+		url := jwtAPI.URL
+		agentURL := url + "/token_keys"
+
+		It("check provided token is valid", func() {
+			response, err := FetchPublicKey(agentURL, "uaa-jwt-key-1")
+			if err != nil {
+
+				fmt.Println(err.Error())
+
+			}
 			Expect(err).To(BeNil())
-			Expect(res.StatusCode).To(Equal(http.StatusOK))
-			tempFile, err := os.CreateTemp("", "")
-			Expect(err).To(BeNil())
-			_, err = io.Copy(tempFile, res.Body)
-			Expect(err).To(BeNil())
-			err = tempFile.Close()
-			Expect(err).To(BeNil())
-			infoSrc, err := os.Stat("test/sample.pcap")
-			Expect(err).To(BeNil())
-			infoDst, err := os.Stat(tempFile.Name())
-			Expect(err).To(BeNil())
-			Expect(infoDst.Size()).To(Equal(infoSrc.Size()))
+			Expect(*response).To(Equal(keys.Keys[0]))
 		})
 	})
 })
