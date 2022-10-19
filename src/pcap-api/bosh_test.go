@@ -1,7 +1,12 @@
 package main
 
 import (
+
+
 	"encoding/json"
+	"io"
+
+
 	"fmt"
 	"net/http"
 	"net/url"
@@ -23,7 +28,10 @@ var _ = Describe("Bosh api basic Tests", func() {
 	})
 
 	Context("When the bosh Pcap API is started with the default config", func() {
-		boshAPI := test.MockBoshDirectorAPI(nil)
+
+
+		jwtapi, _ := test.MockjwtAPI()
+		boshAPI := test.MockBoshDirectorAPI(nil,jwtapi.URL)
 		var pcapApi *Api
 		var err error
 
@@ -57,7 +65,9 @@ var _ = Describe("Bosh api basic Tests", func() {
 var _ = Describe("Single Instances capture validation errors", func() {
 
 	Context("When the bosh Pcap API is started with the default config", func() {
-		boshAPI := test.MockBoshDirectorAPI(nil)
+
+		jwtapi, _ := test.MockjwtAPI()
+		boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
 		var pcapApi *Api
 		var err error
 
@@ -148,7 +158,9 @@ var _ = Describe("Single deployment Capture Tests", func() {
 		"/deployments/haproxy/instances": string(instances),
 	}
 
-	boshAPI := test.MockBoshDirectorAPI(responses)
+	jwtapi, token := test.MockjwtAPI()
+
+	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
 
 	cfg := DefaultConfig
 	cfg.BoshDirectorAPI = boshAPI.URL
@@ -177,6 +189,42 @@ var _ = Describe("Single deployment Capture Tests", func() {
 			Expect(status).To(Equal(http.StatusOK))
 			Expect(selectedInstances).To(Equal(haproxyInstances))
 
+			for _, instance := range selectedInstances {
+				ip := instance.Ips[0]
+				resp, err := NewPcapStreamer(pcapApi.config).getPcapStream(fmt.Sprintf("https://%s:%s/capture/bosh?deployment=haproxy&device=eth0&filter=", ip, pcapAgent.Port))
+				if err != nil {
+					fmt.Println(err.Error())
+				}
+
+				Expect(err).To(BeNil())
+				Expect(resp).NotTo(BeNil())
+			}
+
+		})
+
+		It("Returns an stream for the target instances", func() {
+
+			client := http.DefaultClient
+			agentURL, _ := url.Parse("http://localhost:8080/capture/bosh?deployment=haproxy&group=ha_proxy_z1")
+			req := &http.Request{
+				URL: agentURL,
+				Header: map[string][]string{
+					"Authorization": []string{fmt.Sprintf("Bearer %s", token)},
+				},
+			}
+
+			res,err := client.Do(req)
+
+			Expect(err).To(BeNil())
+			io.ReadAll(res.Body)
+
+			selectedInstances, status, err := pcapApi.bosh.getInstances("haproxy", "Bearer")
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+			Expect(err).To(BeNil())
+			Expect(status).To(Equal(http.StatusOK))
+			Expect(selectedInstances).To(Equal(haproxyInstances))
 
 			for _, instance := range selectedInstances {
 				ip := instance.Ips[0]
@@ -227,31 +275,8 @@ var _ = Describe("Capture Tests", func() {
 	}
 	pcapAgent := test.NewMockPcapAgent(pcapResponses)
 
-	keys := struct {
-		Keys []UaaKeyInfo `json:"keys"`
-	}{[]UaaKeyInfo{{
 
-		Kty:   "RSA",
-		E:     "AQAB",
-		Use:   "sig",
-		Kid:   "uaa-jwt-key-1",
-		Alg:   "RS256",
-		Value: "-----BEGIN PUBLIC KEY-----\n-----END PUBLIC KEY-----",
-		N:     "",
-	},}}
-
-
-	jwtresponse, err := json.Marshal(keys)
-
-	if err != nil {
-		panic(err.Error())
-	}
-
-	responses := map[string]string{
-		"/token_keys": string(jwtresponse),
-	}
-
-	jwtAPI := test.MockjwtAPI(responses)
+	jwtAPI, token := test.MockjwtAPI()
 
 	cfg := DefaultConfig
 	cfg.BoshDirectorAPI = ""
@@ -271,17 +296,17 @@ var _ = Describe("Capture Tests", func() {
 	Context("Check token for bosh instance", func() {
 
 		url := jwtAPI.URL
-		agentURL := url + "/token_keys"
+
 
 		It("check provided token is valid", func() {
-			response, err := FetchPublicKey(agentURL, "uaa-jwt-key-1")
+			response, err := VerifyJwt(token,"bosh.dmin",[]string{url} )
 			if err != nil {
 
 				fmt.Println(err.Error())
 
 			}
 			Expect(err).To(BeNil())
-			Expect(*response).To(Equal(keys.Keys[0]))
+			Expect(response).To(BeTrue())
 		})
 	})
 })

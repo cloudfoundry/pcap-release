@@ -104,7 +104,7 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 		return
 	}
 
-	allowed, err := verifyJwt(authToken, "bosh.admin", bosh.uaaUrls)
+	allowed, err := VerifyJwt(authToken, "bosh.admin", bosh.uaaUrls)
 	if err != nil {
 		log.Errorf("could not verify token %s (%s)", authToken, err)
 		response.WriteHeader(http.StatusUnauthorized)

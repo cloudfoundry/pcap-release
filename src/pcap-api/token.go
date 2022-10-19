@@ -4,12 +4,13 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v4"
+	log "github.com/sirupsen/logrus"
 )
 
 // UaaKeyInfo holds the response of the UAA /token_keys endpoint
@@ -33,7 +34,8 @@ type UaaKeyInfo struct {
 //
 // returns a boolean that confirms that the token is valid, from a valid issuer and has the needed scope,
 // and an error in case anything went wrong while verifying the token and its scopes.
-func verifyJwt(tokenString string, neededScope string, issuers []string) (bool, error) {
+
+func VerifyJwt(tokenString string, neededScope string, issuers []string) (bool, error) {
 
 	tokenString = strings.Replace(tokenString, "Bearer ", "", 1)
 
@@ -90,7 +92,7 @@ func parseRsaToken(token *jwt.Token) (interface{}, error) {
 		if keyInfoUrl, ok := token.Header["jku"].(string); ok {
 			if kid, ok := token.Header["kid"].(string); ok {
 
-				key, err := FetchPublicKey(keyInfoUrl, kid)
+				key, err := fetchPublicKey(keyInfoUrl, kid)
 				if err != nil {
 					return nil, err
 				}
@@ -117,7 +119,7 @@ func parseRsaToken(token *jwt.Token) (interface{}, error) {
 // returns an error if no key can be found with the requested kid or an error arises while communicating with url.
 //
 // Limitation: This will only fetch keys with RSA as signature algorithm.
-func  FetchPublicKey(url, kid string) (*UaaKeyInfo, error) {
+func  fetchPublicKey(url, kid string) (*UaaKeyInfo, error) {
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
