@@ -2,15 +2,20 @@
 
 set -euo pipefail
 
+apt-get update && apt-get install -y libpcap-dev # TODO: remove and move to dockerfile
+
 cd ${REPO_ROOT}
 
+echo "> Running 'bundle exec rake lint'"
 bundle package
 bundle exec rake lint
 
+echo "> Running 'go vet' for pcap-agent"
 pushd src/pcap-agent
   go vet
 popd
 
+echo "> Running 'go vet' for pcap-api"
 pushd src/pcap-api
   go vet
 popd
