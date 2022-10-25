@@ -5,13 +5,14 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"net/http"
-	"os"
 )
 
 type PcapStreamer struct {

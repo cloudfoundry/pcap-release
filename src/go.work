@@ -1,6 +1,7 @@
 go 1.19
 
 use (
+	./pcap-agent
 	./pcap-api
 	./pcap-bosh-cli
 	./pcap-cf-cli

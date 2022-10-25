@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type cfAPIResponse struct {
@@ -225,7 +225,7 @@ func (cf *CfCaptureHandler) getAppLocation(appId string, appIndex int, appType s
 	}
 
 	var appStatsResponse *cfAppStatsResponse
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", err
 	}

@@ -1,21 +1,22 @@
 package main
 
 import (
-	"code.cloudfoundry.org/bytefmt"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jessevdk/go-flags"
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
-	"github.com/cloudfoundry/pcap-release/pcap-api/api"
+	"code.cloudfoundry.org/bytefmt"
+	"github.com/jessevdk/go-flags"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap-api/api"
 )
 
 type environment struct {

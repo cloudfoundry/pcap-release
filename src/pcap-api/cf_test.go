@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudfoundry/pcap-release/pcap-api/test"
+	"github.com/cloudfoundry/pcap-release/src/pcap-api/test"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

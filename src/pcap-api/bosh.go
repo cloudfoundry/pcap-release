@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -224,9 +223,8 @@ func (bosh *BoshCaptureHandler) setup() {
 
 	if bosh.config.BoshDirectorCa == "" {
 
-
 		bosh.client = http.DefaultClient
-	}else {
+	} else {
 		data, err := os.ReadFile(bosh.config.BoshDirectorCa)
 
 		if err != nil {
@@ -249,7 +247,6 @@ func (bosh *BoshCaptureHandler) setup() {
 		}
 
 	}
-
 
 	log.Info("Discovering BOSH Director endpoint...")
 	response, err := bosh.client.Get(bosh.config.BoshDirectorAPI + "/info")

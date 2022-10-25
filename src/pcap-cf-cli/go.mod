@@ -1,4 +1,4 @@
-module github.com/cloudfoundry/pcap-release/pcap-cf-cli
+module github.com/cloudfoundry/pcap-release/src/pcap-cf-cli
 
 go 1.19
 

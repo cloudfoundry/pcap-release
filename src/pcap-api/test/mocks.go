@@ -113,18 +113,18 @@ func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Serv
 func verifyJWTTokenMock(jku string) (string, string) {
 
 	type payload struct {
-		Scope      []string  `json:"scope"`
-		ClientId   string    `json:"client_id"`
-		Cid        string    `json:"cid"`
-		Azp        string    `json:"azp"`
-		Grant_Type string    `json:"grant_type"`
-		UserId     string    `json:"user_id"`
-		Origin     string    `json:"origin"`
-		User       string    `json:"user_name"`
-		Email      string    `json:"email"`
-		Auth_time  time.Time `json:"auth_time"`
-		Rev_sig    string    `json:"rev_sig"`
-		Zid        string    `json:"zid"`
+		Scope     []string  `json:"scope"`
+		ClientId  string    `json:"client_id"`
+		Cid       string    `json:"cid"`
+		Azp       string    `json:"azp"`
+		GrantType string    `json:"grant_type"`
+		UserId    string    `json:"user_id"`
+		Origin    string    `json:"origin"`
+		User      string    `json:"user_name"`
+		Email     string    `json:"email"`
+		AuthTime  time.Time `json:"auth_time"`
+		RevSig    string    `json:"rev_sig"`
+		Zid       string    `json:"zid"`
 		jwt.RegisteredClaims
 	}
 
@@ -133,17 +133,17 @@ func verifyJWTTokenMock(jku string) (string, string) {
 
 		Scope: []string{"openid",
 			"bosh.admin"},
-		ClientId:   "bosh_cli",
-		Cid:        "bosh_cli",
-		Azp:        "bosh_cli",
-		Grant_Type: "password",
-		UserId:     "f62c94ae-2552-411b-9f8e-9ad181c50b40",
-		Origin:     "uaa",
-		User:       "h.example",
-		Email:      "h.example@192.168.1.11:8443",
-		Auth_time:  time.Now(),
-		Rev_sig:    "14832ae7",
-		Zid:        "uaa",
+		ClientId:  "bosh_cli",
+		Cid:       "bosh_cli",
+		Azp:       "bosh_cli",
+		GrantType: "password",
+		UserId:    "f62c94ae-2552-411b-9f8e-9ad181c50b40",
+		Origin:    "uaa",
+		User:      "h.example",
+		Email:     "h.example@192.168.1.11:8443",
+		AuthTime:  time.Now(),
+		RevSig:    "14832ae7",
+		Zid:       "uaa",
 
 		RegisteredClaims: jwt.RegisteredClaims{
 			// A usual scenario is to set the expiration time relative to the current time

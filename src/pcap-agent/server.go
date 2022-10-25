@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"runtime"
 
 	"github.com/containerd/go-runc"
@@ -73,7 +73,7 @@ func (a *Agent) handleCaptureCF(response http.ResponseWriter, request *http.Requ
 	// Load container store
 	var store ContainerKeys
 	storeFile := a.config.ContainerStore
-	storeData, err := ioutil.ReadFile(storeFile)
+	storeData, err := os.ReadFile(storeFile)
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		log.Errorln(err)
@@ -228,7 +228,7 @@ func (a *Agent) Run() {
 	var tlsConfig *tls.Config
 	if a.config.EnableServerTLS {
 		// Create a CA certificate pool and add cert.pem to it
-		caCert, err := ioutil.ReadFile(a.config.CaCert)
+		caCert, err := os.ReadFile(a.config.CaCert)
 		if err != nil {
 			log.Fatal(err)
 		}

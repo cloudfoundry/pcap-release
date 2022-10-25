@@ -3,8 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/pcap-api/api"
 	"net/http"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap-api/api"
 
 	log "github.com/sirupsen/logrus"
 )

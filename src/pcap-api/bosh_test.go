@@ -1,18 +1,14 @@
 package main
 
 import (
-
-
 	"encoding/json"
-	"io"
-
-
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
 
-	"github.com/cloudfoundry/pcap-release/pcap-api/test"
+	"github.com/cloudfoundry/pcap-release/src/pcap-api/test"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -29,9 +25,8 @@ var _ = Describe("Bosh api basic Tests", func() {
 
 	Context("When the bosh Pcap API is started with the default config", func() {
 
-
 		jwtapi, _ := test.MockjwtAPI()
-		boshAPI := test.MockBoshDirectorAPI(nil,jwtapi.URL)
+		boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
 		var pcapApi *Api
 		var err error
 
@@ -209,11 +204,11 @@ var _ = Describe("Single deployment Capture Tests", func() {
 			req := &http.Request{
 				URL: agentURL,
 				Header: map[string][]string{
-					"Authorization": []string{fmt.Sprintf("Bearer %s", token)},
+					"Authorization": {fmt.Sprintf("Bearer %s", token)},
 				},
 			}
 
-			res,err := client.Do(req)
+			res, err := client.Do(req)
 
 			Expect(err).To(BeNil())
 			io.ReadAll(res.Body)
@@ -275,7 +270,6 @@ var _ = Describe("Capture Tests", func() {
 	}
 	pcapAgent := test.NewMockPcapAgent(pcapResponses)
 
-
 	jwtAPI, token := test.MockjwtAPI()
 
 	cfg := DefaultConfig
@@ -297,9 +291,8 @@ var _ = Describe("Capture Tests", func() {
 
 		url := jwtAPI.URL
 
-
 		It("check provided token is valid", func() {
-			response, err := VerifyJwt(token,"bosh.dmin",[]string{url} )
+			response, err := VerifyJwt(token, "bosh.dmin", []string{url})
 			if err != nil {
 
 				fmt.Println(err.Error())
