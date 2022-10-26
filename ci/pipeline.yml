@@ -4,8 +4,6 @@ groups:
     jobs:
       - unit-tests
       - unit-tests-pr
-      # - acceptance-tests
-      # - acceptance-tests-pr
 
 jobs:
   - name: unit-tests
@@ -56,10 +54,10 @@ jobs:
                 args: []
               params:
                 REPO_ROOT: git
-        # on_failure: # TODO
+        # on_failure: # TODO channel doesn't exist (yet?)
         #   put: notify
         #   params:
-        #     channel: "#pcap-release" # TODO: channel doesn't exist (yet?)
+        #     channel: "#pcap-release"
         #     username: ci-bot
         #     icon_url: "((slack.icon))"
         #     text: "((slack.fail_url)) pcap-releae : unit-tests job failed"
@@ -152,34 +150,19 @@ resources:
   - name: git
     type: git
     source:
-      uri: git@github.com:sap-contributions/pcap-release.git
-      branch: setup-ci-environment
+      uri: git@github.com:cloudfoundry/pcap-release.git
+      branch: main
       private_key: ((github.private_key))
 
   - name: git-pull-requests
     type: pull-request
     source:
       access_token: ((github.access_token))
-      repository: sap-contributions/pcap-release
-      base_branch: setup-ci-environment
+      repository: cloudfoundry/pcap-release
+      base_branch: main
       labels: [run-ci]
 
   # - name: notify
   #   type: slack-notification
   #   source:
   #     url: ((slack.webhook))
-
-  - name: github
-    type: github-release-alt
-    source:
-      user: a18e
-      repository: pcap-release
-      access_token: ((github.access_token))
-
-  # - name: daily
-  #   type: time
-  #   source:
-  #     start: 7:00 AM
-  #     stop: 8:00 AM
-  #     location: Europe/Berlin
-  #     interval: 24h
