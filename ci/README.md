@@ -27,7 +27,8 @@ A decision still has to be made on whether to adjust the image to work for both 
 All tests run in Docker. The image `iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight` is a built and cached version of building [`Dockerfile`](Dockerfile).
 
 -->
-
+## TODO
+Add a description on unit tests and acceptance tests
 <!--
 ### Unit Tests
 
@@ -98,11 +99,9 @@ The pipeline `pcap-release` is used to build, verify and release this BOSH relea
 
 New pipeline steps should be added without modifying existing steps or resources, or in a separate pipeline altogether.
 
-A pipeline can be uploaded to concourse via the [`upload-to-concourse.sh`](upload-to-concourse.sh) script. This script requires the data in `source.me`, which can be found in the team's Vault.
-
 ### Testing new Pipeline Steps in a Branch
 
-While developing new scripts or pipeline steps, these steps will not be in the Git `main` branch. In order to access them, *copy* the resource `git` and defined this separate resource to check out the particular branch you are working on.
+While developing new scripts or pipeline steps, these steps will not be in the Git `main` branch. In order to access them, *copy* the resource `git` and define this separate resource to check out the particular branch you are working on.
 
 Please note that the name of a git resource influences the directory name in the workspace, i.e. the directory will not be called `git` but whatever you called your copied git resource.
 
