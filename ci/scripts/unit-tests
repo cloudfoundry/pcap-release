@@ -1,0 +1,21 @@
+#!/bin/bash
+
+set -euo pipefail
+
+apt-get update && apt-get install -y libpcap-dev # TODO: remove and move to dockerfile
+
+cd ${REPO_ROOT}
+
+echo "> Running 'bundle exec rake spec'"
+bundle package
+bundle exec rake spec
+
+echo "> Running 'go test' for pcap-agent"
+pushd src/pcap-agent
+  go test
+popd
+
+echo "> Running 'go test' for pcap-api"
+pushd src/pcap-api
+  go test
+popd
