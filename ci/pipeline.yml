@@ -50,13 +50,13 @@ jobs:
                 args: []
               params:
                 REPO_ROOT: git
-        # on_failure: # TODO channel doesn't exist (yet?)
-        #   put: notify
-        #   params:
-        #     channel: "#pcap-release"
-        #     username: ci-bot
-        #     icon_url: "((slack.icon))"
-        #     text: "((slack.fail_url)) pcap-releae : unit-tests job failed"
+        on_failure: # TODO channel doesn't exist (yet?)
+          put: notify
+          params:
+            channel: "#pcap-release"
+            username: ci-bot
+            icon_url: "((slack.icon))"
+            text: "((slack.fail_url)) pcap-releae : unit-tests job failed"
 
   - name: unit-tests-pr
     public: true
@@ -154,7 +154,7 @@ resources:
       base_branch: main
       labels: [run-ci]
 
-  # - name: notify
-  #   type: slack-notification
-  #   source:
-  #     url: ((slack.webhook))
+  - name: notify
+    type: slack-notification
+    source:
+      url: ((slack.pcap_release_webhook))
