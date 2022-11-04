@@ -19,10 +19,8 @@ jobs:
               image_resource:
                 type: docker-image
                 source:
-                  repository: iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight
+                  repository: bosh/main-bosh-docker
                   tag: latest
-                  username: ((docker.username))
-                  password: ((docker.password))
               inputs:
                 - { name: git }
               caches:
@@ -39,10 +37,8 @@ jobs:
               image_resource:
                 type: docker-image
                 source:
-                  repository: iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight
+                  repository: bosh/main-bosh-docker
                   tag: latest
-                  username: ((docker.username))
-                  password: ((docker.password))
               inputs:
                 - { name: git }
 
@@ -79,10 +75,8 @@ jobs:
               image_resource:
                 type: docker-image
                 source:
-                  repository: iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight
+                  repository: bosh/main-bosh-docker
                   tag: latest
-                  username: ((docker.username))
-                  password: ((docker.password))
               inputs:
                 - { name: git-pull-requests }
               caches:
@@ -99,10 +93,8 @@ jobs:
               image_resource:
                 type: docker-image
                 source:
-                  repository: iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight
+                  repository: bosh/main-bosh-docker
                   tag: latest
-                  username: ((docker.username))
-                  password: ((docker.password))
               inputs:
                 - { name: git-pull-requests }
               caches:
