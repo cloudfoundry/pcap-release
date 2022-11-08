@@ -27,7 +27,7 @@ func NewBoshCaptureHandler(config *Config) *BoshCaptureHandler {
 	}
 }
 
-type boshInfo struct {
+type BoshInfo struct {
 	Name            string `json:"name"`
 	Uuid            string `json:"uuid"`
 	Version         string `json:"version"`
@@ -261,7 +261,7 @@ func (bosh *BoshCaptureHandler) setup() {
 		log.Fatalf("Could not fetch BOSH Director API from %s (%s)", bosh.config.BoshDirectorAPI, err)
 	}
 
-	var apiResponse *boshInfo
+	var apiResponse *BoshInfo
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
 		log.Fatalf("Could not read BOSH Director API response: %s", err)
