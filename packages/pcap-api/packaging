@@ -19,17 +19,11 @@ export GOPATH=$BOSH_COMPILE_TARGET/gopath
 export GOCACHE=$BOSH_COMPILE_TARGET/gocache
 
 pushd pcap-api
-  $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/pcap-api
-popd
-pushd pcap-api/pcap-cf-cli
-  GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-cf-cli-linux-amd64
-popd
-pushd pcap-api/pcap-cf-cli
-  GOOS=darwin GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-cf-cli-mac-amd64
-popd
-pushd pcap-api/pcap-bosh-cli
-  GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-bosh-cli-linux-amd64
-popd
-pushd pcap-api/pcap-bosh-cli
-  GOOS=darwin GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-bosh-cli-mac-amd64
+  $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/pcap-api github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-api
+
+  GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-cf-cli-linux-amd64 github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-cf-cli-plugin
+  GOOS=darwin GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-cf-cli-mac-amd64 github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-cf-cli-plugin
+
+  GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-bosh-cli-linux-amd64 github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-bosh-cli
+  GOOS=darwin GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-bosh-cli-mac-amd64 github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-bosh-cli
 popd

@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"crypto/tls"
@@ -56,7 +56,11 @@ func (s *PcapStreamer) getPcapStream(pcapAgentURL string) (io.ReadCloser, error)
 		return nil, err
 	}
 	if res.StatusCode != http.StatusOK {
-		return res.Body, fmt.Errorf("expected status code %d but got status code %d", http.StatusOK, res.StatusCode)
+		content, err := io.ReadAll(res.Body)
+		if err != nil {
+			panic(err.Error())
+		}
+		return res.Body, fmt.Errorf("expected status code %d but got status code %d: %s", http.StatusOK, res.StatusCode, string(content))
 	}
 
 	return res.Body, nil
@@ -151,7 +155,7 @@ func (s *PcapStreamer) captureFromAgent(agentURL string, packets chan packetMess
 			handleIOError(err)
 			return
 		}
-		log.Debugf("Read packet: Time %s Length %d Captured %d", capInfo.Timestamp, capInfo.Length, capInfo.CaptureLength)
+		log.Tracef("Read packet: Time %s Length %d Captured %d", capInfo.Timestamp, capInfo.Length, capInfo.CaptureLength)
 		packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.Default)
 		packet.Metadata().CaptureInfo = capInfo
 		packets <- packetMessage{

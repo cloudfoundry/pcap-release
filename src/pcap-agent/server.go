@@ -196,7 +196,7 @@ func doCapture(device string, filter string, snaplen uint32, response http.Respo
 
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 		for packet := range packetSource.Packets() {
-			log.Debugf("Packet: %s\n", packet.String())
+			log.Tracef("Packet: %s\n", packet.String())
 			err = w.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
 			if err != nil {
 				if errors.Is(err, io.EOF) {

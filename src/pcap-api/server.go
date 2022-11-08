@@ -1,11 +1,9 @@
-package main
+package api
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-
-	"github.com/cloudfoundry/pcap-release/src/pcap-api/api"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -19,14 +17,13 @@ type Api struct {
 
 func (a *Api) handleHealth(response http.ResponseWriter, _ *http.Request) {
 
-	status := api.Status{
+	data, err := json.Marshal(Status{
 		Up: true,
-		Handlers: api.Handlers{
+		Handlers: Handlers{
 			Bosh: a.bosh != nil,
-			Cf:   a.cf != nil},
-	}
-
-	data, err := json.Marshal(status)
+			Cf:   a.cf != nil,
+		},
+	})
 
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)

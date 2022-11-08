@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"crypto/tls"
@@ -158,10 +158,16 @@ func (bosh *BoshCaptureHandler) handleCapture(response http.ResponseWriter, requ
 	agentURLs := make([]string, 0, len(selectedInstances))
 
 	for _, instance := range selectedInstances {
-		ip := instance.Ips[0]
-
-		agentURL := fmt.Sprintf("https://%s:%s/capture/bosh?device=%s&filter=%s", ip, bosh.config.AgentPort, device, filter)
-		agentURLs = append(agentURLs, agentURL)
+		agentURLs = append(agentURLs, (&url.URL{
+			Scheme:  "https",
+			Host:    fmt.Sprintf("%s:%s", instance.Ips[0], bosh.config.AgentPort),
+			Path:    "/capture/bosh",
+			RawPath: "",
+			RawQuery: url.Values(map[string][]string{
+				"device": {device},
+				"filter": {filter},
+			}).Encode(),
+		}).String())
 	}
 
 	NewPcapStreamer(bosh.config).captureAndStream(agentURLs, &response, request)
