@@ -14,12 +14,11 @@
 # Dependency directories & default folders/files
 .bundle
 .dev_builds
+pcap-release.tgz
+config/private.yml
 blobs
 dev_releases
 vendor
-
-# private.yml for security reasons
-config/private.yml
 
 # Releases/tarballs
 .final_builds/jobs/**/*.tgz

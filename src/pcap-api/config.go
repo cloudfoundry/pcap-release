@@ -1,11 +1,13 @@
-package main
+package api
 
 import (
-	"io/ioutil"
+	"os"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
+// TODO: Consider splitting this into pcap-api, cf and bosh parts. cf and bosh could then be
+// used to _not_ enable a specific capture endpoint when there's no configuration for it.
 type Config struct { //nolint:maligned
 	LogLevel           string `yaml:"log_level"`
 	Listen             string `yaml:"listen"`
@@ -13,6 +15,8 @@ type Config struct { //nolint:maligned
 	Cert               string `yaml:"cert"`
 	Key                string `yaml:"key"`
 	CfAPI              string `yaml:"cf_api"`
+	BoshDirectorAPI    string `yaml:"bosh_director_api"`
+	BoshDirectorCa     string `yaml:"bosh_director_ca"`
 	AgentPort          string `yaml:"agent_port"`
 	ClientCert         string `yaml:"client_cert"`
 	ClientCertKey      string `yaml:"client_key"`
@@ -28,7 +32,8 @@ var DefaultConfig = Config{
 	EnableServerTLS:    false,
 	Cert:               "test/server.crt",
 	Key:                "test/server.key",
-	CfAPI:              "https://api.cf.aws-cfn02.aws.cfi.sapcloud.io",
+	CfAPI:              "",
+	BoshDirectorAPI:    "",
 	AgentPort:          "9494",
 	ClientCert:         "test/client.crt",
 	ClientCertKey:      "test/client.key",
@@ -39,7 +44,7 @@ var DefaultConfig = Config{
 }
 
 func NewConfigFromFile(filename string) (*Config, error) {
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}

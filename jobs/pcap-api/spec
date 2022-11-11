@@ -6,6 +6,7 @@ templates:
   pcap-api.yml.erb: config/pcap-api.yml
   pcap-api.crt.erb: config/pcap-api.crt
   pcap-api.key.erb: config/pcap-api.key
+  pcap-api-bosh.ca.erb: config/pcap-api-bosh.ca
   pcap-api-client.crt.erb: config/pcap-api-client.crt
   pcap-api-client.key.erb: config/pcap-api-client.key
   pcap-api-client.ca.erb: config/pcap-api-client.ca
@@ -27,6 +28,10 @@ properties:
     description: "Key for the TLS certificate"
   pcap-api.cf_api:
     description: "Endpoint of the cf API"
+  pcap-api.bosh_director_api:
+    description: "Endpoint of the BOSH Director API"
+  pcap-api.bosh_director_ca:
+    description: "CA of the BOSH Director cert"
   pcap-api.agent_port:
     description: "Port of the pcap-agent that runs on the diego cells"
     default: "9494"

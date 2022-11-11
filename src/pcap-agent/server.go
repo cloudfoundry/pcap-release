@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"runtime"
 
 	"github.com/containerd/go-runc"
@@ -73,7 +73,7 @@ func (a *Agent) handleCaptureCF(response http.ResponseWriter, request *http.Requ
 	// Load container store
 	var store ContainerKeys
 	storeFile := a.config.ContainerStore
-	storeData, err := ioutil.ReadFile(storeFile)
+	storeData, err := os.ReadFile(storeFile)
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		log.Errorln(err)
@@ -196,7 +196,7 @@ func doCapture(device string, filter string, snaplen uint32, response http.Respo
 
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 		for packet := range packetSource.Packets() {
-			log.Debugf("Packet: %s\n", packet.String())
+			log.Tracef("Packet: %s\n", packet.String())
 			err = w.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
 			if err != nil {
 				if errors.Is(err, io.EOF) {
@@ -222,14 +222,13 @@ func (a *Agent) Run() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/capture", a.handleCaptureCF) // backwards compatibility
 	mux.HandleFunc("/capture/cf", a.handleCaptureCF)
 	mux.HandleFunc("/capture/bosh", a.handleCaptureBOSH)
 
 	var tlsConfig *tls.Config
 	if a.config.EnableServerTLS {
 		// Create a CA certificate pool and add cert.pem to it
-		caCert, err := ioutil.ReadFile(a.config.CaCert)
+		caCert, err := os.ReadFile(a.config.CaCert)
 		if err != nil {
 			log.Fatal(err)
 		}

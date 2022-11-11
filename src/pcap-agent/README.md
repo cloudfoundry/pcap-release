@@ -1,3 +1,3 @@
 # pcap-agent
 
-An API wrapper around the google/gopacket package
+An API wrapper around the `github.com/google/gopacket` package
