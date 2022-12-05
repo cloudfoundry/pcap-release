@@ -53,7 +53,8 @@ The BOSH director is used to verify and find the requested target VMs' IP addres
 
 ```mermaid
 graph LR
-    pcap-cli -->|H/2, gRPC| pcap-api
+    pcap-cli -->|H/2, gRPC| gorouter
+    gorouter -->|H/2, gRPC| pcap-api
 
     subgraph pcap deployment
         pcap-api
@@ -112,7 +113,7 @@ Figure 2: The BOSH Capturing case
 ### pcap-api -> pcap-cli
 
 - Status
-- captured pcap data packet
+- captured pcap data packets
 - Message
     - Stop confirmation
     - Capture status
@@ -157,7 +158,7 @@ The following attributes are part of all capture requests and define the details
 | Parameter | Type | Required? | Default | Description                                                                                                                                                  |
 |-----|-----|-----|-----|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
 |  | `Common` | yes | | All [common fields](#common-fields-for-pcap-agent) are included in a CF capture request                                                                      |
-| `token`     | `string` | yes | | The UAA token for the user sending the capture request.                                                                                                      |
+| `token`     | `string` | yes | | The CF UAA token for the user sending the capture request.                                                                                                      |
 | `application_id` | `string` | yes | | The ID of the target application.                                                                                                                       |
 | `type`        | `string` | no | `web`   | An app can have processes of different types, `web` being the default. This allows targeting processes of a specific type for this app.                      |
 | `instance_ids` | `[]int` | no | `[]`  | List of instance indexes of the application. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_guids`.    |
@@ -168,7 +169,7 @@ The following attributes are part of all capture requests and define the details
 | Parameter        | Type       | Required? | Default | Description                                                                                                                                                         |
 |------------------|------------|-----------|-----|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 |                  | `Common`   | yes       | | All [common fields](#common-fields-for-pcap-agent) are included in a CF capture request                                                                                                   |
-| `token`          | `string`   | yes       | | The UAA token for the user sending the capture request.                                                                                                             |
+| `token`          | `string`   | yes       | | The BOSH UAA token for the user sending the capture request.                                                                                                             |
 | `deployment`     | `string`   | yes       | | The name of the target BOSH deployment.                                                                                                                             |
 | `groups`         | `[]string` | yes       |    | A list of instance groups from which to capture. **Must contain at least one instance group**.                                                                      |
 | `instance_ids`   | `[]int`    | no        | `[]` | List of instance indexes of the application. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_guids`.           |
@@ -268,9 +269,10 @@ sequenceDiagram
     bosh-director ->> pcap-api: BOSH Director Info w/ UAA URL
 ```
 
-For **CF**, on startup of pcap-api, the Cloud Controller needs t obe contacted in order to:
-* The Cloud Controller base URL
+For **CF**, on startup of pcap-api, the Cloud Controller needs to be contacted in order to get :
 * The UAA Base URL
+
+This will validate the availability of Cloud Controller.
 
 ```mermaid
 sequenceDiagram
@@ -330,7 +332,7 @@ sequenceDiagram
 
 ### Unexpected Disconnects
 
-A clean shutdown of components and notification is necessary when either of the components disconnect unexpectedly.
+A clean shutdown of components and notification is necessary when either one of the components disconnect unexpectedly.
 
 When a pcap-agent terminates while capturing, e.g. due to crash or because its connection is lost, pcap-api will notify the pcap-cli that this particular agent is now disconnected.
 
@@ -395,7 +397,7 @@ sequenceDiagram
     end
 ```
 
-In the case that a long-running request is terminated by Gorouter due to context deadline, the request will be terminated and the CLI informed by Gorouter. The pcap-agent needs to clean up in this case.
+In the case that a long-running request is terminated by gorouter due to context deadline, the request will be terminated and the CLI informed by gorouter. The pcap-agent needs to clean up in this case.
 
 ```mermaid
 sequenceDiagram
@@ -462,8 +464,8 @@ sequenceDiagram
 
 Availability issues:
 
-* No pcap-agents available in BOSH case (e.g. not deployed for this deployment)
-* PCAP permission for the space is not enabled in the CF case
+* No pcap-agents available in BOSH case (e.g. not deployed for the given deployment)
+* `PCAP permission` for the space, under which the application is hosted, is not enabled in the CF case
 
 ```mermaid
 sequenceDiagram
