@@ -10,9 +10,10 @@ Pcap-release uses gRPC for communication between all components. This document h
 
 ## CF Case Overview
 
-Capturing data from cloud foundry applications requires the pcap-agent inside the app container. The pcap-agent runs in plain-text HTTP/2 (H2C). The Envoy in the app container provides the TLS termination.
+Capturing data from cloud foundry applications REQUIRES the pcap-agent inside the app container. The pcap-agent MUST run in plain-text HTTP/2 (H2C). The Envoy in the app container provides the TLS termination.
 
-The Cloud Controller is used to identify the target ports of the pcap-agent in the target app instance.
+The `pcap-cf-cli` is a plugin to the cf CLI. The default login mechanism, which communicates with the CF UAA, SHALL be used to obtain a token and is outside the scope of the pcap-release.
+For the pcap-release, the existing token SHALL be reused.
 
 ```mermaid
 graph LR
@@ -23,10 +24,10 @@ graph LR
     style nats fill:#ccf,stroke:#333,stroke-width:2px,color:#fff,stroke-dasharray: 5 5
     style NATS fill:#bbd,stroke:#222,stroke-width:2px,color:#fff,stroke-dasharray: 5 5
     
-    pcap-cli -->|HTTP/1.1, JSON| cf[cf UAA]
-    pcap-cli -->|H/2, gRPC| gorouter
+    pcap-cf-cli -->|HTTP/1.1, JSON| cf[cf UAA]
+    pcap-cf-cli -->|H/2, gRPC| gorouter
     gorouter -->|H/2, gRPC| pcap-api
-    pcap-api ---nats
+    pcap-api --- nats
     subgraph pcap deployment
         pcap-api
     end
@@ -57,6 +58,30 @@ graph LR
     end
 ```
 Figure 1: The Cloud Foundry Application Capturing case
+
+In the CF case, `pcap-agent` runs in the app container. The availability and IP/Port where `pcap-agent` is exposed by Envoy MUST be accessible to the pcap-api.
+
+
+Identifying the `pcap-agent` in a specific app container can be done:
+* by querying the [Cloud Controller](#target-registration-via-cloud-controller--option-)
+* by sending [Registration Messages transported via NATS](#target-registration-via-nats--option-)
+
+Both options are described below.
+
+### Target Identification via Cloud Controller (Option)
+
+For the target identification via Cloud Controller, the pcap-api MUST query the cloud controller to identify the target IP and port of the `pcap-agent` in the app container, as exposed by Envoy.
+
+### Target Registration via NATS (Option)
+
+For target registration via NATS, the pcap-agent MUST send a `pcap.register` message indicating:
+* the app ID/org ID/space ID
+* the IP address of the Diego cell (can be retrieved from the CF app environment)
+* the external port of the `pcap-agent`, as provided by Envoy.
+
+When the `pcap-agent` goes offline it MUST send a `pcap.deregister` message.
+
+The `pcap-agent` SHOULD send refresh messages in a regular interval, so pcap-api can have an up-to-date view of available pcap-agents. This COULD be used for automated pruning of registered pcap-agents. 
 
 ## BOSH Case Overview
 
@@ -96,6 +121,8 @@ Figure 2: The BOSH Capturing case
     - CF Capture Request
     - BOSH Capture Request
   - Send stop request
+### pcap-cli -> BOSH Director UAA
+  - Refresh access token via Refresh token
 ### pcap-api
   - Status response
   - CF Capture Request
@@ -107,11 +134,13 @@ Figure 2: The BOSH Capturing case
       - HTTP: Retrieve /info (also works without Auth)
       - HTTP: Retrieve deployment instances
     - pcap-api -> BOSH Director UAA
-      - HTTP: Retrieve JWT token key
+      - HTTP: Retrieve JWT token key (used for RSA signature verification)
   - pcap-api -> pcap-agent
     - Status
     - Send Capture Request
     - Send stop request
+### NATS -> pcap-api (option)
+  - Send registration and deregistration messages
 ### pcap-agent -> pcap-api
   - Send status
   - Send Capture Response
@@ -122,9 +151,10 @@ Figure 2: The BOSH Capturing case
         - Limit reached (e.g. number of concurrent capture requests exceeded, )
         - Invalid Request (e.g. malformed filter, device not found, etc.)
         - Runtime (any unexpected error occurring on the agent during capture. Contains as much information as possible and forward before terminating)
-    - captured pcap data packet(s) - consider batching multiple packets in one Capture Response
+    - captured pcap data packets
+### pcap-agent -> NATS (Option)
+  - Send registration and deregistration messages 
 ### pcap-api -> pcap-cli
-
 - Status
 - captured pcap data packets
 - Message
@@ -134,9 +164,9 @@ Figure 2: The BOSH Capturing case
         - All agents stopped
         - Congestion
     - Errors
-        - Limit reached (e.g. number of concurrent capture requests exceeded, )
+        - Limit reached (e.g. number of concurrent capture requests exceeded on the pcap-api or pcap-agent)
         - Unauthorized
-        - Invalid Request (e.g. malformed filter, Target not found, device not found, etc.)
+        - Invalid Request (e.g. malformed filter, Target not found, device not found)
 
 ## Data Structures
 
@@ -160,33 +190,33 @@ The capture request can contain a start or stop request. The start request can e
 
 The following attributes are part of all capture requests and define the details required for the `pcap-agent`.
 
-| Parameter      | Type    | Required? | Default | Description                                                                                                                                               |
-|----------------|---------|-----------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `device`       | string  | yes       | `eth0`   | The device on the app container from which to capture the traffic                                                                                         |
-| `filter`       | string  | no        |         | BPF Filter expression to use with tcpdump command to capture traffic.                                                                                     |
-| `snaplen`      | integer | no        | 65535   | Limit the amount of data captured for each packet, see [SnapLen](https://wiki.wireshark.org/SnapLen)                                                      |
+| Parameter | Type    | Required? | Default | Description                                                                                          |
+|-----------|---------|-----------|---------|------------------------------------------------------------------------------------------------------|
+| `device`  | string  | yes       | `eth0`  | The device on the app container from which to capture the traffic                                    |
+| `filter`  | string  | no        |         | BPF Filter expression to use with tcpdump command to capture traffic.                                |
+| `snaplen` | integer | no        | 65535   | Limit the amount of data captured for each packet, see [SnapLen](https://wiki.wireshark.org/SnapLen) |
 
 #### CF App Start Capture Request
 
-| Parameter | Type | Required? | Default | Description                                                                                                                                                  |
-|-----|-----|-----|-----|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|  | `Common` | yes | | All [common fields](#common-fields-for-pcap-agent) are included in a CF capture request                                                                      |
-| `token`     | `string` | yes | | The CF UAA token for the user sending the capture request.                                                                                                      |
-| `application_id` | `string` | yes | | The ID of the target application.                                                                                                                       |
-| `type`        | `string` | no | `web`   | An app can have processes of different types, `web` being the default. This allows targeting processes of a specific type for this app.                      |
-| `instance_ids` | `[]int` | no | `[]`  | List of instance indexes of the application. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_guids`.    |
-| `instance_guids` | `[]string` | no | `[]` | List of instance IDs for finer-grained targeting. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_ids`. |
+| Parameter        | Type       | Required? | Default | Description                                                                                                                                                  |
+|------------------|------------|-----------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|                  | `Common`   | yes       |         | All [common fields](#common-fields-for-pcap-agent) are included in a CF capture request                                                                      |
+| `token`          | `string`   | yes       |         | The CF UAA token for the user sending the capture request.                                                                                                   |
+| `application_id` | `string`   | yes       |         | The ID of the target application.                                                                                                                            |
+| `type`           | `string`   | no        | `web`   | An app can have processes of different types, `web` being the default. This allows targeting processes of a specific type for this app.                      |
+| `instance_ids`   | `[]int`    | no        | `[]`    | List of instance indexes of the application. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_guids`.    |
+| `instance_guids` | `[]string` | no        | `[]`    | List of instance IDs for finer-grained targeting. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_ids`. |
 
 #### BOSH Start Capture Request
 
-| Parameter        | Type       | Required? | Default | Description                                                                                                                                                         |
-|------------------|------------|-----------|-----|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|                  | `Common`   | yes       | | All [common fields](#common-fields-for-pcap-agent) are included in a CF capture request                                                                                                   |
-| `token`          | `string`   | yes       | | The BOSH UAA token for the user sending the capture request.                                                                                                             |
-| `deployment`     | `string`   | yes       | | The name of the target BOSH deployment.                                                                                                                             |
-| `groups`         | `[]string` | yes       |    | A list of instance groups from which to capture. **Must contain at least one instance group**.                                                                      |
-| `instance_ids`   | `[]int`    | no        | `[]` | List of instance indexes of the application. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_guids`.           |
-| `instance_guids` | `[]string` | no        | `[]` | List of instance IDs for finer-grained targeting. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_ids`. |
+| Parameter        | Type       | Required? | Default | Description                                                                                                                                                  |
+|------------------|------------|-----------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|                  | `Common`   | yes       |         | All [common fields](#common-fields-for-pcap-agent) are included in a CF capture request                                                                      |
+| `token`          | `string`   | yes       |         | The BOSH UAA token for the user sending the capture request.                                                                                                 |
+| `deployment`     | `string`   | yes       |         | The name of the target BOSH deployment.                                                                                                                      |
+| `groups`         | `[]string` | yes       |         | A list of instance groups from which to capture. **Must contain at least one instance group**.                                                               |
+| `instance_ids`   | `[]int`    | no        | `[]`    | List of instance indexes of the application. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_guids`.    |
+| `instance_guids` | `[]string` | no        | `[]`    | List of instance IDs for finer-grained targeting. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_ids`. |
 
 #### Stop Capture Request
 
@@ -202,19 +232,30 @@ The stop capture request just indicates that the capture on the current stream i
 
 #### Enum `MessageType`
 
-| Value                   | Description                                                                                                                                                       |
-|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `INSTANCE_NOT_FOUND`    | One of the requested instances does not exist but there is at least one instance to capture from. MUST be sent as soon as possible.                               |
-| `INSTANCE_DISCONNECTED` | One instance failed during capturing but there are still instances left to capture from. The detailed message should contain information about the stopped party. |
-| `INSTANCE_STOPPED`      | A single agent has stopped gracefully. The detailed message should contain information about the stopped party.                                                   |
-| `START_CAPTURE_FAILED`  | Starting the capture from a specific instance has failed.                                                                                                         |
-| `INVALID_REQUEST`       | The request could not be fulfilled, e.g. because the app or BOSH deployment with the requested name do not exist.                                                 |
-| `CONGESTED`             | Some participant on the path is congested to the point of discarding data. The detailed message should contain the congested party.                               |
-| `CAPTURE_STOPPED`       | Confirmation that the capture has stopped gracefully. All of the targeted agents have stopped.                                                                    |
-| `LIMIT_REACHED`         | Some limit has been reached, e.g. number of concurrent requests, time, bytes, etc.; Message details identifies, which limit has been reached.                     |
-| `UNAUTHORIZED`          | The token sent by the client is rejected (e.g. invalid, timed out, etc.). Detail for the rejection in the message.                                                |                                                                                                     |
-| `MTLS_ERROR`        | An error happened while attempting mTLS communication with PCAP components, independent of the client.         |
-| `NO_CAPTURE_RUNNING`    | A Stop Capture Request is received but no capture is running.                                                                                                     |
+The table below shows the `MessageType` enum and the meanings of the various values.
+
+When a gRPC Termination State is listed, the `pcap-agent` is expected to send this state when terminating the condition.
+
+All messages SHALL be forwarded from pcap-api to pcap-cli. Information received as gRPC status code must be coverted to a `Message` with appropriate `MessageType`.
+
+| Value                   | gRPC Termination State | Origin                   | Description                                                                                                                                                       |
+|-------------------------|------------------------|--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `INSTANCE_NOT_FOUND`    |                        | `pcap-api`               | One of the requested instances does not exist but there is at least one instance to capture from. MUST be sent as soon as possible.                               |
+| `INSTANCE_DISCONNECTED` | `ABORTED`              | `pcap-api`               | One instance failed during capturing but there are still instances left to capture from. The detailed message should contain information about the stopped party. |
+| `INSTANCE_STOPPED`      | `OK`                   | `pcap-agent`             | A single agent has stopped gracefully. The detailed message should contain information about the stopped party.                                                   |
+| `START_CAPTURE_FAILED`  |                        | `pcap-api`               | Starting the capture request has failed because the request could not be fulfilled (e.g. no matching instances, pcap feature not enabled)                         |
+| `INVALID_REQUEST`       | `INVALID_ARGUMENT`     | `pcap-api`, `pcap-agent` | The request could not be fulfilled, e.g. because the app or BOSH deployment with the requested name do not exist.                                                 |
+| `CONGESTED`             |                        | `pcap-api`, `pcap-agent` | Some participant on the path is congested to the point of discarding data. The detailed message should contain the congested party.                               |
+| `CAPTURE_STOPPED`       |                        | `pcap-api`               | Confirmation that the capture has stopped gracefully. All of the targeted agents have stopped. MUST be sent from the pcap-api to pcap-cli                         |
+| `LIMIT_REACHED`         | `RESOURCE_EXHAUSTED`   | `pcap-api`, `pcap-agent` | Some limit has been reached, e.g. number of concurrent requests, time, bytes, etc.; Message details identifies, which limit has been reached.                     |
+| `UNAUTHORIZED`          |                        | `pcap-api`               | The token sent by the client is rejected (e.g. invalid, timed out, etc.). Detail for the rejection in the message.                                                |                                                                                                     |
+| `MTLS_ERROR`            |                        | `pcap-api`               | An error happened while attempting mTLS communication with PCAP components, independent of the client.                                                            |
+| `NO_CAPTURE_RUNNING`    |                        | `pcap-api`               | A Stop Capture Request is received but no capture is running.                                                                                                     |
+
+Possible duplicates / ambiguous values:
+* `START_CAPTURE_FAILED` / `INSTANCE_NOT_FOUND` / `INVALID_REQUEST`
+* `CAPTURE_STOPPED` / `INSTANCE_STOPPED`
+
 
 ### Status
 
@@ -228,11 +269,11 @@ The stop capture request just indicates that the capture on the current stream i
 
 #### Enum `Health`
 
-| Value       | Description                                                                                                                                  |
-|-------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| `OK`        | Everything is nominal.                                                                                                                       |
-| `DRAINING`  | This instance is currently being shut down and is draining its remaining connections.                                                        |
-| `UNHEALTHY` | Communication to some of the components is interrupted, e.g. BOSH Director, UAA, Cloud Controller, pcap-api (in the case of the pcap-agent)? |
+| Value      | Description                                                                                                                                  |
+|------------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| `UP`       | Everything is nominal.                                                                                                                       |
+| `DRAINING` | This instance is currently being shut down and is draining its remaining connections.                                                        |
+| `DOWN`     | Communication to some of the components is interrupted, e.g. BOSH Director, UAA, Cloud Controller, pcap-api (in the case of the pcap-agent)? |
 
 
 ### PCAP Data
