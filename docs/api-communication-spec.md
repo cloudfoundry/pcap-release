@@ -19,28 +19,37 @@ graph LR
     subgraph UAA authentication
         cf[cf UAA]
     end
+    
+    style nats fill:#ccf,stroke:#333,stroke-width:2px,color:#fff,stroke-dasharray: 5 5
+    style NATS fill:#bbd,stroke:#222,stroke-width:2px,color:#fff,stroke-dasharray: 5 5
+    
     pcap-cli -->|HTTP/1.1, JSON| cf[cf UAA]
     pcap-cli -->|H/2, gRPC| gorouter
     gorouter -->|H/2, gRPC| pcap-api
-
+    pcap-api ---nats
     subgraph pcap deployment
         pcap-api
     end
-    
+    subgraph NATS
+        nats[nats]
+    end
     subgraph diego-cell1
         subgraph cf-app1
             pcap-api -->|H/2, gRPC| c1e[Envoy]
             c1e -->|gRPC, H2C| c1[pcap-agent]
+            c1[pcap-agent] --> nats
         end 
         subgraph cf-app2
             pcap-api -->|H/2, gRPC| c2e[Envoy]
             c2e -->|gRPC, H2C| c2[pcap-agent]
+            c2[pcap-agent] --> nats
         end 
     end
     subgraph diego-cell2
         subgraph cf-app3
             pcap-api -->|H/2, gRPC| c3e[Envoy]
             c3e -->|H2C, gRPC| c3[pcap-agent]
+            c3[pcap-agent] --> nats
         end 
     end
     subgraph cloud-controller
