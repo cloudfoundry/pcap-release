@@ -16,6 +16,10 @@ The Cloud Controller is used to identify the target ports of the pcap-agent in t
 
 ```mermaid
 graph LR
+    subgraph UAA authentication
+        cf[cf UAA]
+    end
+    pcap-cli -->|HTTP/1.1, JSON| cf[cf UAA]
     pcap-cli -->|H/2, gRPC| gorouter
     gorouter -->|H/2, gRPC| pcap-api
 
