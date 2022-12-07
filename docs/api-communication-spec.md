@@ -553,41 +553,12 @@ sequenceDiagram
     pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
     pcap-api ->> cf-uaa: Verify (Token)
     cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: Instances (AppID, Instances)?
-    cloud-controller ->> pcap-api: Instances (AppID, Instances)
-    par
-        pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
-        pcap-api ->> pcap-agent2: Capture pcap(eth0, "host 1.2.3.4", 65k)
-        loop
-            pcap-agent1 ->> pcap-api: pcap data
-            pcap-api ->> pcap-cli: pcap data
-            pcap-agent2 ->> pcap-api: pcap data
-            pcap-api ->> pcap-cli: pcap data
-        end
-    end
-    pcap-cli --X pcap-api: Connection terminated
-    note over pcap-api: Terminate all agents for this client
-    par
-    pcap-api ->> pcap-agent1: Stop
-    pcap-api ->> pcap-agent2: Stop
-        pcap-agent1 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent1)
-        pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
-    end
-```
-
-- Target Identification via NATS (Option)
-
-```mermaid
-sequenceDiagram
-    pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
-    pcap-api ->> cf-uaa: Verify (Token)
-    cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: check token scope on AppID?
-    cloud-controller ->> pcap-api: token scope on AppID
-    loop
-        pcap-api -->nats: Get apps' IP and port, AppID
-        pcap-agent1 ->> nats: pcap.register
-        pcap-agent2 ->> nats: pcap.register
+    alt Target agent identification via Cloud Controller
+        pcap-api ->> cloud-controller: Instances (AppID, Instances)?
+        cloud-controller ->> pcap-api: Instances (AppID, Instances)
+    else Target agent registry via NATS
+        note right of pcap-api: Look up targets in agent registry
+        pcap-api ->> pcap-api: 
     end
     par
         pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
@@ -604,8 +575,8 @@ sequenceDiagram
     par
     pcap-api ->> pcap-agent1: Stop
     pcap-api ->> pcap-agent2: Stop
-        pcap-agent1 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent1)
-        pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-agent1 ->> pcap-api: OK (pcap-agent1)
+        pcap-agent2 ->> pcap-api: OK (pcap-agent2)
     end
 ```
 
@@ -619,43 +590,12 @@ sequenceDiagram
     gorouter ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
     pcap-api ->> cf-uaa: Verify (Token)
     cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: Instances (AppID, Instances)?
-    cloud-controller ->> pcap-api: Instances (AppID, Instances)
-    par
-        pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
-        pcap-api ->> pcap-agent2: Capture pcap(eth0, "host 1.2.3.4", 65k)
-        loop
-            pcap-agent1 ->> pcap-api: pcap data
-            pcap-api ->> pcap-cli: pcap data
-            pcap-agent2 ->> pcap-api: pcap data
-            pcap-api ->> pcap-cli: pcap data
-        end
-    end
-    note over pcap-cli, gorouter: The request was longer than<br/>the gorouter request deadline
-    gorouter --X pcap-cli: Context deadline exceeded
-    gorouter --X pcap-api: Context deadline exceeded
-    par
-        pcap-api ->> pcap-agent1: Stop
-        pcap-agent1 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent1)
-        pcap-api ->> pcap-agent2: Stop
-        pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
-    end
-```
-
-- Target Identification via NATS (Option)
-
-```mermaid
-sequenceDiagram
-    pcap-cli ->>+ gorouter: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
-    gorouter ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
-    pcap-api ->> cf-uaa: Verify (Token)
-    cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: check token scope on AppID?
-    cloud-controller ->> pcap-api: token scope on AppID
-    loop
-        pcap-api -->nats: Get apps' IP and port, AppID
-        pcap-agent1 ->> nats: pcap.register
-        pcap-agent2 ->> nats: pcap.register
+    alt Target agent identification via Cloud Controller
+        pcap-api ->> cloud-controller: Instances (AppID, Instances)?
+        cloud-controller ->> pcap-api: Instances (AppID, Instances)
+    else Target agent registry via NATS
+        note right of pcap-api: Look up targets in agent registry
+        pcap-api ->> pcap-api: 
     end
     par
         pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
@@ -751,43 +691,17 @@ Issues discovered by pcap-agent:\
 - Invalid syntax of filter
   - Open Question: pre-check on the pcap-cli/pcap-agent?
 
-- Target Identification via Cloud Controller (Option)
-
 ```mermaid
 sequenceDiagram
     pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 120k) }
     pcap-api ->> cf-uaa: Verify (Token)
     cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: Instances (AppID, Instances)?
-    cloud-controller ->> pcap-api: Instances (AppID, Instances)
-    par
-        pcap-api ->>+ pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 120k)
-        pcap-agent1 ->>- pcap-api: INVALID_REQUEST (pcap-agent1, SnapLen > max)
-        pcap-api ->> pcap-cli: INVALID_REQUEST (pcap-agent1, SnapLen > max)
-    
-        note over pcap-agent2: pcap-agent2 only has 'en0' interface
-        pcap-api ->>+ pcap-agent2: Capture pcap(eth0, "host 1.2.3.4", 120k)
-        pcap-agent2 ->>- pcap-api: INVALID_REQUEST (pcap-agent2, device eth0 not available)
-        pcap-api ->> pcap-cli: INVALID_REQUEST (pcap-agent2, device eth0 not available)
-    end
-    
-    pcap-api ->> pcap-cli: Message: START_CAPTURE_FAILED
-    pcap-api -->- pcap-cli: Close
-```
-
-- Target Identification via NATS (Option)
-
-```mermaid
-sequenceDiagram
-    pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 120k) }
-    pcap-api ->> cf-uaa: Verify (Token)
-    cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: check token scope on AppID?
-    cloud-controller ->> pcap-api: token scope on AppID
-    loop
-        pcap-api -->nats: Get apps' IP and port, AppID
-        pcap-agent1 ->> nats: pcap.register
-        pcap-agent2 ->> nats: pcap.register
+    alt Target agent identification via Cloud Controller
+        pcap-api ->> cloud-controller: Instances (AppID, Instances)?
+        cloud-controller ->> pcap-api: Instances (AppID, Instances)
+    else Target agent registry via NATS
+        note right of pcap-api: Look up targets in agent registry
+        pcap-api ->> pcap-api: 
     end
     par
         pcap-api ->>+ pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 120k)
@@ -813,36 +727,12 @@ sequenceDiagram
     pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "hosts 1.2.3.4", 120k) }
     pcap-api ->> cf-uaa: Verify (Token)
     cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: Instances (AppID, Instances)?
-    cloud-controller ->> pcap-api: Instances (AppID, Instances)
-    par
-        pcap-api ->>+ pcap-agent1: Capture pcap(eth0, "hosts 1.2.3.4", 120k)
-        pcap-agent1 ->>- pcap-api: INVALID_REQUEST (pcap-agent1, Unknown keyword 'hosts')
-        pcap-api ->> pcap-cli: INVALID_REQUEST (pcap-agent1, Unknown keyword 'hosts')
-    
-        note over pcap-agent2: pcap-agent2 only has 'en0' interface
-        pcap-api ->>+ pcap-agent2: Capture pcap(eth0, "hosts 1.2.3.4", 120k)
-        pcap-agent2 ->>- pcap-api: INVALID_REQUEST (pcap-agent2, Unknown keyword 'hosts')
-        pcap-api ->> pcap-cli: INVALID_REQUEST (pcap-agent2, Unknown keyword 'hosts')
-    end
-    
-    pcap-api ->> pcap-cli: Message: START_CAPTURE_FAILED
-    pcap-api -->- pcap-cli: Close
-```
-
-- Target Identification via NATS (Option)
-
-```mermaid
-sequenceDiagram
-    pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "hosts 1.2.3.4", 120k) }
-    pcap-api ->> cf-uaa: Verify (Token)
-    cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: check token scope on AppID?
-    cloud-controller ->> pcap-api: token scope on AppID
-    loop
-        pcap-api -->nats: Get apps' IP and port, AppID
-        pcap-agent1 ->> nats: pcap.register
-        pcap-agent2 ->> nats: pcap.register
+    alt Target agent identification via Cloud Controller
+        pcap-api ->> cloud-controller: Instances (AppID, Instances)?
+        cloud-controller ->> pcap-api: Instances (AppID, Instances)
+    else Target agent registry via NATS
+        note right of pcap-api: Look up targets in agent registry
+        pcap-api ->> pcap-api: 
     end
     par
         pcap-api ->>+ pcap-agent1: Capture pcap(eth0, "hosts 1.2.3.4", 120k)
@@ -885,15 +775,18 @@ sequenceDiagram
 
 The amount of concurrently running captures (for each pcap-api instance and each pcap-agent instance) in order to avoid excessive use, overload, etc.
 
-- Target Identification via Cloud Controller (Option)
-
 ```mermaid
 sequenceDiagram
     pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
     pcap-api ->> cf-uaa: Verify (Token)
     cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: Instances (AppID, Instances)?
-    cloud-controller ->> pcap-api: Instances (AppID, Instances)
+    alt Target agent identification via Cloud Controller
+        pcap-api ->> cloud-controller: Instances (AppID, Instances)?
+        cloud-controller ->> pcap-api: Instances (AppID, Instances)
+    else Target agent registry via NATS
+        note right of pcap-api: Look up targets in agent registry
+        pcap-api ->> pcap-api: 
+    end
     par
         note over pcap-agent1: pcap-agent1 already has<br/>ongoing captures
         pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
@@ -911,42 +804,6 @@ sequenceDiagram
         pcap-api ->> pcap-agent2: Stop
         pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
         pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
-    end
-
-    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
-    pcap-api -->- pcap-cli: Close
-```
-
-- Target Identification via NATS (Option)
-
-```mermaid
-sequenceDiagram
-    pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
-    pcap-api ->> cf-uaa: Verify (Token)
-    cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: check token scope on AppID?
-    cloud-controller ->> pcap-api: token scope on AppID
-    loop
-        pcap-api -->nats: Get apps' IP and port, AppID
-        pcap-agent1 ->> nats: pcap.register
-        pcap-agent2 ->> nats: pcap.register
-    end
-    par
-        note over pcap-agent1: pcap-agent1 already has<br/>ongoing captures
-        pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
-        pcap-api ->> pcap-agent2: Capture pcap(eth0, "host 1.2.3.4", 65k)
-        loop
-            pcap-agent2 ->> pcap-api: pcap data
-            pcap-api ->> pcap-cli: pcap data
-        end
-    end
-    pcap-agent1 ->> pcap-api: Message: LIMIT_REACHED (pcap-agent1, Concurrent captures exceed limit)
-    pcap-api ->> pcap-cli: Message: LIMIT_REACHED (pcap-agent1, Concurrent captures exceed limit)
-    pcap-cli ->> pcap-api: Stop
-    par
-        pcap-api ->> pcap-agent2: Stop
-    pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
-    pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
     end
 
     pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
