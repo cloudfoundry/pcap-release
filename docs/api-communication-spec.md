@@ -324,11 +324,10 @@ Information received from pcap-agent as native termination status code MUST be c
 |-------------------------|---------------------------|--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `INSTANCE_NOT_FOUND`    |                           | `pcap-api`               | One of the requested instances does not exist but there is at least one instance to capture from. MUST be sent as soon as possible.                               |
 | `INSTANCE_DISCONNECTED` | `ABORTED`                 | `pcap-api`               | One instance failed during capturing but there are still instances left to capture from. The detailed message should contain information about the stopped party. |
-| `INSTANCE_STOPPED`      | `OK`                      | `pcap-agent`             | A single agent has stopped gracefully. The detailed message should contain information about the stopped party.                                                   |
-| `START_CAPTURE_FAILED`  |  `FAILED_PRECONDITION`    | `pcap-api`               | Starting the capture request has failed because the request could not be fulfilled (e.g. no matching instances, pcap feature not enabled)                         |
+| `START_CAPTURE_FAILED`  | `FAILED_PRECONDITION`     | `pcap-api`               | Starting the capture request has failed because the request could not be fulfilled (e.g. no matching instances, pcap feature not enabled)                         |
 | `INVALID_REQUEST`       | `INVALID_ARGUMENT`        | `pcap-api`, `pcap-agent` | The request could not be fulfilled, e.g. because the app or BOSH deployment with the requested name do not exist.                                                 |
 | `CONGESTED`             |                           | `pcap-api`, `pcap-agent` | Some participant on the path is congested to the point of discarding data. The detailed message should contain the congested party.                               |
-| `CAPTURE_STOPPED`       | `OK`                         | `pcap-api`               | Confirmation that the capture has stopped gracefully. All of the targeted agents have stopped. MUST be sent from the pcap-api to pcap-cli                         |
+| `CAPTURE_STOPPED`       | `OK`                      | `pcap-api`               | A single agent or the overall capture has stopped gracefully. The detailed message should contain information about the stopped party.                            |
 | `LIMIT_REACHED`         | `RESOURCE_EXHAUSTED`      | `pcap-api`, `pcap-agent` | Some limit has been reached, e.g. number of concurrent requests, time, bytes, etc.; Message details identifies, which limit has been reached.                     |
 |                         | `UNAUTHENTICATED`         | `pcap-api`               | The token sent by the client is rejected (e.g. invalid, timed out, etc.). Detail for the rejection in the message.                                                |                                                                                                     |
 | `MTLS_ERROR`            |                           | `pcap-api`               | An error happened while attempting mTLS communication with PCAP components, independent of the client.                                                            |
@@ -337,7 +336,6 @@ Information received from pcap-agent as native termination status code MUST be c
 Possible duplicates / ambiguous values:
 
 - `START_CAPTURE_FAILED` / `INSTANCE_NOT_FOUND` / `INVALID_REQUEST`
-- `CAPTURE_STOPPED` / `INSTANCE_STOPPED`
 
 ### Status
 
@@ -447,8 +445,8 @@ sequenceDiagram
         pcap-api ->> pcap-agent2: Stop
         pcap-agent2 ->> pcap-api: OK (pcap-agent2 stopped)
         pcap-agent1 ->> pcap-api: OK (pcap-agent1 stopped)
-        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent1)
-        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent1)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent2)
     end
 
     pcap-api ->>- pcap-cli: OK
@@ -485,8 +483,8 @@ sequenceDiagram
         pcap-api ->> pcap-agent2: Stop
         pcap-agent2 ->> pcap-api: OK (pcap-agent2 stopped)
         pcap-agent1 ->> pcap-api: OK (pcap-agent1 stopped)
-        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent1)
-        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent1)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent2)
     end
 
     pcap-api ->>- pcap-cli: OK
@@ -538,7 +536,7 @@ sequenceDiagram
     par
         pcap-api ->> pcap-agent2: Stop
         pcap-agent2 ->> pcap-api: OK (pcap-agent2)
-        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent2)
     end
 
     pcap-api ->>- pcap-cli: OK
@@ -793,7 +791,7 @@ sequenceDiagram
     par
         pcap-api ->> pcap-agent2: Stop
         pcap-agent2 ->> pcap-api: OK (pcap-agent2)
-        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent2)
     end
 
     pcap-api ->>- pcap-cli: OK
@@ -842,8 +840,8 @@ sequenceDiagram
         pcap-api ->> pcap-agent2: Stop
         pcap-agent2 ->> pcap-api: OK (pcap-agent2)
         pcap-agent1 ->> pcap-api: OK (pcap-agent1)
-        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent1)
-        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent1)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent2)
     end
 
     pcap-api ->> pcap-cli: OK
@@ -879,8 +877,8 @@ sequenceDiagram
         pcap-api ->> pcap-agent2: Stop
     pcap-agent2 ->> pcap-api: OK (pcap-agent2)
     pcap-agent1 ->> pcap-api: OK (pcap-agent1)
-    pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent1)
-    pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
+    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent1)
+    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent2)
     end
 
     pcap-api ->>- pcap-cli: OK
