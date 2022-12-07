@@ -38,6 +38,8 @@
 
 This document contains the API specification for the PCAP release.
 
+> The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
+
 The pcap-release automates the identification of network capture targets based on metadata from:
 
 - **Cloud Foundry Applications**, where network traffic is captured directly from the application container.  
