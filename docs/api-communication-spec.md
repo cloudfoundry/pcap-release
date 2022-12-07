@@ -81,7 +81,34 @@ For target registration via NATS, the pcap-agent MUST send a `pcap.register` mes
 
 When the `pcap-agent` goes offline it MUST send a `pcap.deregister` message.
 
-The `pcap-agent` SHOULD send refresh messages in a regular interval, so pcap-api can have an up-to-date view of available pcap-agents. This COULD be used for automated pruning of registered pcap-agents. 
+```mermaid
+sequenceDiagram
+    participant pcap-api
+    participant nats
+    participant pcap-agent1
+    participant pcap-agent2
+    note over pcap-agent1: Agent starts
+    note over pcap-agent2: Agent starts
+    loop
+        pcap-agent1 ->> nats: pcap.register (pcap-agent1, diego-ip:61404)
+        nats ->> pcap-api: pcap.register (pcap-agent1, diego-ip:61404)
+        note right of pcap-api: Store/update agent<br>endpoint: pcap-agent1, diego-ip:61404
+        pcap-api --> pcap-api: 
+        pcap-agent2 ->> nats: pcap.register (pcap-agent2, diego-ip:61294)
+        nats ->> pcap-api: pcap.register (pcap-agent2, diego-ip:61294)
+        note right of pcap-api: Store/update agent<br>endpoint: pcap-agent2, diego-ip:61294
+    end
+    note over pcap-agent1: Agent stops
+    note over pcap-agent2: Agent stops
+
+    pcap-agent1 ->> nats: pcap.deregister (pcap-agent1, diego-ip:61404)
+    nats ->> pcap-api: pcap.deregister (pcap-agent1, diego-ip:61404)
+    pcap-agent2 ->> nats: pcap.deregister (pcap-agent2, diego-ip:61294)
+    nats ->> pcap-api: pcap.deregister (pcap-agent2, diego-ip:61294)
+    
+``` 
+
+The `pcap-agent` SHOULD send refresh messages in a regular interval, so pcap-api can have an up-to-date view of available pcap-agents. This COULD be used for automated pruning of registered pcap-agents.
 
 ## BOSH Case Overview
 
@@ -337,6 +364,10 @@ sequenceDiagram
 
 ### Regular Request with Clean Shutdown
 
+The regular case with a graceful shutdown of all components is shown below for BOSH and CF case respectively.
+
+BOSH Case:
+
 ```mermaid
 sequenceDiagram
     pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>BOSH (Deployment, Groups, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
@@ -369,6 +400,44 @@ sequenceDiagram
     pcap-api -->- pcap-cli: Close
 ```
 
+CF Case (with cloud controller and NATS options)
+
+```mermaid
+sequenceDiagram
+   pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
+    pcap-api ->> cf-uaa: Verify (Token)
+    cf-uaa ->> pcap-api: Token valid
+    alt Target agent identification via Cloud Controller
+        pcap-api ->> cloud-controller: Instances (AppID, Instances)?
+        cloud-controller ->> pcap-api: Instances (AppID, Instances)
+    else Target agent registry via NATS
+        note right of pcap-api: Look up targets in agent registry
+        pcap-api ->> pcap-api: 
+    end
+    par
+        pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
+        pcap-api ->> pcap-agent2: Capture pcap(eth0, "host 1.2.3.4", 65k)
+        loop
+            pcap-agent1 ->> pcap-api: pcap data
+            pcap-api ->> pcap-cli: pcap data
+            pcap-agent2 ->> pcap-api: pcap data
+            pcap-api ->> pcap-cli: pcap data
+        end
+    end
+    pcap-cli ->> pcap-api: Stop
+    par
+        pcap-api ->> pcap-agent1: Stop
+        pcap-api ->> pcap-agent2: Stop
+        pcap-agent2 ->> pcap-api: OK (pcap-agent2 stopped)
+        pcap-agent1 ->> pcap-api: OK (pcap-agent1 stopped)
+        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent1)
+        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
+    end
+
+    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
+    pcap-api -->- pcap-cli: Close
+```
+
 ### Authentication Failures
 
 On authentication failures, the message `UNAUTHORIZED` is sent back. The message detail explains the reason for rejection, e.g. signature check failed, token expired, etc.
@@ -379,10 +448,9 @@ sequenceDiagram
     pcap-api ->> cf-uaa: Verify (Token)
     cf-uaa ->> pcap-api: Token invalid
     
-    pcap-api ->> pcap-cli: Message: UNAUTHORIZED (Reason)
+    pcap-api ->> pcap-cli: UNAUTHENTICATED (Reason)
     pcap-api -->- pcap-cli: Close
 ```
-
 
 ### Unexpected Disconnects
 
@@ -413,57 +481,19 @@ sequenceDiagram
     end
     pcap-agent1 --X pcap-api: Connection terminated
     pcap-api ->> pcap-cli: Message: INSTANCE_DISCONNECTED (pcap-agent1)
+    note over pcap-cli, pcap-api: Client requests a graceful stop
     pcap-cli ->> pcap-api: Stop
     par
         pcap-api ->> pcap-agent2: Stop
-    pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
-    pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
     end
 
     pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
     pcap-api -->- pcap-cli: Close
 ```
 
-- Target Identification via NATS (Option)
-
-```mermaid
-sequenceDiagram
-    pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>CF (AppID, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
-    pcap-api ->> cf-uaa: Verify (Token)
-    cf-uaa ->> pcap-api: Token valid
-    pcap-api ->> cloud-controller: check token scope on AppID?
-    cloud-controller ->> pcap-api: token scope on AppID
-    loop
-        pcap-api -->nats: Get apps' IP and port, AppID
-        pcap-agent1 ->> nats: pcap.register
-        pcap-agent2 ->> nats: pcap.register
-    end
-    par
-        pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
-        pcap-api ->> pcap-agent2: Capture pcap(eth0, "host 1.2.3.4", 65k)
-        loop
-            pcap-agent1 ->> pcap-api: pcap data
-            pcap-api ->> pcap-cli: pcap data
-            pcap-agent2 ->> pcap-api: pcap data
-            pcap-api ->> pcap-cli: pcap data
-        end
-    end
-    pcap-agent1 --X pcap-api: Connection terminated
-    pcap-api ->> pcap-cli: Message: INSTANCE_DISCONNECTED (pcap-agent1)
-    pcap-cli ->> pcap-api: Stop
-    par
-        pcap-api ->> pcap-agent2: Stop
-    pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
-    pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
-    end
-
-    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
-    pcap-api -->- pcap-cli: Close
-``` 
-
 In the case that the pcap-cli disconnects without stopping the capture, the pcap-api will stop all capture requests on pcap-agents for this client.
-
-- Target Identification via Cloud Controller (Option)
 
 ```mermaid
 sequenceDiagram
