@@ -122,10 +122,7 @@ When the `pcap-agent` goes offline it MUST send a `pcap.deregister` message.
 
 ```mermaid
 sequenceDiagram
-    participant pcap-api
-    participant nats
-    participant pcap-agent1
-    participant pcap-agent2
+
     note over pcap-agent1: Agent starts
     note over pcap-agent2: Agent starts
     loop
@@ -136,14 +133,20 @@ sequenceDiagram
         pcap-agent2 ->> nats: pcap.register (pcap-agent2, diego-ip:61294)
         nats ->> pcap-api: pcap.register (pcap-agent2, diego-ip:61294)
         note right of pcap-api: Store/update agent<br>endpoint: pcap-agent2, diego-ip:61294
+        pcap-api --> pcap-api: 
     end
     note over pcap-agent1: Agent stops
     note over pcap-agent2: Agent stops
 
     pcap-agent1 ->> nats: pcap.deregister (pcap-agent1, diego-ip:61404)
     nats ->> pcap-api: pcap.deregister (pcap-agent1, diego-ip:61404)
+    note right of pcap-api: Remove agent<br>endpoint: pcap-agent1, diego-ip:61404
+    pcap-api --> pcap-api: 
+
     pcap-agent2 ->> nats: pcap.deregister (pcap-agent2, diego-ip:61294)
     nats ->> pcap-api: pcap.deregister (pcap-agent2, diego-ip:61294)
+    note right of pcap-api: Remove agent<br>endpoint: pcap-agent2, diego-ip:61294    
+    pcap-api --> pcap-api: 
     
 ```
 
@@ -322,10 +325,10 @@ Information received from pcap-agent as native termination status code MUST be c
 | `INSTANCE_NOT_FOUND`    |                           | `pcap-api`               | One of the requested instances does not exist but there is at least one instance to capture from. MUST be sent as soon as possible.                               |
 | `INSTANCE_DISCONNECTED` | `ABORTED`                 | `pcap-api`               | One instance failed during capturing but there are still instances left to capture from. The detailed message should contain information about the stopped party. |
 | `INSTANCE_STOPPED`      | `OK`                      | `pcap-agent`             | A single agent has stopped gracefully. The detailed message should contain information about the stopped party.                                                   |
-| `START_CAPTURE_FAILED`  |                           | `pcap-api`               | Starting the capture request has failed because the request could not be fulfilled (e.g. no matching instances, pcap feature not enabled)                         |
+| `START_CAPTURE_FAILED`  |  `FAILED_PRECONDITION`    | `pcap-api`               | Starting the capture request has failed because the request could not be fulfilled (e.g. no matching instances, pcap feature not enabled)                         |
 | `INVALID_REQUEST`       | `INVALID_ARGUMENT`        | `pcap-api`, `pcap-agent` | The request could not be fulfilled, e.g. because the app or BOSH deployment with the requested name do not exist.                                                 |
 | `CONGESTED`             |                           | `pcap-api`, `pcap-agent` | Some participant on the path is congested to the point of discarding data. The detailed message should contain the congested party.                               |
-| `CAPTURE_STOPPED`       |                           | `pcap-api`               | Confirmation that the capture has stopped gracefully. All of the targeted agents have stopped. MUST be sent from the pcap-api to pcap-cli                         |
+| `CAPTURE_STOPPED`       | `OK`                         | `pcap-api`               | Confirmation that the capture has stopped gracefully. All of the targeted agents have stopped. MUST be sent from the pcap-api to pcap-cli                         |
 | `LIMIT_REACHED`         | `RESOURCE_EXHAUSTED`      | `pcap-api`, `pcap-agent` | Some limit has been reached, e.g. number of concurrent requests, time, bytes, etc.; Message details identifies, which limit has been reached.                     |
 |                         | `UNAUTHENTICATED`         | `pcap-api`               | The token sent by the client is rejected (e.g. invalid, timed out, etc.). Detail for the rejection in the message.                                                |                                                                                                     |
 | `MTLS_ERROR`            |                           | `pcap-api`               | An error happened while attempting mTLS communication with PCAP components, independent of the client.                                                            |
@@ -448,8 +451,7 @@ sequenceDiagram
         pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
     end
 
-    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: OK
 ```
 
 CF Case (with cloud controller and NATS options)
@@ -487,8 +489,8 @@ sequenceDiagram
         pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
     end
 
-    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: OK
+
 ```
 
 ### Authentication Failures
@@ -501,8 +503,7 @@ sequenceDiagram
     pcap-api ->> cf-uaa: Verify (Token)
     cf-uaa ->> pcap-api: Token invalid
     
-    pcap-api ->> pcap-cli: UNAUTHENTICATED (Reason)
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: UNAUTHENTICATED (Reason, e.g. token expired)
 ```
 
 ### Unexpected Disconnects
@@ -512,8 +513,6 @@ A clean shutdown of components and notification is necessary when either one of 
 When a pcap-agent terminates while capturing, e.g. due to crash or because its connection is lost, pcap-api will notify the pcap-cli that this particular agent is now disconnected.
 
 **NOTE:** This behaviour needs to work correctly, even when no `FIN` is sent from the client, e.g. the node disappears and the request times out.
-
-- Target Identification via Cloud Controller (Option)
 
 ```mermaid
 sequenceDiagram
@@ -542,8 +541,8 @@ sequenceDiagram
         pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
     end
 
-    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: OK
+    
 ```
 
 In the case that the pcap-cli disconnects without stopping the capture, the pcap-api will stop all capture requests on pcap-agents for this client.
@@ -573,16 +572,14 @@ sequenceDiagram
     pcap-cli --X pcap-api: Connection terminated
     note over pcap-api: Terminate all agents for this client
     par
-    pcap-api ->> pcap-agent1: Stop
-    pcap-api ->> pcap-agent2: Stop
+        pcap-api ->> pcap-agent1: Stop
+        pcap-api ->> pcap-agent2: Stop
         pcap-agent1 ->> pcap-api: OK (pcap-agent1)
         pcap-agent2 ->> pcap-api: OK (pcap-agent2)
     end
 ```
 
 In the case that a long-running request is terminated by gorouter due to context deadline, the request will be terminated and the CLI informed by gorouter. The pcap-agent needs to clean up in this case.
-
-- Target Identification via Cloud Controller (Option)
 
 ```mermaid
 sequenceDiagram
@@ -612,9 +609,9 @@ sequenceDiagram
     gorouter --X pcap-api: Context deadline exceeded
     par
         pcap-api ->> pcap-agent1: Stop
-        pcap-agent1 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent1)
         pcap-api ->> pcap-agent2: Stop
-        pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-agent1 ->> pcap-api: OK (pcap-agent1)
+        pcap-agent2 ->> pcap-api: OK (pcap-agent2)
     end
 ```
 
@@ -637,7 +634,7 @@ sequenceDiagram
     note over pcap-api, bosh-uaa: Token and scope verification    
     pcap-api ->> bosh-director: Instances (Deployment)?
     bosh-director ->> pcap-api: Unknown deployment: Deployment
-    pcap-api ->> pcap-cli: Message: INVALID_REQUEST (Unknown deployment: Deployment)
+    pcap-api ->> pcap-cli: INVALID_ARGUMENT (Unknown deployment: Deployment)
     pcap-api -->- pcap-cli: Close
 
     note over pcap-cli, pcap-api: Scenario: Invalid Instance Group(s) or Instance IDs
@@ -648,14 +645,12 @@ sequenceDiagram
     pcap-api ->> bosh-director: Instances (Deployment)?
     bosh-director ->> pcap-api: Instances (Deployment)
     note over pcap-api: List does not contain matching<br/>instance groups(s) or instance IDs
-    pcap-api ->> pcap-cli: Message: INVALID_REQUEST (No instances found to capture ...)
-    pcap-api -->- pcap-cli: Close
-    
+    pcap-api ->>- pcap-cli: INVALID_ARGUMENT (Requested instances not found)
 ```
 
 Availability issues:
 
-- No pcap-agents available in BOSH case (e.g. not deployed for the given deployment)
+- No pcap-agents available in BOSH case (e.g. not deployed for the given deployment, not reachable)
 - `PCAP permission` for the space, under which the application is hosted, is not enabled in the CF case
 
 ```mermaid
@@ -669,9 +664,10 @@ sequenceDiagram
     note over pcap-api: Find and check pcap-agent targets
     note over pcap-api: None found or unable to connect.
     
-    pcap-api ->> pcap-cli: Message: START_CAPTURE_FAILED (No instances found to capture ...)
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: FAILED_PRECONDITION (No instances found to capture ...)
 ```
+
+The PCAP feature CAN be enabled for a space. If it is not enabled, the capture will fail.
 
 ```mermaid
 sequenceDiagram
@@ -680,11 +676,10 @@ sequenceDiagram
     cf-uaa ->> pcap-api: Token valid
     note over pcap-api: PCAP not enabled on the space.
     
-    pcap-api ->> pcap-cli: Message: START_CAPTURE_FAILED (PCAP feature not enabled on space XYZ ...)
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: FAILED_PRECONDITION (PCAP feature not enabled on space XYZ ...)
 ```
 
-Issues discovered by pcap-agent:\
+Issues discovered by pcap-agent:
 
 - Invalid Snap Length
 - Invalid / not available device
@@ -705,22 +700,19 @@ sequenceDiagram
     end
     par
         pcap-api ->>+ pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 120k)
-        pcap-agent1 ->>- pcap-api: INVALID_REQUEST (pcap-agent1, SnapLen > max)
-        pcap-api ->> pcap-cli: INVALID_REQUEST (pcap-agent1, SnapLen > max)
+        pcap-agent1 ->>- pcap-api: INVALID_ARGUMENT (pcap-agent1, SnapLen > max)
+        pcap-api ->> pcap-cli: Message: INVALID_REQUEST (pcap-agent1, SnapLen > max)
     
         note over pcap-agent2: pcap-agent2 only has 'en0' interface
         pcap-api ->>+ pcap-agent2: Capture pcap(eth0, "host 1.2.3.4", 120k)
-        pcap-agent2 ->>- pcap-api: INVALID_REQUEST (pcap-agent2, device eth0 not available)
-        pcap-api ->> pcap-cli: INVALID_REQUEST (pcap-agent2, device eth0 not available)
+        pcap-agent2 ->>- pcap-api: INVALID_ARGUMENT (pcap-agent2, device eth0 not available)
+        pcap-api ->> pcap-cli: Message: INVALID_REQUEST (pcap-agent2, device eth0 not available)
     end
     
-    pcap-api ->> pcap-cli: Message: START_CAPTURE_FAILED
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: FAILED_PRECONDITION (No agents available)
 ```
 
 The 'invalid filter' use case needs to be handled by the pcap-agent (i.e. sending back the appropriate message and terminating this request), but should ideally be avoided in the pcap-cli or latest pcap-api already by checking the BPF filter syntax before sending it on to the pcap-agent.
-
-- Target Identification via Cloud Controller (Option)
 
 ```mermaid
 sequenceDiagram
@@ -736,17 +728,16 @@ sequenceDiagram
     end
     par
         pcap-api ->>+ pcap-agent1: Capture pcap(eth0, "hosts 1.2.3.4", 120k)
-        pcap-agent1 ->>- pcap-api: INVALID_REQUEST (pcap-agent1, Unknown keyword 'hosts')
-        pcap-api ->> pcap-cli: INVALID_REQUEST (pcap-agent1, Unknown keyword 'hosts')
+        pcap-agent1 ->>- pcap-api: INVALID_ARGUMENT (pcap-agent1, Unknown keyword 'hosts')
+        pcap-api ->> pcap-cli: Message: INVALID_REQUEST (pcap-agent1, Unknown keyword 'hosts')
     
         note over pcap-agent2: pcap-agent2 only has 'en0' interface
         pcap-api ->>+ pcap-agent2: Capture pcap(eth0, "hosts 1.2.3.4", 120k)
-        pcap-agent2 ->>- pcap-api: INVALID_REQUEST (pcap-agent2, Unknown keyword 'hosts')
-        pcap-api ->> pcap-cli: INVALID_REQUEST (pcap-agent2, Unknown keyword 'hosts')
+        pcap-agent2 ->>- pcap-api: INVALID_ARGUMENT (pcap-agent2, Unknown keyword 'hosts')
+        pcap-api ->> pcap-cli: Message INVALID_REQUEST (pcap-agent2, Unknown keyword 'hosts')
     end
     
-    pcap-api ->> pcap-cli: Message: START_CAPTURE_FAILED
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: FAILED_PRECONDITION (No agents available)
 ```
 
 Connections to mTLS can fail due to misconfiguration or expired certificates.
@@ -761,14 +752,13 @@ sequenceDiagram
     pcap-api ->> cloud-controller: Instances (AppID, [1])?
     cloud-controller ->> pcap-api: Instances (AppID, [1])
     par
-        pcap-api -->+ pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 120k)
+        pcap-api -->+ pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 120k) [invalid mTLS Cert]
         pcap-agent1 ->> pcap-api: Message: MTLS_ERROR (pcap-agent1, expected [1], got [other-guid])
     end
 
     pcap-api ->> pcap-cli: Message: MTLS_ERROR (pcap-agent1, expected [1], got [other-guid])
     
-    pcap-api ->> pcap-cli: Message: START_CAPTURE_FAILED
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: FAILED_PRECONDITION (No agents available)
 ```
 
 ### Resource Limits
@@ -796,18 +786,18 @@ sequenceDiagram
             pcap-api ->> pcap-cli: pcap data
         end
     end
-    pcap-agent1 ->> pcap-api: Message: LIMIT_REACHED (pcap-agent1, Concurrent captures exceed limit)
+    pcap-agent1 ->> pcap-api: RESOURCE_EXHAUSTED (pcap-agent1, Concurrent captures exceed limit)
     pcap-api ->> pcap-cli: Message: LIMIT_REACHED (pcap-agent1, Concurrent captures exceed limit)
     note over pcap-cli, pcap-api: Client requests a graceful stop
     pcap-cli ->> pcap-api: Stop
     par
         pcap-api ->> pcap-agent2: Stop
-        pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-agent2 ->> pcap-api: OK (pcap-agent2)
         pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
     end
 
-    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: OK
+    
 ```
 
 The limit for a particular client IP could also be reached with too many ongoing concurrent capture requests. To avoid synchronisation issues, the limit is enforced by each pcap-api instance, not globally.
@@ -850,13 +840,13 @@ sequenceDiagram
     par
         pcap-api ->> pcap-agent1: Stop
         pcap-api ->> pcap-agent2: Stop
-        pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
-        pcap-agent1 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent1)
+        pcap-agent2 ->> pcap-api: OK (pcap-agent2)
+        pcap-agent1 ->> pcap-api: OK (pcap-agent1)
         pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent1)
         pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
     end
 
-    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
+    pcap-api ->> pcap-cli: OK
     pcap-api -->- pcap-cli: Close
 ```
 
@@ -887,12 +877,11 @@ sequenceDiagram
     par
         pcap-api ->> pcap-agent1: Stop
         pcap-api ->> pcap-agent2: Stop
-    pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
-    pcap-agent1 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent1)
+    pcap-agent2 ->> pcap-api: OK (pcap-agent2)
+    pcap-agent1 ->> pcap-api: OK (pcap-agent1)
     pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent1)
     pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
     end
 
-    pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED
-    pcap-api -->- pcap-cli: Close
+    pcap-api ->>- pcap-cli: OK
 ```
