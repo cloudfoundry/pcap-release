@@ -100,6 +100,7 @@ Figure 1: The Cloud Foundry Application Capturing case
 In the CF case, `pcap-agent` runs in the app container. The availability and IP/Port where `pcap-agent` is exposed by Envoy MUST be accessible to the pcap-api.
 
 Identifying the `pcap-agent` in a specific app container can be done:
+
 - by querying the [Cloud Controller](#target-identification-via-cloud-controller--option-)
 - by sending [Registration Messages transported via NATS](#target-registration-via-nats--option-)
 
@@ -112,6 +113,7 @@ For the target identification via Cloud Controller, the pcap-api MUST query the 
 ### Target Registration via NATS (Option)
 
 For target registration via NATS, the pcap-agent MUST send a `pcap.register` message indicating:
+
 - the app ID/org ID/space ID
 - the IP address of the Diego cell (can be retrieved from the CF app environment)
 - the external port of the `pcap-agent`, as provided by Envoy.
@@ -143,7 +145,7 @@ sequenceDiagram
     pcap-agent2 ->> nats: pcap.deregister (pcap-agent2, diego-ip:61294)
     nats ->> pcap-api: pcap.deregister (pcap-agent2, diego-ip:61294)
     
-``` 
+```
 
 The `pcap-agent` SHOULD send refresh messages in a regular interval, so pcap-api can have an up-to-date view of available pcap-agents. This COULD be used for automated pruning of registered pcap-agents.
 
@@ -330,6 +332,7 @@ Information received from pcap-agent as native termination status code MUST be c
 | `NO_CAPTURE_RUNNING`    |                           | `pcap-api`               | A Stop Capture Request is received but no capture is running.                                                                                                     |
 
 Possible duplicates / ambiguous values:
+
 - `START_CAPTURE_FAILED` / `INSTANCE_NOT_FOUND` / `INVALID_REQUEST`
 - `CAPTURE_STOPPED` / `INSTANCE_STOPPED`
 
@@ -389,6 +392,7 @@ The following use cases were considered and should cover the 'happy path' as wel
 ### Initialization
 
 For **BOSH**, on startup of pcap-api, the BOSH director needs to be contacted in order to:
+
 - make sure the URL is reachable and the endpoint is a BOSH director
 - retrieve the URL for the BOSH UAA
 
@@ -399,6 +403,7 @@ sequenceDiagram
 ```
 
 For **CF**, on startup of pcap-api, the Cloud Controller needs to be contacted in order to get :
+
 - The UAA Base URL
 
 This will validate the availability of Cloud Controller.
@@ -533,7 +538,7 @@ sequenceDiagram
     pcap-cli ->> pcap-api: Stop
     par
         pcap-api ->> pcap-agent2: Stop
-        pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
+        pcap-agent2 ->> pcap-api: OK (pcap-agent2)
         pcap-api ->> pcap-cli: Message: INSTANCE_STOPPED (pcap-agent2)
     end
 
@@ -672,11 +677,13 @@ sequenceDiagram
         pcap-agent2 ->> pcap-api: Message: INSTANCE_STOPPED (pcap-agent2)
     end
 ```
+
 ### Invalid Requests
 
 Requests can be invalid for many reasons.
 
 The following diagram presents the following invalid request reasons for BOSH captures:
+
 - Invalid deployment name
 - Invalid instance group
 - No instances matching the request
