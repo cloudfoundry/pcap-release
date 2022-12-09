@@ -365,7 +365,7 @@ The stop capture request just indicates that the capture on the current stream i
 | Parameter      | Type               | Required? | Description                                                                                                                                          |
 |----------------|--------------------|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `message_type` | `enum MessageType` | yes       | The type of message sent. This allows for logic based on the message type                                                                            |
-| `origin`       | `string`           | yes       | The sender of this message, e.g. `pcap-api-[group/guid]`, `pcap-agent-[instance_id]`                                                      |
+| `origin`       | `string`           | yes       | The sender of this message, e.g. `pcap-api-[group/guid]`, `pcap-agent-[instance_id]`                                                                 |
 | `message`      | `string`           | no        | The detailed message, human readable, explaining the reason for this message. Optional but recommended, as it could be shown on the CLI to the user. |
 
 Examples for origin:
@@ -408,14 +408,16 @@ Information received from pcap-agent as native termination status code MUST be c
 |-------------------------|---------------------------|--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `INSTANCE_NOT_FOUND`    |                           | `pcap-api`               | One of the requested instances does not exist but there is at least one instance to capture from. MUST be sent as soon as possible.                               |
 | `INSTANCE_DISCONNECTED` | `ABORTED`                 | `pcap-api`               | One instance failed during capturing but there are still instances left to capture from. The detailed message should contain information about the stopped party. |
-| `START_CAPTURE_FAILED`  | `FAILED_PRECONDITION`     | `pcap-api`               | Starting the capture request has failed because the request could not be fulfilled (e.g. no matching instances, pcap feature not enabled)                         |
+| `START_CAPTURE_FAILED`  | `FAILED_PRECONDITION`     | `pcap-api`               | Starting the capture request has failed because the request could not be fulfilled (e.g. no matching instances, pcap feature not enabled, no capture running)     |
 | `INVALID_REQUEST`       | `INVALID_ARGUMENT`        | `pcap-api`, `pcap-agent` | The request could not be fulfilled, e.g. because the app or BOSH deployment with the requested name do not exist.                                                 |
 | `CONGESTED`             |                           | `pcap-api`, `pcap-agent` | Some participant on the path is congested to the point of discarding data. The detailed message should contain the congested party.                               |
-| `CAPTURE_STOPPED`       | `OK`                      | `pcap-api`               | A single agent or the overall capture has stopped gracefully. The detailed message should contain information about the stopped party.                            |
+| `CAPTURE_STOPPED`       | `OK`                      | `pcap-api`, `pcap-agent` | A single agent or the overall capture has stopped gracefully. The detailed message should contain information about the stopped party.                            |
 | `LIMIT_REACHED`         | `RESOURCE_EXHAUSTED`      | `pcap-api`, `pcap-agent` | Some limit has been reached, e.g. number of concurrent requests, time, bytes, etc.; Message details identifies, which limit has been reached.                     |
 |                         | `UNAUTHENTICATED`         | `pcap-api`               | The token sent by the client is rejected (e.g. invalid, timed out, etc.). Detail for the rejection in the message.                                                |                                                                                                     |
-| `MTLS_ERROR`            | `UNAVAILABLE`             | `pcap-api`, `pcap-agent` | An error happened while attempting mTLS communication with PCAP components, independent of the client.                                                            |
-| `NO_CAPTURE_RUNNING`    |                           | `pcap-api`               | A Stop Capture Request is received but no capture is running.                                                                                                     |
+| `CONNECTION_ERROR`      |                           | `pcap-api`               | An error happened while attempting communication with PCAP components, independent of the client.                                                                 |
+|                         | `ABORTED`                 | `pcap-api`               | The capture initially started but while capturing all agents failed and no data is left to forward.                                                               |
+
+If the cause of the error is not clear (e.g. because it could be multiple things) and processing can not continue `UNKNOWN` should be used as the native termination status.
 
 ### Status
 

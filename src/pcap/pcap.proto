@@ -1,0 +1,149 @@
+syntax = "proto3";
+option go_package = "github.com/cloudfoundry/pcap-release/src/pcap";
+
+package pcap;
+
+message CaptureOptions {
+  string device = 1;
+  string filter = 2;
+  uint32 snapLen = 3;
+}
+
+// CaptureResponse contains either a pcap packet or a message to inform the
+// client of some condition that appeared.
+message CaptureResponse {
+  oneof payload {
+    Packet packet = 1;
+    Message message = 2;
+  }
+}
+
+// Packet wraps the raw pcap data stream of one packet. More fields might be
+// added as needed.
+message Packet {
+  bytes data = 1;
+}
+
+// Message represents a control message used by the server to inform the client
+// of something it encountered. The type specifies kind of message it is and the
+// message contains a human readable version with more details that should be
+// shown to the end-user. These messages MUST NOT represent error conditions in
+// which the connection can not be continued, those must be represented using
+// the proper error/status messages.
+message Message {
+  MessageType type = 1;
+  string message = 2;
+}
+
+// MessageType represents the underlying issue for easy assertion of the
+// situation. It should be used by the client to provide a nice message to the
+// end user. Future values will be added to extend functionalities of the API.
+enum MessageType {
+  // One of the requested instances does not exist but there is at least one
+  // instance to capture from. MUST be sent as soon as possible.
+  INSTANCE_NOT_FOUND = 0;
+  // One instance failed during capturing but there are still instances left to
+  // capture from. The detailed message should contain information about the
+  // stopped party.
+  INSTANCE_DISCONNECTED = 1;
+  // Starting the capture request has failed because the request could not be
+  // fulfilled (e.g. no matching instances, pcap feature not enabled).
+  START_CAPTURE_FAILED = 2;
+  // The request could not be fulfilled, e.g. because the app or BOSH deployment
+  // with the requested name do not exist.
+  INVALID_REQUEST = 3;
+  // Some participant on the path is congested to the point of discarding data.
+  // The detailed message should contain the congested party.
+  CONGESTED = 4;
+  // Some limit has been reached, e.g. number of concurrent requests, time,
+  // bytes, etc.; Message details identifies, which limit has been reached.
+  LIMIT_REACHED = 5;
+}
+
+message StatusResponse {
+  bool healthy = 1;
+  int64 compatibilityLevel = 2;
+  string message = 3;
+  optional bool bosh = 4;
+  optional bool cf = 5;
+}
+
+message StatusRequest {}
+
+service API {
+  rpc Status(StatusRequest) returns (StatusResponse);
+  // CaptureBosh starts capturing packets on bosh VMs. The capture can be
+  // stopped by closing the client-side send channel. The Api MUST listen for
+  // that close and MUST stop sending packets as soon as possible but SHOULD
+  // send packets that it still receives from the agents.
+  rpc CaptureBosh (stream BoshRequest) returns (stream CaptureResponse);
+  // CaptureCloudFoundry starts capturing packets on a cloud foundry app. The
+  // capture can be stopped by closing the client-side send channel. The Api
+  // MUST listen for that close and MUST stop sending packets as soon as
+  // possible but SHOULD send packets that it still receives from the agents.
+  rpc CaptureCloudfoundry (stream CloudfoundryRequest) returns (stream CaptureResponse);
+}
+
+message BoshRequest {
+  oneof payload {
+    StartBoshCapture start = 1;
+    StopBoshCapture stop = 2;
+  }
+}
+
+message StartBoshCapture {
+  CaptureOptions capture = 1;
+  string token = 2;
+  string deployment = 3;
+  repeated string groups = 4;
+  repeated string instances = 5;
+}
+
+message StopBoshCapture {}
+
+message CloudfoundryRequest {
+  oneof payload {
+    StartCloudfoundryCapture start = 1;
+    StopCloudfoundryCapture stop = 2;
+  }
+}
+
+message StartCloudfoundryCapture {
+  CaptureOptions capture = 1;
+  string token = 2;
+  string appId = 3;
+  optional string appType = 4;
+  repeated string indices = 5;
+}
+
+message StopCloudfoundryCapture {}
+
+service Agent {
+  // Status returns the current status of the agent. It indicates whether the agent is ready to
+  // accept new capture requests or is currently unavailable.
+  rpc Status(StatusRequest) returns (StatusResponse);
+  // Capture is the main handler for the pcap agent. It contains the logic to open an interface
+  // and start a packet capture. The resulting packets will be streamed back to the caller together
+  // with messages informing the caller of any abnormal conditions that occur. The first message
+  // sent must contain a payload of type StartAgentCapture, this will trigger the start of the capture.
+  // The only messages that can be sent next is a StopAgentCapture which stops the capture gracefully
+  // still sending any packets that are remaining and closing the stream afterwards.
+  rpc Capture(stream AgentRequest) returns (stream CaptureResponse);
+}
+
+// AgentRequest contains either the start or stop request.
+message AgentRequest {
+  // payload wraps the start and stop requests.
+  oneof payload {
+    StartAgentCapture start = 1;
+    StopAgentCapture stop = 2;
+  }
+}
+
+// StartAgentCapture holds all parameters needed to start a capture.
+message StartAgentCapture {
+  CaptureOptions capture = 1;
+}
+
+// StopAgentCapture signals the agent to stop the current capture.
+message StopAgentCapture {}
