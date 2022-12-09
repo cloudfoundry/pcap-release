@@ -99,16 +99,14 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 		return status.Errorf(codes.Unknown, "unable to receive message: %s", err.Error())
 	}
 
-	startCmd, ok := req.Payload.(*AgentRequest_Start)
-	if !ok {
-		return status.Error(codes.InvalidArgument, "first message must contain Payload of type StartAgentCapture")
+	err = validateAgentStartRequest(req)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, err.Error())
 	}
 
-	opts := startCmd.Start.Capture
+	opts := req.Payload.(*AgentRequest_Start).Start.Capture
 
-	// TODO: validate provided input?
-
-	log = log.With(zap.String("trace_id", startCmd.Start.Context.TraceId))
+	log = log.With(zap.String("trace_id", req.Payload.(*AgentRequest_Start).Start.Context.TraceId))
 	log.Info("starting capture", zap.String("device", opts.Device), zap.Uint32("snapLen", opts.SnapLen), zap.String("filter", opts.Filter))
 
 	c := &cause{}
@@ -139,6 +137,39 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	}
 
 	log.Info("capture done")
+	return nil
+}
+
+func validateAgentStartRequest(req *AgentRequest) error {
+	if req == nil {
+		return fmt.Errorf("invalid message: expected message to be not nil")
+	}
+
+	if req.Payload == nil {
+		return fmt.Errorf("invalid message: expected payload to be not nil")
+	}
+
+	startCmd, ok := req.Payload.(*AgentRequest_Start)
+	if !ok {
+		return fmt.Errorf("first message must contain Payload of type StartAgentCapture")
+	}
+
+	if startCmd.Start == nil {
+		return fmt.Errorf("invalid message: expected start to be not nil")
+	}
+
+	if startCmd.Start.Capture == nil {
+		return fmt.Errorf("invalid message: expected capture options to be not nil")
+	}
+
+	if startCmd.Start.Context == nil {
+		return fmt.Errorf("invalid message: expected capture context to be not nil")
+	}
+
+	err := startCmd.Start.Capture.validate()
+	if err != nil {
+		return fmt.Errorf("invalid message: %s", err.Error())
+	}
 	return nil
 }
 

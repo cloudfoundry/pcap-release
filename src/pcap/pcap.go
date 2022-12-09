@@ -6,6 +6,7 @@ package pcap
 import (
 	"fmt"
 	"go.uber.org/zap"
+	"unicode"
 )
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pcap.proto
@@ -68,4 +69,30 @@ func newPacketResponse(data []byte) *CaptureResponse {
 			},
 		},
 	}
+}
+
+func (opts *CaptureOptions) validate() error {
+	if opts.Device == "" {
+		return fmt.Errorf("expected device to be not empty string")
+	}
+
+	if !isAlphanumeric(opts.Device) {
+		return fmt.Errorf("expected device name to be alphanumeric string")
+	}
+
+	// TODO: what validations we need for filters
+
+	if opts.SnapLen == 0 {
+		return fmt.Errorf("expected snaplen to be not zero")
+	}
+	return nil
+}
+
+func isAlphanumeric(s string) bool {
+	for _, r := range s {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
