@@ -1,0 +1,142 @@
+syntax = "proto3";
+option go_package = "github.com/cloudfoundry/pcap-release/src/pcap";
+
+// TODO: trace ID?
+
+package pcap;
+
+message Context {
+  string traceId = 1;
+}
+
+message CaptureOptions {
+  string device = 1;
+  string filter = 2;
+  uint32 snapLen = 3;
+}
+
+// CaptureResponse contains either a pcap packet or a message to inform the
+// client of some condition that appeared.
+message CaptureResponse {
+  oneof payload {
+    Packet packet = 1;
+    Message message = 2;
+  }
+}
+
+// Packet wraps the raw pcap data stream of one packet. More fields might be
+// added as needed.
+message Packet {
+  bytes data = 1;
+}
+
+// Message represents a control message used by the server to inform the client
+// of something it encountered. The type specifies kind of message it is and the
+// message contains a human readable version with more details that should be
+// shown to the end-user. These messages MUST NOT represent error conditions in
+// which the connection can not be continued, those must be represented using
+// the proper error/status messages.
+message Message {
+  MessageType type = 1;
+  string message = 2;
+}
+
+// MessageType represents the underlying issue for easy assertion of the
+// situation. It should be used by the client to provide a nice message to the
+// end user. Future values will be added to extend functionalities of the API.
+enum MessageType {
+  // One of the requested instances does not exist but there is at least one
+  // instance to capture from. MUST be sent as soon as possible.
+  INSTANCE_NOT_FOUND = 0;
+  // One instance failed during capturing but there are still instances left to
+  // capture from.
+  INSTANCE_DISCONNECTED = 1;
+  // Starting the capture from a specific instance has failed.
+  START_CAPTURE_FAILED = 2;
+}
+
+message StatusResponse {
+  Health health = 1;
+  string Version = 2;
+  string status = 3;
+  optional bool bosh = 4;
+  optional bool cf = 5;
+}
+
+enum Health {
+  // Everything is nominal.
+  UP = 0;
+  // This instance is currently being shut down and is draining its remaining connections.
+  DRAINING = 1;
+  // Component is unavailable.
+  DOWN = 2;
+}
+
+message StatusRequest {}
+
+service Api {
+  rpc Status(StatusRequest) returns (StatusResponse);
+  // CaptureBosh starts capturing packets on bosh VMs. The capture can be
+  // stopped by closing the client-side send channel. The Api MUST listen for
+  // that close and MUST stop sending packets as soon as possible but SHOULD
+  // send packets that it still receives from the agents.
+  rpc CaptureBosh (stream BoshRequest) returns (stream CaptureResponse);
+  // CaptureCloudFoundry starts capturing packets on a cloud foundry app. The
+  // capture can be stopped by closing the client-side send channel. The Api
+  // MUST listen for that close and MUST stop sending packets as soon as
+  // possible but SHOULD send packets that it still receives from the agents.
+  rpc CaptureCloudfoundry (stream CloudfoundryRequest) returns (stream CaptureResponse);
+}
+
+message BoshRequest {
+  oneof payload {
+    StartBoshCapture start = 1;
+    StopBoshCapture stop = 2;
+  }
+}
+
+message StartBoshCapture {
+  CaptureOptions capture = 1;
+  string token = 2;
+  string deployment = 3;
+  repeated string groups = 4;
+  repeated string instances = 5;
+}
+
+message StopBoshCapture {}
+
+message CloudfoundryRequest {
+  oneof payload {
+    StartCloudfoundryCapture start = 1;
+    StopCloudfoundryCapture stop = 2;
+  }
+}
+
+message StartCloudfoundryCapture {
+  CaptureOptions capture = 1;
+  string token = 2;
+  string appId = 3;
+  optional string appType = 4;
+  repeated string indices = 5;
+}
+
+message StopCloudfoundryCapture {}
+
+service Agent {
+  rpc Status(StatusRequest) returns (StatusResponse);
+  rpc Capture(stream AgentRequest) returns (stream CaptureResponse);
+}
+
+message AgentRequest {
+  oneof payload {
+    StartAgentCapture start = 1;
+    StopAgentCapture stop = 2;
+  }
+}
+
+message StartAgentCapture {
+  CaptureOptions capture = 1;
+  Context context = 2;
+}
+
+message StopAgentCapture {}
