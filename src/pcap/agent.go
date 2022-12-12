@@ -3,6 +3,7 @@ package pcap
 import (
 	"context"
 	"fmt"
+	"github.com/google/gopacket"
 	"sync"
 
 	"github.com/google/gopacket/pcap"
@@ -141,28 +142,28 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 
 func validateAgentStartRequest(req *AgentRequest) error {
 	if req == nil {
-		return fmt.Errorf("invalid message: expected message to be not nil")
+		return fmt.Errorf("invalid message: message: %w", errNilField)
 	}
 
 	if req.Payload == nil {
-		return fmt.Errorf("invalid message: expected payload to be not nil")
+		return fmt.Errorf("invalid message: payload: %w", errNilField)
 	}
 
 	startCmd, ok := req.Payload.(*AgentRequest_Start)
 	if !ok {
-		return fmt.Errorf("first message must contain Payload of type StartAgentCapture")
+		return fmt.Errorf("invalid message: expected Payload of type StartAgentCapture: %w", errInvalidPayload)
 	}
 
 	if startCmd.Start == nil {
-		return fmt.Errorf("invalid message: expected start to be not nil")
+		return fmt.Errorf("invalid message: start: %w", errNilField)
 	}
 
 	if startCmd.Start.Capture == nil {
-		return fmt.Errorf("invalid message: expected capture options to be not nil")
+		return fmt.Errorf("invalid message: capture options: %w", errNilField)
 	}
 
 	if startCmd.Start.Context == nil {
-		return fmt.Errorf("invalid message: expected capture context to be not nil")
+		return fmt.Errorf("invalid message: capture context: %w", errNilField)
 	}
 
 	err := startCmd.Start.Capture.validate()
@@ -187,11 +188,16 @@ func openHandle(opts *CaptureOptions) (*pcap.Handle, error) {
 	return handle, nil
 }
 
+type pcapHandle interface {
+	ReadPacketData() ([]byte, gopacket.CaptureInfo, error)
+	Close()
+}
+
 // readPackets reads from the packet source and writes them to the returned
 // channel. If the given context errors the loop breaks with the next read.
 // If an error is encountered while reading packets the cancel function is
 // called and the loop is stopped.
-func readPackets(ctx context.Context, cancel CancelCauseFunc, handle *pcap.Handle) <-chan *CaptureResponse {
+func readPackets(ctx context.Context, cancel CancelCauseFunc, handle pcapHandle) <-chan *CaptureResponse {
 	out := make(chan *CaptureResponse, 100)
 
 	go func() {
@@ -253,6 +259,11 @@ type agentRequestReceiver interface {
 	Recv() (*AgentRequest, error)
 }
 
+var (
+	errNilField = fmt.Errorf("field is nil")
+	errInvalidPayload = fmt.Errorf("invalid payload")
+)
+
 // agentStopCmd reads the next message from the stream. It ensures that the message
 // has a payload of StopAgentCapture. If any error is encountered or the payload is
 // of a different type an appropriate cause is set and the cancel function is called.
@@ -265,14 +276,14 @@ func agentStopCmd(cancel CancelCauseFunc, stream agentRequestReceiver) {
 		}
 
 		if msg == nil || msg.Payload == nil {
-			cancel(fmt.Errorf("read message: message or payload is nil, expected Payload of type StopAgentCapture"))
+			cancel(fmt.Errorf("read message: message or payload: %w", errNilField))
 			return
 		}
 
 		// request is empty, no need to save it
 		_, ok := msg.Payload.(*AgentRequest_Stop)
 		if !ok {
-			cancel(fmt.Errorf("read payload: unexpected message, expected Payload of type StopAgentCapture"))
+			cancel(fmt.Errorf("read payload: expected Payload of type StopAgentCapture: %w", errInvalidPayload))
 			return
 		}
 
