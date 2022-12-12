@@ -19,13 +19,6 @@ import (
 
 // then run the bosh.go as client. It will capture 100 responses and then gracefully close the connection from the client side.
 
-var (
-	// errStoppedByUser is an internal error that should not be returned to the
-	// caller.
-	errStoppedByUser  = fmt.Errorf("stopped by user")
-	errNotImplemented = fmt.Errorf("not implemented")
-)
-
 type Target struct {
 	Ip   string `json:"ip"`
 	Port int    `json:"port"`
@@ -39,7 +32,7 @@ func (t Target) String() string {
 // discarded messages are logged on the trace level.
 func drain[T any](c <-chan T) {
 	for m := range c {
-		zap.L().Debug("discarding message", zap.Bool("trace", true), zap.Any("message", m))
+		zap.L().Warn("discarding message", zap.Any("message", m))
 
 		// FIXME: Disabled metric as this led to an error of 'unknown metric'
 		// MetricsServer().MessageDrained()

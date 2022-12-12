@@ -3,90 +3,87 @@ package pcap
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/google/gopacket/pcap"
+
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"net"
-	"sync"
-	"sync/atomic"
 )
 
-// cause is an intermediate solution until go1.20 is released which brings
-// proper support for reporting a cause when cancelling a context.
-// See: https://tip.golang.org/doc/go1.20#context
-type cause struct {
-	m   sync.Mutex
-	err error
-}
-
-// Set the given error as cause. Only the first error will be recorded,
-// subsequent calls to Set do nothing.
-func (c *cause) Set(e error) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	if c.err == nil {
-		c.err = e
-	}
-}
-
-// Get the initial error that has been recorded as cause.
-func (c *cause) Get() error {
-	c.m.Lock()
-	defer c.m.Unlock()
-	return c.err
-}
-
 type Agent struct {
-	draining atomic.Bool
-	// ctx can be used to stop the agent and all captures that are currently running.
-	ctx context.Context
+	done chan struct{}
+	wg   sync.WaitGroup
+	log  *zap.Logger
 	UnimplementedAgentServer
 }
 
-func NewAgent() (*Agent, error) {
+func NewAgent(log *zap.Logger) (*Agent, error) {
+	if log == nil {
+		log = zap.L()
+	}
 	return &Agent{
-		draining: atomic.Bool{},
+		done: make(chan struct{}),
+		log:  log,
 	}, nil
 }
 
-func (a *Agent) Draining() {
-	a.draining.Store(true)
+// Stop the server. This will gracefully stop any captures that are currently running
+func (a *Agent) Stop() {
+	select {
+	case <-a.done:
+		// if the channel is already closed, we do nothing
+	default:
+		// otherwise the channel is still open and we close it
+		close(a.done)
+	}
 }
 
-func (a *Agent) Listen(port int) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return fmt.Errorf("listen: %w", err)
-	}
-
-	server := grpc.NewServer()
-	RegisterAgentServer(server, a)
-
-	// TODO: implement a graceful stop
-	return server.Serve(lis)
+// Wait for all open streams to terminate.
+func (a *Agent) Wait() {
+	a.wg.Wait()
 }
 
-func (a *Agent) Status(ctx context.Context, req *StatusRequest) (*StatusResponse, error) {
-	health := Health_UP
-	if a.draining.Load() {
-		health = Health_DRAINING
+func (a *Agent) Status(_ context.Context, _ *StatusRequest) (*StatusResponse, error) {
+	// TODO: how to do versioning?
+	version := "devel"
+
+	var stopping bool
+	select {
+	case <-a.done:
+		// we only get here if the channel is closed since it is never written to
+		stopping = true
+	default:
+		// channel is still open
+		stopping = false
 	}
-	return &StatusResponse{
-		Health:  health,
-		Version: "", // TODO: decide on a way to version
-		Status:  "ok",
-	}, nil
+
+	if stopping {
+		return &StatusResponse{
+			Health:  Health_DRAINING,
+			Version: version,
+			Status:  "agent shutting down",
+		}, nil
+	} else {
+		return &StatusResponse{
+			Health:  Health_UP,
+			Version: version,
+			Status:  "ok",
+		}, nil
+	}
 }
 
 // Capture
 // TODO: write doc
 func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
-	ctx, cancel := context.WithCancel(stream.Context())
-	defer cancel()
+	a.wg.Add(1)
+	defer a.wg.Done()
 
-	log := zap.L().With(zap.String("handler", "capture"))
+	ctx, cancel := WithCancelCause(stream.Context())
+	defer cancel(nil)
+
+	log := a.log.With(zap.String("handler", "capture"))
 
 	defer func() {
 		if err != nil {
@@ -109,30 +106,32 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	log = log.With(zap.String("trace_id", req.Payload.(*AgentRequest_Start).Start.Context.TraceId))
 	log.Info("starting capture", zap.String("device", opts.Device), zap.Uint32("snapLen", opts.SnapLen), zap.String("filter", opts.Filter))
 
-	c := &cause{}
-
 	handle, err := openHandle(opts)
 	if err != nil {
 		return err
 	}
+	defer handle.Close()
 
 	// source / producer
-	responses := readPackets(ctx, cancel, handle, c)
-	// after this function returns we want to make sure that this channel is
-	// drained properly if there is anything left in it.
-	defer drain(responses)
+	responses := readPackets(ctx, cancel, handle)
 
 	// sink / consumer
-	forwardToStream(cancel, responses, stream, c)
+	forwardToStream(cancel, responses, stream)
 
-	agentStopCmd(cancel, stream, c)
+	agentStopCmd(cancel, stream)
 
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+		// nothing to do, stream was terminated
+	case <-a.done:
+		cancel(fmt.Errorf("agent was stopped"))
+		// just to be sure that the error was already propagated
+		<-ctx.Done()
+	}
 
-	// FIXME(maxmoehl): with go1.20 we can add a cause to know why the capture was stopped
-	// err = context.Cause(ctx)
-	err = c.Get()
+	err = Cause(ctx)
 	if err != nil {
+		// TODO: try harder to get proper statuses
 		return status.Error(codes.Unknown, err.Error())
 	}
 
@@ -192,7 +191,7 @@ func openHandle(opts *CaptureOptions) (*pcap.Handle, error) {
 // channel. If the given context errors the loop breaks with the next read.
 // If an error is encountered while reading packets the cancel function is
 // called and the loop is stopped.
-func readPackets(ctx context.Context, cancel context.CancelFunc, handle *pcap.Handle, c *cause) <-chan *CaptureResponse {
+func readPackets(ctx context.Context, cancel CancelCauseFunc, handle *pcap.Handle) <-chan *CaptureResponse {
 	out := make(chan *CaptureResponse, 100)
 
 	go func() {
@@ -212,11 +211,7 @@ func readPackets(ctx context.Context, cancel context.CancelFunc, handle *pcap.Ha
 
 			data, _, err := handle.ReadPacketData()
 			if err != nil {
-				err = fmt.Errorf("read packet: %w", err)
-				// FIXME(maxmoehl): with go1.20 we can propagate the error by using context.WithCauseCancel
-				//  for now we only log the error.
-				c.Set(err)
-				cancel()
+				cancel(fmt.Errorf("read packet: %w", err))
 				return
 			}
 
@@ -235,16 +230,18 @@ type packetSender interface {
 // forwardToStream reads Packets form src until it's closed and writes them to stream.
 // If it encounters an error while doing so the error is set to cause and the cancel function
 // is called.
-func forwardToStream(cancel context.CancelFunc, src <-chan *CaptureResponse, stream packetSender, c *cause) {
+func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream packetSender) {
 	go func() {
+		// After this function returns we want to make sure that this channel is
+		// drained properly if there is anything left in it. This avoids responses
+		// left after the connection to the client broke and no more responses are
+		// read from the channel.
+		defer drain(src)
+
 		for res := range src {
 			err := stream.Send(res)
 			if err != nil {
-				err = fmt.Errorf("send response: %w", err)
-				// FIXME(maxmoehl): with go1.20 we can propagate the error by using context.WithCauseCancel
-				//  for now we only log the error.
-				c.Set(err)
-				cancel()
+				cancel(fmt.Errorf("send response: %w", err))
 				return
 			}
 		}
@@ -259,40 +256,28 @@ type agentRequestReceiver interface {
 // agentStopCmd reads the next message from the stream. It ensures that the message
 // has a payload of StopAgentCapture. If any error is encountered or the payload is
 // of a different type an appropriate cause is set and the cancel function is called.
-func agentStopCmd(cancel context.CancelFunc, stream agentRequestReceiver, c *cause) {
+func agentStopCmd(cancel CancelCauseFunc, stream agentRequestReceiver) {
 	go func() {
 		msg, err := stream.Recv()
 		if err != nil {
-			err = fmt.Errorf("read message: %w", err)
-			// FIXME(maxmoehl): with go1.20 we can propagate the error by using context.WithCauseCancel
-			//  for now we only log the error.
-			c.Set(err)
-			cancel()
+			cancel(fmt.Errorf("read message: %w", err))
 			return
 		}
 
 		if msg == nil || msg.Payload == nil {
-			err = fmt.Errorf("read message: message or payload is nil, expected Payload of type StopAgentCapture")
-			// FIXME(maxmoehl): with go1.20 we can propagate the error by using context.WithCauseCancel
-			//  for now we only log the error.
-			c.Set(err)
-			cancel()
+			cancel(fmt.Errorf("read message: message or payload is nil, expected Payload of type StopAgentCapture"))
 			return
 		}
 
 		// request is empty, no need to save it
 		_, ok := msg.Payload.(*AgentRequest_Stop)
 		if !ok {
-			err = fmt.Errorf("read payload: unexpected message, expected Payload of type StopAgentCapture")
-			// FIXME(maxmoehl): with go1.20 we can propagate the error by using context.WithCauseCancel
-			//  for now we only log the error.
-			c.Set(err)
-			cancel()
+			cancel(fmt.Errorf("read payload: unexpected message, expected Payload of type StopAgentCapture"))
 			return
 		}
 
 		// cancel without cause - normal exit
 		zap.L().Debug("client requested stop of capture")
-		cancel()
+		cancel(nil)
 	}()
 }
