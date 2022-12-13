@@ -60,10 +60,10 @@ func (a *Agent) draining() bool {
 	select {
 	case <-a.done:
 		// we only get here if the channel is closed since it is never written to
-		return false
+		return true
 	default:
 		// channel is still open
-		return true
+		return false
 	}
 }
 
@@ -253,7 +253,7 @@ type packetSender interface {
 	Send(*CaptureResponse) error
 }
 
-// forwardToStream reads Packets form src until it's closed and writes them to stream.
+// forwardToStream reads Packets from src until it's closed and writes them to stream.
 // If it encounters an error while doing so the error is set to cause and the cancel function
 // is called. Any data that is forwarded after an error is discarded.
 func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream packetSender) {
@@ -276,7 +276,7 @@ func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream
 			} else if discarding && !isMsg {
 				// do nothing, get the buffer down as quickly as possible
 				continue
-			} else if fillLvl > 0.8 && !isMsg {
+			} else if fillLvl >= 0.8 && !isMsg {
 				discarding = true
 				// this only is sent when we start discarding (and discards the current data packet)
 				res = newMessageResponse(MessageType_DISCARDING_MESSAGES, "too much back pressure, discarding packets")

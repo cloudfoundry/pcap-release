@@ -26,37 +26,37 @@ func TestAgentStopCmd(t *testing.T) {
 		name        string
 		recv        agentRequestReceiver
 		expectedErr error
-		wantedErr   bool
+		wantErr     bool
 	}{
 		{
 			name:        "EOF during reading of message",
 			recv:        &mockStreamReceiver{req: &AgentRequest{}, err: io.EOF},
 			expectedErr: io.EOF,
-			wantedErr:   true,
+			wantErr:     true,
 		},
 		{
 			name:        "Empty payload",
 			recv:        &mockStreamReceiver{req: &AgentRequest{}, err: nil},
 			expectedErr: errNilField,
-			wantedErr:   true,
+			wantErr:     true,
 		},
 		{
 			name:        "Empty message",
 			recv:        &mockStreamReceiver{req: nil, err: nil},
 			expectedErr: errNilField,
-			wantedErr:   true,
+			wantErr:     true,
 		},
 		{
 			name:        "Invalid payload type",
 			recv:        &mockStreamReceiver{req: &AgentRequest{Payload: &AgentRequest_Start{}}, err: nil},
 			expectedErr: errInvalidPayload,
-			wantedErr:   true,
+			wantErr:     true,
 		},
 		{
 			name:        "Happy path",
 			recv:        &mockStreamReceiver{req: &AgentRequest{Payload: &AgentRequest_Stop{}}, err: nil},
 			expectedErr: context.Canceled,
-			wantedErr:   true,
+			wantErr:     true,
 		},
 	}
 	for _, test := range tests {
@@ -68,8 +68,8 @@ func TestAgentStopCmd(t *testing.T) {
 
 			err := Cause(ctx)
 
-			if (err != nil) != test.wantedErr {
-				t.Errorf("wantedErr = %v, error = %v", test.wantedErr, err)
+			if (err != nil) != test.wantErr {
+				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
 			}
 
 			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
@@ -101,43 +101,144 @@ func (m *mockPcapHandle) Close() {
 func TestReadPackets(t *testing.T) {
 	tests := []struct {
 		name      string
-		handle    mockPcapHandle
-		wantedErr bool
-		want      string
+		handle  mockPcapHandle
+		wantErr  bool
+		wantData string
 	}{
 		{
-			name:      "Error during reading of packet data",
-			handle:    mockPcapHandle{data: []byte{}, ci: gopacket.CaptureInfo{}, err: fmt.Errorf("Error")},
-			wantedErr: true,
-			want:      "",
+			name:     "Error during reading of packet data",
+			handle:   mockPcapHandle{data: []byte{}, ci: gopacket.CaptureInfo{}, err: fmt.Errorf("Error")},
+			wantErr:  true,
+			wantData: "",
 		},
 		{
-			name:      "Happy path",
-			handle:    mockPcapHandle{data: []byte("ABC"), ci: gopacket.CaptureInfo{}, err: nil},
-			wantedErr: false,
-			want:      "ABC",
+			name:     "Happy path",
+			handle:   mockPcapHandle{data: []byte("ABC"), ci: gopacket.CaptureInfo{}, err: nil},
+			wantErr:  false,
+			wantData: "ABC",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			ctx, cancel := WithCancelCause(ctx)
+
 			out := readPackets(ctx, cancel, &test.handle)
+
 			<-ctx.Done()
 
 			err := Cause(ctx)
 
-			if (err != nil) != test.wantedErr && test.want == "" {
-				t.Errorf("wantedErr = %v, error = %v", test.wantedErr, err)
+			if (err != nil) != test.wantErr && test.wantData == "" {
+				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
 			}
-			if test.want != "" {
+
+			if test.wantData != "" {
 				data := ""
 				for s := range out {
 					data += string(s.GetPacket().Data)
 				}
-				if test.want != data {
+				if test.wantData != data {
 					t.Errorf("Invalid data response %s", data)
 				}
+			}
+
+		})
+	}
+}
+
+type mockPacketSender struct {
+	err    error
+	called bool
+	msgCounter uint16
+	msgCount uint16
+}
+
+func (m *mockPacketSender) Send(res *CaptureResponse) error{
+	message, isMsg := res.Payload.(*CaptureResponse_Message)
+    m.msgCounter++
+
+	if isMsg && message.Message.Type == MessageType_DISCARDING_MESSAGES{
+		return fmt.Errorf("%v", message.Message.Type)
+	}
+
+	if m.msgCount == m.msgCounter {
+		return errTestEnded
+	}
+
+	return m.err
+}
+
+func (m *mockPacketSender) MsgCounter() uint16{
+	return m.msgCounter
+}
+
+
+func TestForwardToStream(t *testing.T) {
+	tests := []struct {
+		name string
+		msgCount uint16
+		stream packetSender
+		src chan *CaptureResponse
+		responses []*CaptureResponse
+		wantErr bool
+		success bool
+	}{
+		{
+			name: "error during sending of packets",
+			stream: &mockPacketSender{err: fmt.Errorf("Error"), msgCount: 1},
+			src: make(chan *CaptureResponse, 5),
+			responses: []*CaptureResponse{newPacketResponse([]byte("ABC"))},
+			wantErr: true,
+			success: false,
+		},
+		{
+			name: "buffer is filled with PacketResponse",
+			msgCount: 5,
+			stream: &mockPacketSender{err: nil, msgCount: 5},
+			src: make(chan *CaptureResponse, 5),
+			responses: []*CaptureResponse{newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC"))},
+			wantErr: true,
+			success: false,
+		},
+		{
+			name: "buffer is filled with MessageResponse",
+			stream: &mockPacketSender{err: nil, msgCount: 5},
+			src: make(chan *CaptureResponse, 5),
+			responses: []*CaptureResponse{newMessageResponse(MessageType_INSTANCE_NOT_FOUND,"invalid id"),newMessageResponse(MessageType_INSTANCE_NOT_FOUND,"invalid id"),newMessageResponse(MessageType_INSTANCE_NOT_FOUND,"invalid id"),newMessageResponse(MessageType_INSTANCE_NOT_FOUND,"invalid id"),newMessageResponse(MessageType_INSTANCE_NOT_FOUND,"invalid id")},
+			wantErr: false,
+			success: true,
+		},
+		{
+			name: "happy path",
+			stream: &mockPacketSender{err: nil, msgCount: 2},
+			src: make(chan *CaptureResponse, 5),
+			responses: []*CaptureResponse{newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC"))},
+			wantErr: false,
+			success: true,
+		},
+
+	}
+		for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			ctx, cancel := WithCancelCause(ctx)
+
+			for _, res := range test.responses{
+				test.src <- res
+			}
+
+			forwardToStream(cancel, test.src, test.stream)
+
+			<-ctx.Done()
+
+			err := Cause(ctx)
+			if test.success && err != nil && !errors.Is(err, errTestEnded)  {
+				t.Errorf("forwardToStream() error to be of type errTestEnded but was error = %v, wantErr %v", err, test.wantErr)
+			}
+
+			if !test.success && (err != nil) != test.wantErr {
+				t.Errorf("forwardToStream() error = %v, wantErr %v", err, test.wantErr)
 			}
 
 		})
@@ -148,44 +249,56 @@ func TestValidateAgentStartRequest(t *testing.T) {
 	tests := []struct {
 		name        string
 		req         *AgentRequest
-		wantedErr   bool
+		wantErr     bool
 		expectedErr error
 	}{
 		{
 			name:        "Request is nil",
 			req:         nil,
-			wantedErr:   true,
+			wantErr:     true,
 			expectedErr: errNilField,
 		},
 		{
 			name:        "Request Payload is nil",
 			req:         &AgentRequest{},
-			wantedErr:   true,
+			wantErr:     true,
 			expectedErr: errNilField,
 		},
 		{
 			name:        "Request Payload invalid type",
 			req:         &AgentRequest{Payload: &AgentRequest_Stop{}},
-			wantedErr:   true,
+			wantErr:     true,
 			expectedErr: errInvalidPayload,
 		},
 		{
 			name:        "Request Payload start is nil",
+			req:         &AgentRequest{Payload: &AgentRequest_Start{}},
+			wantErr:     true,
+			expectedErr: errNilField,
+		},
+		{
+			name:        "Request Payload start is nil",
 			req:         &AgentRequest{Payload: &AgentRequest_Start{&StartAgentCapture{}}},
-			wantedErr:   true,
+			wantErr:     true,
 			expectedErr: errNilField,
 		},
 		{
 			name:        "Request Payload capture options is nil",
 			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Context: &Context{TraceId: "12344"}}}},
-			wantedErr:   true,
+			wantErr:     true,
 			expectedErr: errNilField,
 		},
 		{
 			name:        "Request Payload context options is nil",
 			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
-			wantedErr:   true,
+			wantErr:     true,
 			expectedErr: errNilField,
+		},
+		{
+			name:        "Request Payload capture options invalid",
+			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "", Filter: "", SnapLen: 0}, Context: &Context{TraceId: "12344"}}}},
+			wantErr:     true,
+			expectedErr: nil,
 		},
 		{
 			name: "Happy path",
@@ -193,18 +306,92 @@ func TestValidateAgentStartRequest(t *testing.T) {
 				Context: &Context{TraceId: "12344"},
 				Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000},
 			}}},
-			wantedErr:   false,
+			wantErr:     false,
 			expectedErr: nil,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			err := validateAgentStartRequest(test.req)
-			if (err != nil) != test.wantedErr {
-				t.Errorf("wantedErr = %v, error = %v", test.wantedErr, err)
+			if (err != nil) != test.wantErr {
+				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
 			}
 			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
 				t.Errorf("expectedErr = %v, error = %v", test.expectedErr, err)
+			}
+		})
+	}
+}
+
+func TestAgentDraining(t *testing.T) {
+
+	tests := []struct {
+		name         string
+		expectedDone bool
+		want         bool
+	}{
+		{
+			name:         "not draining",
+			expectedDone: false,
+			want:         false,
+		},
+		{
+			name:         "draining",
+			expectedDone: true,
+			want:         true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a, err := NewAgent(nil)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if tt.expectedDone {
+				a.Stop()
+			}
+			if got := a.draining(); got != tt.want {
+				t.Errorf("draining() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAgent_Status(t *testing.T) {
+	tests := []struct {
+		name    string
+		agentDraining bool
+		wantHealth    Health
+		wantErr bool
+	}{
+		{
+			name: "up and running",
+			agentDraining: false,
+			wantHealth: Health_UP,
+            wantErr: false,
+		},
+		{
+			name: "draining",
+			agentDraining: true,
+			wantHealth: Health_DRAINING,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a, err := NewAgent(nil)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if tt.agentDraining {
+				a.Stop()
+			}
+			got, err := a.Status(nil, nil)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Status() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got.Health != tt.wantHealth {
+				t.Errorf("Status() health = %v, wantHealth %v", got.Health, tt.wantHealth)
 			}
 		})
 	}
