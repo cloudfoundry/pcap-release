@@ -53,6 +53,7 @@ enum MessageType {
   INSTANCE_DISCONNECTED = 1;
   // Starting the capture from a specific instance has failed.
   START_CAPTURE_FAILED = 2;
+  DISCARDING_MESSAGES = 3;
 }
 
 message StatusResponse {
@@ -123,6 +124,8 @@ message StartCloudfoundryCapture {
 message StopCloudfoundryCapture {}
 
 service Agent {
+  // Status returns the current status of the agent. It indicates whether the agent is ready to
+  // accept new capture requests or is currently unavailable.
   rpc Status(StatusRequest) returns (StatusResponse);
   rpc Capture(stream AgentRequest) returns (stream CaptureResponse);
 }

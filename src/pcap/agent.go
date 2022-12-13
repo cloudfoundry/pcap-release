@@ -2,24 +2,33 @@ package pcap
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/google/gopacket"
 	"sync"
 
+	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
-
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+// Agent is the central struct to which the handlers are attached.
 type Agent struct {
+	// done is used to gracefully shut down the agent, it will terminate all
+	// ongoing streams.
 	done chan struct{}
-	wg   sync.WaitGroup
-	log  *zap.Logger
+	// wg tracks any running streams.
+	// TODO: expose as metric?
+	wg sync.WaitGroup
+	// log carries the logger all session loggers are derived from.
+	log *zap.Logger
+
 	UnimplementedAgentServer
 }
 
+// NewAgent creates a new ready-to-use agent. If the given logger is nil zap.L will
+// be used.
 func NewAgent(log *zap.Logger) (*Agent, error) {
 	if log == nil {
 		log = zap.L()
@@ -31,6 +40,7 @@ func NewAgent(log *zap.Logger) (*Agent, error) {
 }
 
 // Stop the server. This will gracefully stop any captures that are currently running
+// by closing Agent.done. Further calls to Stop have no effect.
 func (a *Agent) Stop() {
 	select {
 	case <-a.done:
@@ -46,33 +56,32 @@ func (a *Agent) Wait() {
 	a.wg.Wait()
 }
 
-func (a *Agent) Status(_ context.Context, _ *StatusRequest) (*StatusResponse, error) {
-	// TODO: how to do versioning?
-	version := "devel"
-
-	var stopping bool
+func (a *Agent) draining() bool {
 	select {
 	case <-a.done:
 		// we only get here if the channel is closed since it is never written to
-		stopping = true
+		return false
 	default:
 		// channel is still open
-		stopping = false
+		return true
+	}
+}
+
+// Status endpoint. See interface documentation for details.
+func (a *Agent) Status(_ context.Context, _ *StatusRequest) (*StatusResponse, error) {
+	// TODO: how to do versioning?
+	s := &StatusResponse{
+		Version: "devel",
+		Health:  Health_UP,
+		Status:  "ok",
 	}
 
-	if stopping {
-		return &StatusResponse{
-			Health:  Health_DRAINING,
-			Version: version,
-			Status:  "agent shutting down",
-		}, nil
-	} else {
-		return &StatusResponse{
-			Health:  Health_UP,
-			Version: version,
-			Status:  "ok",
-		}, nil
+	if a.draining() {
+		s.Health = Health_DRAINING
+		s.Status = "agent is shutting down"
 	}
+
+	return s, nil
 }
 
 // Capture
@@ -81,20 +90,25 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	a.wg.Add(1)
 	defer a.wg.Done()
 
+	log := a.log.With(zap.String("handler", "capture"))
+
 	ctx, cancel := WithCancelCause(stream.Context())
 	defer cancel(nil)
 
-	log := a.log.With(zap.String("handler", "capture"))
-
 	defer func() {
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("capture ended unsuccessfully", zap.Error(err))
 		}
 	}()
 
+	if a.draining() {
+		return status.Error(codes.Unavailable, "agent is draining")
+	}
+
 	req, err := stream.Recv()
 	if err != nil {
-		return status.Errorf(codes.Unknown, "unable to receive message: %s", err.Error())
+		return errorf(codes.Unknown, "unable to receive message: %w", err)
+		// return status.Errorf(codes.Unknown, "unable to receive message: %s", err.Error())
 	}
 
 	err = validateAgentStartRequest(req)
@@ -125,21 +139,27 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	case <-ctx.Done():
 		// nothing to do, stream was terminated
 	case <-a.done:
+		// agent shutting down
 		cancel(fmt.Errorf("agent was stopped"))
 		// just to be sure that the error was already propagated
 		<-ctx.Done()
 	}
 
 	err = Cause(ctx)
-	if err != nil {
-		// TODO: try harder to get proper statuses
-		return status.Error(codes.Unknown, err.Error())
+	// Cancelling the context with nil causes context.Cancelled to be set
+	// which is a non-error in our case.
+	if err != nil && !errors.Is(err, context.Canceled) {
+		s := status.Code(err)
+		return status.Error(s, err.Error())
 	}
 
 	log.Info("capture done")
 	return nil
 }
 
+// validateAgentStartRequest returns an error describing the issue or nil if
+// the request is valid. The returned error does not have a gRPC status associated
+// with it.
 func validateAgentStartRequest(req *AgentRequest) error {
 	if req == nil {
 		return fmt.Errorf("invalid message: message: %w", errNilField)
@@ -198,7 +218,7 @@ type pcapHandle interface {
 // If an error is encountered while reading packets the cancel function is
 // called and the loop is stopped.
 func readPackets(ctx context.Context, cancel CancelCauseFunc, handle pcapHandle) <-chan *CaptureResponse {
-	out := make(chan *CaptureResponse, 100)
+	out := make(chan *CaptureResponse, 100) // TODO: make buffer configurable
 
 	go func() {
 		defer close(out)
@@ -235,7 +255,7 @@ type packetSender interface {
 
 // forwardToStream reads Packets form src until it's closed and writes them to stream.
 // If it encounters an error while doing so the error is set to cause and the cancel function
-// is called.
+// is called. Any data that is forwarded after an error is discarded.
 func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream packetSender) {
 	go func() {
 		// After this function returns we want to make sure that this channel is
@@ -244,10 +264,27 @@ func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream
 		// read from the channel.
 		defer drain(src)
 
+		discarding := false
 		for res := range src {
+			fillLvl := float64(len(src)) / float64(cap(src))
+			// we never discard messages, only data
+			_, isMsg := res.Payload.(*CaptureResponse_Message)
+
+			if fillLvl <= 0.2 && discarding { // TODO: make thresholds configurable
+				// stop discarding after we reached an acceptable level
+				discarding = false
+			} else if discarding && !isMsg {
+				// do nothing, get the buffer down as quickly as possible
+				continue
+			} else if fillLvl > 0.8 && !isMsg {
+				discarding = true
+				// this only is sent when we start discarding (and discards the current data packet)
+				res = newMessageResponse(MessageType_DISCARDING_MESSAGES, "too much back pressure, discarding packets")
+			}
+
 			err := stream.Send(res)
 			if err != nil {
-				cancel(fmt.Errorf("send response: %w", err))
+				cancel(errorf(codes.Unknown, "send response: %w", err))
 				return
 			}
 		}
@@ -259,11 +296,6 @@ type agentRequestReceiver interface {
 	Recv() (*AgentRequest, error)
 }
 
-var (
-	errNilField = fmt.Errorf("field is nil")
-	errInvalidPayload = fmt.Errorf("invalid payload")
-)
-
 // agentStopCmd reads the next message from the stream. It ensures that the message
 // has a payload of StopAgentCapture. If any error is encountered or the payload is
 // of a different type an appropriate cause is set and the cancel function is called.
@@ -271,19 +303,21 @@ func agentStopCmd(cancel CancelCauseFunc, stream agentRequestReceiver) {
 	go func() {
 		msg, err := stream.Recv()
 		if err != nil {
-			cancel(fmt.Errorf("read message: %w", err))
+			cancel(errorf(codes.Unknown, "read message: %w", err))
 			return
 		}
 
 		if msg == nil || msg.Payload == nil {
-			cancel(fmt.Errorf("read message: message or payload: %w", errNilField))
+			cancel(errorf(codes.InvalidArgument, "read message: message or payload: %w", errNilField))
 			return
 		}
 
 		// request is empty, no need to save it
 		_, ok := msg.Payload.(*AgentRequest_Stop)
 		if !ok {
-			cancel(fmt.Errorf("read payload: expected Payload of type StopAgentCapture: %w", errInvalidPayload))
+			// TODO: in such cases we would like to wrap our error inside a gRPC status
+			//  however those currently do not support wrapping.
+			cancel(errorf(codes.InvalidArgument, "read payload: expected Payload of type StopAgentCapture: %w", errInvalidPayload))
 			return
 		}
 

@@ -28,6 +28,10 @@ func WithCancelCause(parent context.Context) (context.Context, CancelCauseFunc) 
 	ctx, cancel := context.WithCancel(ctx)
 
 	return ctx, func(err error) {
+		// see: https://cs.opensource.google/go/go/+/refs/tags/go1.20rc1:src/context/context.go;l=457-459
+		if err == nil {
+			err = context.Canceled
+		}
 		if cause.Load() == nil {
 			cause.Store(&err)
 		}

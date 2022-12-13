@@ -261,6 +261,8 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AgentClient interface {
+	// Status returns the current status of the agent. It indicates whether the agent is ready to
+	// accept new capture requests or is currently unavailable.
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 	Capture(ctx context.Context, opts ...grpc.CallOption) (Agent_CaptureClient, error)
 }
@@ -317,6 +319,8 @@ func (x *agentCaptureClient) Recv() (*CaptureResponse, error) {
 // All implementations must embed UnimplementedAgentServer
 // for forward compatibility
 type AgentServer interface {
+	// Status returns the current status of the agent. It indicates whether the agent is ready to
+	// accept new capture requests or is currently unavailable.
 	Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	Capture(Agent_CaptureServer) error
 	mustEmbedUnimplementedAgentServer()

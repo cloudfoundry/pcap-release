@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/gopacket"
 	"io"
 	"testing"
+
+	"github.com/google/gopacket"
 )
+
+var errTestEnded = fmt.Errorf("test ended")
 
 type mockStreamReceiver struct {
 	req *AgentRequest
@@ -20,40 +23,40 @@ func (m *mockStreamReceiver) Recv() (*AgentRequest, error) {
 
 func TestAgentStopCmd(t *testing.T) {
 	tests := []struct {
-		name string
-		recv agentRequestReceiver
+		name        string
+		recv        agentRequestReceiver
 		expectedErr error
-		wantedErr bool
+		wantedErr   bool
 	}{
 		{
-			name: "EOF during reading of message",
-			recv: &mockStreamReceiver{req: &AgentRequest{}, err: io.EOF},
+			name:        "EOF during reading of message",
+			recv:        &mockStreamReceiver{req: &AgentRequest{}, err: io.EOF},
 			expectedErr: io.EOF,
-			wantedErr: true,
+			wantedErr:   true,
 		},
 		{
-			name: "Empty payload",
-			recv: &mockStreamReceiver{req: &AgentRequest{}, err: nil},
+			name:        "Empty payload",
+			recv:        &mockStreamReceiver{req: &AgentRequest{}, err: nil},
 			expectedErr: errNilField,
-			wantedErr: true,
+			wantedErr:   true,
 		},
 		{
-			name: "Empty message",
-			recv: &mockStreamReceiver{req: nil, err: nil},
+			name:        "Empty message",
+			recv:        &mockStreamReceiver{req: nil, err: nil},
 			expectedErr: errNilField,
-			wantedErr: true,
+			wantedErr:   true,
 		},
 		{
-			name: "Invalid payload type",
-			recv: &mockStreamReceiver{req: &AgentRequest{Payload: &AgentRequest_Start{}}, err: nil},
+			name:        "Invalid payload type",
+			recv:        &mockStreamReceiver{req: &AgentRequest{Payload: &AgentRequest_Start{}}, err: nil},
 			expectedErr: errInvalidPayload,
-			wantedErr: true,
+			wantedErr:   true,
 		},
 		{
-			name: "Happy path",
-			recv: &mockStreamReceiver{req: &AgentRequest{Payload: &AgentRequest_Stop{}}, err: nil},
-			expectedErr: nil,
-			wantedErr: false,
+			name:        "Happy path",
+			recv:        &mockStreamReceiver{req: &AgentRequest{Payload: &AgentRequest_Stop{}}, err: nil},
+			expectedErr: context.Canceled,
+			wantedErr:   true,
 		},
 	}
 	for _, test := range tests {
@@ -61,7 +64,7 @@ func TestAgentStopCmd(t *testing.T) {
 			ctx := context.Background()
 			ctx, cancel := WithCancelCause(ctx)
 			agentStopCmd(cancel, test.recv)
-			<- ctx.Done()
+			<-ctx.Done()
 
 			err := Cause(ctx)
 
@@ -69,7 +72,7 @@ func TestAgentStopCmd(t *testing.T) {
 				t.Errorf("wantedErr = %v, error = %v", test.wantedErr, err)
 			}
 
-			if test.expectedErr != nil && !errors.Is(err, test.expectedErr){
+			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
 				t.Errorf("expectedErr = %v, error = %v", test.expectedErr, err)
 			}
 		})
@@ -77,53 +80,53 @@ func TestAgentStopCmd(t *testing.T) {
 }
 
 type mockPcapHandle struct {
-	data []byte
-	ci gopacket.CaptureInfo
-	err error
+	data   []byte
+	ci     gopacket.CaptureInfo
+	err    error
+	called bool
 }
 
 func (m *mockPcapHandle) ReadPacketData() ([]byte, gopacket.CaptureInfo, error) {
+	if m.called {
+		return nil, gopacket.CaptureInfo{}, errTestEnded
+	}
+	m.called = true
 	return m.data, m.ci, m.err
 }
 
-func (m *mockPcapHandle) Close() () {
+func (m *mockPcapHandle) Close() {
 	//do nothing
 }
 
 func TestReadPackets(t *testing.T) {
 	tests := []struct {
-		name string
-		handle mockPcapHandle
+		name      string
+		handle    mockPcapHandle
 		wantedErr bool
-		want string
+		want      string
 	}{
 		{
-			name: "Error during reading of packet data",
-			handle: mockPcapHandle{data: []byte{}, ci: gopacket.CaptureInfo{}, err: fmt.Errorf("Error")},
-            wantedErr: true,
-			want: "",
+			name:      "Error during reading of packet data",
+			handle:    mockPcapHandle{data: []byte{}, ci: gopacket.CaptureInfo{}, err: fmt.Errorf("Error")},
+			wantedErr: true,
+			want:      "",
 		},
 		{
-			name: "Happy path",
-			handle: mockPcapHandle{data: []byte("ABC"), ci: gopacket.CaptureInfo{}, err: nil},
+			name:      "Happy path",
+			handle:    mockPcapHandle{data: []byte("ABC"), ci: gopacket.CaptureInfo{}, err: nil},
 			wantedErr: false,
-			want: "ABC",
+			want:      "ABC",
 		},
-
-
 	}
-		for _, test := range tests {
+	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			ctx, cancel := WithCancelCause(ctx)
 			out := readPackets(ctx, cancel, &test.handle)
-			//if test.want == "" {
-				<-ctx.Done()
-			//} else {
-			//	cancel(fmt.Errorf("Error"))
-			//}
+			<-ctx.Done()
 
 			err := Cause(ctx)
+
 			if (err != nil) != test.wantedErr && test.want == "" {
 				t.Errorf("wantedErr = %v, error = %v", test.wantedErr, err)
 			}
@@ -142,47 +145,46 @@ func TestReadPackets(t *testing.T) {
 }
 
 func TestValidateAgentStartRequest(t *testing.T) {
-
 	tests := []struct {
-		name    string
-		req    *AgentRequest
-		wantedErr bool
+		name        string
+		req         *AgentRequest
+		wantedErr   bool
 		expectedErr error
 	}{
 		{
-			name: "Request is nil",
-			req: nil,
-			wantedErr: true,
+			name:        "Request is nil",
+			req:         nil,
+			wantedErr:   true,
 			expectedErr: errNilField,
 		},
 		{
-			name: "Request Payload is nil",
-			req: &AgentRequest{},
-			wantedErr: true,
+			name:        "Request Payload is nil",
+			req:         &AgentRequest{},
+			wantedErr:   true,
 			expectedErr: errNilField,
 		},
 		{
-			name: "Request Payload invalid type",
-			req: &AgentRequest{Payload: &AgentRequest_Stop{}},
-			wantedErr: true,
+			name:        "Request Payload invalid type",
+			req:         &AgentRequest{Payload: &AgentRequest_Stop{}},
+			wantedErr:   true,
 			expectedErr: errInvalidPayload,
 		},
 		{
-			name: "Request Payload start is nil",
-			req: &AgentRequest{Payload: &AgentRequest_Start{&StartAgentCapture{}}},
-			wantedErr: true,
+			name:        "Request Payload start is nil",
+			req:         &AgentRequest{Payload: &AgentRequest_Start{&StartAgentCapture{}}},
+			wantedErr:   true,
 			expectedErr: errNilField,
 		},
 		{
-			name: "Request Payload capture options is nil",
-			req: &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Context: &Context{TraceId: "12344"}}}},
-			wantedErr: true,
+			name:        "Request Payload capture options is nil",
+			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Context: &Context{TraceId: "12344"}}}},
+			wantedErr:   true,
 			expectedErr: errNilField,
 		},
 		{
-			name: "Request Payload context options is nil",
-			req: &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
-			wantedErr: true,
+			name:        "Request Payload context options is nil",
+			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
+			wantedErr:   true,
 			expectedErr: errNilField,
 		},
 		{
@@ -191,7 +193,7 @@ func TestValidateAgentStartRequest(t *testing.T) {
 				Context: &Context{TraceId: "12344"},
 				Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000},
 			}}},
-			wantedErr: false,
+			wantedErr:   false,
 			expectedErr: nil,
 		},
 	}
@@ -201,7 +203,7 @@ func TestValidateAgentStartRequest(t *testing.T) {
 			if (err != nil) != test.wantedErr {
 				t.Errorf("wantedErr = %v, error = %v", test.wantedErr, err)
 			}
-			if test.expectedErr != nil && !errors.Is(err, test.expectedErr){
+			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
 				t.Errorf("expectedErr = %v, error = %v", test.expectedErr, err)
 			}
 		})

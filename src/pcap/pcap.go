@@ -5,8 +5,9 @@ package pcap
 
 import (
 	"fmt"
-	"go.uber.org/zap"
 	"unicode"
+
+	"go.uber.org/zap"
 )
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pcap.proto
@@ -18,6 +19,11 @@ import (
 // docker container run -d --rm --name pcap-api --network pcap -v "$(pwd)/static-targets.json:/usr/local/etc/static-targets.json" -v "$(pwd)/cmd/api/.api.config.yml:/usr/local/etc/pcap-api.yml" -e PCAP_TARGETS=/usr/local/etc/static-targets.json -p 8080:8080 pcap:api
 
 // then run the bosh.go as client. It will capture 100 responses and then gracefully close the connection from the client side.
+
+var (
+	errNilField       = fmt.Errorf("field is nil")
+	errInvalidPayload = fmt.Errorf("invalid payload")
+)
 
 type Target struct {
 	Ip   string `json:"ip"`
