@@ -14,6 +14,7 @@ func TestErrorfWrapsProperly(t *testing.T) {
 
 	wrappedErr := errors.Unwrap(err)
 
+	//nolint:errorlint // we want to check if it is the same error as in: it is the same address
 	if wrappedErr != innerErr {
 		t.Fatalf("expected err to wrap innerErr")
 	}

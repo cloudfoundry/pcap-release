@@ -95,13 +95,13 @@ func (m *mockPcapHandle) ReadPacketData() ([]byte, gopacket.CaptureInfo, error) 
 }
 
 func (m *mockPcapHandle) Close() {
-	//do nothing
+	// do nothing
 }
 
 func TestReadPackets(t *testing.T) {
 	tests := []struct {
-		name      string
-		handle  mockPcapHandle
+		name     string
+		handle   mockPcapHandle
 		wantErr  bool
 		wantData string
 	}{
@@ -142,23 +142,21 @@ func TestReadPackets(t *testing.T) {
 					t.Errorf("Invalid data response %s", data)
 				}
 			}
-
 		})
 	}
 }
 
 type mockPacketSender struct {
-	err    error
-	called bool
+	err        error
 	msgCounter uint16
-	msgCount uint16
+	msgCount   uint16
 }
 
-func (m *mockPacketSender) Send(res *CaptureResponse) error{
+func (m *mockPacketSender) Send(res *CaptureResponse) error {
 	message, isMsg := res.Payload.(*CaptureResponse_Message)
-    m.msgCounter++
+	m.msgCounter++
 
-	if isMsg && message.Message.Type == MessageType_DISCARDING_MESSAGES{
+	if isMsg && message.Message.Type == MessageType_DISCARDING_MESSAGES {
 		return fmt.Errorf("%v", message.Message.Type)
 	}
 
@@ -169,62 +167,60 @@ func (m *mockPacketSender) Send(res *CaptureResponse) error{
 	return m.err
 }
 
-func (m *mockPacketSender) MsgCounter() uint16{
+func (m *mockPacketSender) MsgCounter() uint16 {
 	return m.msgCounter
 }
 
-
 func TestForwardToStream(t *testing.T) {
 	tests := []struct {
-		name string
-		msgCount uint16
-		stream packetSender
-		src chan *CaptureResponse
+		name      string
+		msgCount  uint16
+		stream    responseSender
+		src       chan *CaptureResponse
 		responses []*CaptureResponse
-		wantErr bool
-		success bool
+		wantErr   bool
+		success   bool
 	}{
 		{
-			name: "error during sending of packets",
-			stream: &mockPacketSender{err: fmt.Errorf("Error"), msgCount: 1},
-			src: make(chan *CaptureResponse, 5),
+			name:      "error during sending of packets",
+			stream:    &mockPacketSender{err: fmt.Errorf("Error"), msgCount: 1},
+			src:       make(chan *CaptureResponse, 5),
 			responses: []*CaptureResponse{newPacketResponse([]byte("ABC"))},
-			wantErr: true,
-			success: false,
+			wantErr:   true,
+			success:   false,
 		},
 		{
-			name: "buffer is filled with PacketResponse",
-			msgCount: 5,
-			stream: &mockPacketSender{err: nil, msgCount: 5},
-			src: make(chan *CaptureResponse, 5),
+			name:      "buffer is filled with PacketResponse",
+			msgCount:  5,
+			stream:    &mockPacketSender{err: nil, msgCount: 5},
+			src:       make(chan *CaptureResponse, 5),
 			responses: []*CaptureResponse{newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC"))},
-			wantErr: true,
-			success: false,
+			wantErr:   true,
+			success:   false,
 		},
 		{
-			name: "buffer is filled with MessageResponse",
-			stream: &mockPacketSender{err: nil, msgCount: 5},
-			src: make(chan *CaptureResponse, 5),
-			responses: []*CaptureResponse{newMessageResponse(MessageType_INSTANCE_NOT_FOUND,"invalid id"),newMessageResponse(MessageType_INSTANCE_NOT_FOUND,"invalid id"),newMessageResponse(MessageType_INSTANCE_NOT_FOUND,"invalid id"),newMessageResponse(MessageType_INSTANCE_NOT_FOUND,"invalid id"),newMessageResponse(MessageType_INSTANCE_NOT_FOUND,"invalid id")},
-			wantErr: false,
-			success: true,
+			name:      "buffer is filled with MessageResponse",
+			stream:    &mockPacketSender{err: nil, msgCount: 5},
+			src:       make(chan *CaptureResponse, 5),
+			responses: []*CaptureResponse{newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"), newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"), newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"), newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"), newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id")},
+			wantErr:   false,
+			success:   true,
 		},
 		{
-			name: "happy path",
-			stream: &mockPacketSender{err: nil, msgCount: 2},
-			src: make(chan *CaptureResponse, 5),
+			name:      "happy path",
+			stream:    &mockPacketSender{err: nil, msgCount: 2},
+			src:       make(chan *CaptureResponse, 5),
 			responses: []*CaptureResponse{newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC"))},
-			wantErr: false,
-			success: true,
+			wantErr:   false,
+			success:   true,
 		},
-
 	}
-		for _, test := range tests {
+	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			ctx, cancel := WithCancelCause(ctx)
 
-			for _, res := range test.responses{
+			for _, res := range test.responses {
 				test.src <- res
 			}
 
@@ -233,14 +229,13 @@ func TestForwardToStream(t *testing.T) {
 			<-ctx.Done()
 
 			err := Cause(ctx)
-			if test.success && err != nil && !errors.Is(err, errTestEnded)  {
+			if test.success && err != nil && !errors.Is(err, errTestEnded) {
 				t.Errorf("forwardToStream() error to be of type errTestEnded but was error = %v, wantErr %v", err, test.wantErr)
 			}
 
 			if !test.success && (err != nil) != test.wantErr {
 				t.Errorf("forwardToStream() error = %v, wantErr %v", err, test.wantErr)
 			}
-
 		})
 	}
 }
@@ -324,7 +319,6 @@ func TestValidateAgentStartRequest(t *testing.T) {
 }
 
 func TestAgentDraining(t *testing.T) {
-
 	tests := []struct {
 		name         string
 		expectedDone bool
@@ -359,22 +353,22 @@ func TestAgentDraining(t *testing.T) {
 
 func TestAgent_Status(t *testing.T) {
 	tests := []struct {
-		name    string
+		name          string
 		agentDraining bool
 		wantHealth    Health
-		wantErr bool
+		wantErr       bool
 	}{
 		{
-			name: "up and running",
+			name:          "up and running",
 			agentDraining: false,
-			wantHealth: Health_UP,
-            wantErr: false,
+			wantHealth:    Health_UP,
+			wantErr:       false,
 		},
 		{
-			name: "draining",
+			name:          "draining",
 			agentDraining: true,
-			wantHealth: Health_DRAINING,
-			wantErr: false,
+			wantHealth:    Health_DRAINING,
+			wantErr:       false,
 		},
 	}
 	for _, tt := range tests {
@@ -386,7 +380,7 @@ func TestAgent_Status(t *testing.T) {
 			if tt.agentDraining {
 				a.Stop()
 			}
-			got, err := a.Status(nil, nil)
+			got, err := a.Status(context.Background(), nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Status() error = %v, wantErr %v", err, tt.wantErr)
 			}

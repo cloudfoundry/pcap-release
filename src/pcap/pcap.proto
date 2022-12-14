@@ -75,7 +75,7 @@ enum Health {
 
 message StatusRequest {}
 
-service Api {
+service API {
   rpc Status(StatusRequest) returns (StatusResponse);
   // CaptureBosh starts capturing packets on bosh VMs. The capture can be
   // stopped by closing the client-side send channel. The Api MUST listen for

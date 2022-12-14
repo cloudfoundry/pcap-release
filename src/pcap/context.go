@@ -18,7 +18,7 @@ var cancelCauseKey int
 // See: https://pkg.go.dev/context@go1.20rc1#CancelCauseFunc
 type CancelCauseFunc func(cause error)
 
-// WithCancelCause is context.CancelCauseFunc in go1.20rc1.
+// WithCancelCause is context.WithCancelCause in go1.20rc1.
 // See: https://pkg.go.dev/context@go1.20rc1#WithCancelCause
 func WithCancelCause(parent context.Context) (context.Context, CancelCauseFunc) {
 	cause := atomic.Pointer[error]{}
@@ -39,7 +39,7 @@ func WithCancelCause(parent context.Context) (context.Context, CancelCauseFunc) 
 	}
 }
 
-// Cause is context.CancelCauseFunc in go1.20rc1.
+// Cause is context.Cause in go1.20rc1.
 // See: https://pkg.go.dev/context@go1.20rc1#Cause
 func Cause(ctx context.Context) error {
 	c, ok := ctx.Value(&cancelCauseKey).(*atomic.Pointer[error])

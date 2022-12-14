@@ -1,16 +1,19 @@
+//nolint:all // this is just a dirty hack to test the agent stand-alone
 package main
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"time"
+
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"io"
-	"time"
 )
 
 func main() {
@@ -78,7 +81,6 @@ func readN(n int, stream pcap.Agent_CaptureClient) {
 			fmt.Printf("received packet  (%d/%d): %d bytes\n", i+1, n, len(p.Packet.Data))
 		}
 	}
-
 }
 
 func p(err error) {

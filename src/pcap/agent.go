@@ -13,6 +13,17 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type BufferConf struct {
+	// Size is the number of responses that can be buffered per stream.
+	Size int
+	// UpperLimit controls when the agent will start discarding messages.
+	// The condition is len(buf) >= UpperLimit
+	UpperLimit int
+	// LowerLimit controls when the agent will stop discarding messages.
+	// The condition is len(buf) <= LowerLimit
+	LowerLimit int
+}
+
 // Agent is the central struct to which the handlers are attached.
 type Agent struct {
 	// done is used to gracefully shut down the agent, it will terminate all
@@ -24,18 +35,21 @@ type Agent struct {
 	// log carries the logger all session loggers are derived from.
 	log *zap.Logger
 
+	BufferConf BufferConf
+
 	UnimplementedAgentServer
 }
 
 // NewAgent creates a new ready-to-use agent. If the given logger is nil zap.L will
 // be used.
-func NewAgent(log *zap.Logger) (*Agent, error) {
+func NewAgent(log *zap.Logger, bufConf BufferConf) (*Agent, error) {
 	if log == nil {
 		log = zap.L()
 	}
 	return &Agent{
-		done: make(chan struct{}),
-		log:  log,
+		done:       make(chan struct{}),
+		log:        log,
+		BufferConf: bufConf,
 	}, nil
 }
 
@@ -128,10 +142,10 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	defer handle.Close()
 
 	// source / producer
-	responses := readPackets(ctx, cancel, handle)
+	responses := readPackets(ctx, cancel, handle, a.BufferConf.Size)
 
 	// sink / consumer
-	forwardToStream(cancel, responses, stream)
+	forwardToStream(cancel, responses, stream, a.BufferConf.LowerLimit, a.BufferConf.UpperLimit)
 
 	agentStopCmd(cancel, stream)
 
@@ -188,7 +202,7 @@ func validateAgentStartRequest(req *AgentRequest) error {
 
 	err := startCmd.Start.Capture.validate()
 	if err != nil {
-		return fmt.Errorf("invalid message: %s", err.Error())
+		return fmt.Errorf("invalid message: %w", err)
 	}
 	return nil
 }
@@ -217,8 +231,8 @@ type pcapHandle interface {
 // channel. If the given context errors the loop breaks with the next read.
 // If an error is encountered while reading packets the cancel function is
 // called and the loop is stopped.
-func readPackets(ctx context.Context, cancel CancelCauseFunc, handle pcapHandle) <-chan *CaptureResponse {
-	out := make(chan *CaptureResponse, 100) // TODO: make buffer configurable
+func readPackets(ctx context.Context, cancel CancelCauseFunc, handle pcapHandle, bufSize int) <-chan *CaptureResponse {
+	out := make(chan *CaptureResponse, bufSize)
 
 	go func() {
 		defer close(out)
@@ -248,15 +262,15 @@ func readPackets(ctx context.Context, cancel CancelCauseFunc, handle pcapHandle)
 	return out
 }
 
-// packetSender is an interface used by forwardToStream to simplify testing.
-type packetSender interface {
+// responseSender is an interface used by forwardToStream to simplify testing.
+type responseSender interface {
 	Send(*CaptureResponse) error
 }
 
 // forwardToStream reads Packets from src until it's closed and writes them to stream.
 // If it encounters an error while doing so the error is set to cause and the cancel function
 // is called. Any data that is forwarded after an error is discarded.
-func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream packetSender) {
+func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, lowerLimit, upperLimit int) {
 	go func() {
 		// After this function returns we want to make sure that this channel is
 		// drained properly if there is anything left in it. This avoids responses
@@ -266,17 +280,35 @@ func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream
 
 		discarding := false
 		for res := range src {
-			fillLvl := float64(len(src)) / float64(cap(src))
 			// we never discard messages, only data
 			_, isMsg := res.Payload.(*CaptureResponse_Message)
 
-			if fillLvl <= 0.2 && discarding { // TODO: make thresholds configurable
-				// stop discarding after we reached an acceptable level
+			// example (values are probably a bad choice):
+			// buffer size: 10
+			// lower limit: 2
+			// upper limit: 8
+			// len(src)      => fill level of buffer
+			// discarding    => are we currently discarding packet responses?
+			// messages sent => how many messages have been sent up until now
+			// len(src) | discarding | messages sent
+			// 2        | false      | 0
+			// 1        | false      | 1
+			// 7        | false      | 2
+			// 6        | false      | 3
+			// 9        | true       | 4 // last packet was DISCARDING_MESSAGES
+			// 8        | true       | 4
+			// 7        | true       | 4
+			// ...
+			// 3        | true       | 4
+			// 2        | false      | 5
+			// 1        | false      | 6
+
+			switch {
+			case len(src) <= lowerLimit:
 				discarding = false
-			} else if discarding && !isMsg {
-				// do nothing, get the buffer down as quickly as possible
+			case discarding && !isMsg:
 				continue
-			} else if fillLvl >= 0.8 && !isMsg {
+			case len(src) >= upperLimit && !isMsg:
 				discarding = true
 				// this only is sent when we start discarding (and discards the current data packet)
 				res = newMessageResponse(MessageType_DISCARDING_MESSAGES, "too much back pressure, discarding packets")

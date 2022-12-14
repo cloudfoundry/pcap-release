@@ -26,12 +26,12 @@ var (
 )
 
 type Target struct {
-	Ip   string `json:"ip"`
+	IP   string `json:"ip"`
 	Port int    `json:"port"`
 }
 
 func (t Target) String() string {
-	return fmt.Sprintf("%s:%d", t.Ip, t.Port)
+	return fmt.Sprintf("%s:%d", t.IP, t.Port)
 }
 
 // drain reads all messages from the given channel and discards them. The

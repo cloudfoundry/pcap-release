@@ -16,7 +16,7 @@ func TestCancelCauseWorks(t *testing.T) {
 	<-ctx.Done()
 
 	err := Cause(ctx)
-	if err != originalErr {
+	if err != originalErr { //nolint:errorlint // we want to check if it is the same error as in: it is the same address
 		t.Errorf("expected returned err and originalErr to be the same")
 	}
 }
@@ -32,7 +32,7 @@ func TestCancelCauseReturnsFirstError(t *testing.T) {
 	<-ctx.Done()
 
 	err := Cause(ctx)
-	if err != originalErr {
+	if err != originalErr { //nolint:errorlint // we want to check if it is the same error as in: it is the same address
 		t.Errorf("expected returned err and originalErr to be the same")
 	}
 }
