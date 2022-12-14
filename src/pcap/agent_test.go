@@ -10,7 +10,13 @@ import (
 	"github.com/google/gopacket"
 )
 
-var errTestEnded = fmt.Errorf("test ended")
+var (
+	errTestEnded = fmt.Errorf("test ended")
+	errDiscardedMsg = fmt.Errorf("discarding packets")
+	bufSize = 5
+	bufUpperLimit = 4
+	bufLowerLimit = 3
+)
 
 type mockStreamReceiver struct {
 	req *AgentRequest
@@ -123,7 +129,7 @@ func TestReadPackets(t *testing.T) {
 			ctx := context.Background()
 			ctx, cancel := WithCancelCause(ctx)
 
-			out := readPackets(ctx, cancel, &test.handle)
+			out := readPackets(ctx, cancel, &test.handle, bufSize)
 
 			<-ctx.Done()
 
@@ -148,97 +154,95 @@ func TestReadPackets(t *testing.T) {
 
 type mockPacketSender struct {
 	err        error
-	msgCounter uint16
-	msgCount   uint16
+	msgCounter int
+	sentMsg    int
 }
 
 func (m *mockPacketSender) Send(res *CaptureResponse) error {
 	message, isMsg := res.Payload.(*CaptureResponse_Message)
 	m.msgCounter++
 
-	if isMsg && message.Message.Type == MessageType_DISCARDING_MESSAGES {
-		return fmt.Errorf("%v", message.Message.Type)
-	}
-
-	if m.msgCount == m.msgCounter {
+    if m.sentMsg != -1 && m.sentMsg == m.msgCounter {
 		return errTestEnded
 	}
-
+	if m.sentMsg == -1 && isMsg && message.Message.Type == MessageType_DISCARDING_MESSAGES{
+		return fmt.Errorf("%w", errDiscardedMsg)
+	}
 	return m.err
-}
-
-func (m *mockPacketSender) MsgCounter() uint16 {
-	return m.msgCounter
 }
 
 func TestForwardToStream(t *testing.T) {
 	tests := []struct {
 		name      string
-		msgCount  uint16
+		msgCount  int
 		stream    responseSender
-		src       chan *CaptureResponse
-		responses []*CaptureResponse
-		wantErr   bool
-		success   bool
+		response *CaptureResponse
+		expectedErr   error
 	}{
 		{
 			name:      "error during sending of packets",
-			stream:    &mockPacketSender{err: fmt.Errorf("Error"), msgCount: 1},
-			src:       make(chan *CaptureResponse, 5),
-			responses: []*CaptureResponse{newPacketResponse([]byte("ABC"))},
-			wantErr:   true,
-			success:   false,
+			stream:    &mockPacketSender{err: io.EOF, sentMsg: -1},
+			msgCount:  2,
+			response:  newPacketResponse([]byte("ABC")),
+			expectedErr: io.EOF,
 		},
 		{
-			name:      "buffer is filled with PacketResponse",
-			msgCount:  5,
-			stream:    &mockPacketSender{err: nil, msgCount: 5},
-			src:       make(chan *CaptureResponse, 5),
-			responses: []*CaptureResponse{newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC"))},
-			wantErr:   true,
-			success:   false,
+			name:      "buffer is filled with PacketResponse, one Packet discarded",
+			msgCount:  bufUpperLimit+2,
+			stream:    &mockPacketSender{err: nil, sentMsg: 5},
+			response:  newPacketResponse([]byte("ABC")),
+			expectedErr:   errTestEnded,
 		},
 		{
-			name:      "buffer is filled with MessageResponse",
-			stream:    &mockPacketSender{err: nil, msgCount: 5},
-			src:       make(chan *CaptureResponse, 5),
-			responses: []*CaptureResponse{newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"), newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"), newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"), newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"), newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id")},
-			wantErr:   false,
-			success:   true,
+			name:      "buffer is filled with MessageResponse, no packets",
+			stream:    &mockPacketSender{err: nil, sentMsg: bufUpperLimit + 1},
+			msgCount: bufUpperLimit + 1,
+			response:  newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"),
+			expectedErr:   errTestEnded,
+		},
+		{
+			name:      "buffer is filled with PacketResponse, discarding packets",
+			stream:    &mockPacketSender{err: nil, sentMsg: -1},
+			msgCount: bufUpperLimit+1,
+			response:  newPacketResponse([]byte("ABC")),
+			expectedErr:   errDiscardedMsg,
 		},
 		{
 			name:      "happy path",
-			stream:    &mockPacketSender{err: nil, msgCount: 2},
-			src:       make(chan *CaptureResponse, 5),
-			responses: []*CaptureResponse{newPacketResponse([]byte("ABC")), newPacketResponse([]byte("ABC"))},
-			wantErr:   false,
-			success:   true,
+			stream:    &mockPacketSender{err: nil, sentMsg: bufUpperLimit-1},
+			msgCount:  bufUpperLimit-1,
+			response: newPacketResponse([]byte("ABC")),
+			expectedErr:   errTestEnded,
 		},
+
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			ctx, cancel := WithCancelCause(ctx)
+			src := make(chan *CaptureResponse, bufSize)
+			defer close(src)
+			go func() {
+				for i := 0; i < test.msgCount; i++ {
+					src <- test.response
+				}
+			}()
 
-			for _, res := range test.responses {
-				test.src <- res
-			}
-
-			forwardToStream(cancel, test.src, test.stream)
+			forwardToStream(cancel, src, test.stream, bufLowerLimit, bufUpperLimit)
 
 			<-ctx.Done()
 
 			err := Cause(ctx)
-			if test.success && err != nil && !errors.Is(err, errTestEnded) {
-				t.Errorf("forwardToStream() error to be of type errTestEnded but was error = %v, wantErr %v", err, test.wantErr)
+			if err == nil {
+				t.Errorf("Expected error to finish test")
 			}
-
-			if !test.success && (err != nil) != test.wantErr {
-				t.Errorf("forwardToStream() error = %v, wantErr %v", err, test.wantErr)
+			if !errors.Is(err, test.expectedErr) {
+				t.Errorf("forwardToStream() expectedErr = %v, error = %v", test.expectedErr, err)
 			}
 		})
 	}
 }
+
 
 func TestValidateAgentStartRequest(t *testing.T) {
 	tests := []struct {
@@ -337,7 +341,7 @@ func TestAgentDraining(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := NewAgent(nil)
+			a, err := NewAgent(nil, BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -373,7 +377,7 @@ func TestAgent_Status(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := NewAgent(nil)
+			a, err := NewAgent(nil, BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
