@@ -43,9 +43,6 @@ func main() {
 					Filter:  "",
 					SnapLen: 65000,
 				},
-				Context: &pcap.Context{
-					TraceId: "1bd89b5d-6776-4ca4-b637-3187617f1579",
-				},
 			},
 		},
 	})

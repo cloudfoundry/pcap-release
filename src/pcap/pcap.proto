@@ -3,10 +3,6 @@ option go_package = "github.com/cloudfoundry/pcap-release/src/pcap";
 
 package pcap;
 
-message Context {
-  string traceId = 1;
-}
-
 message CaptureOptions {
   string device = 1;
   string filter = 2;
@@ -47,11 +43,21 @@ enum MessageType {
   // instance to capture from. MUST be sent as soon as possible.
   INSTANCE_NOT_FOUND = 0;
   // One instance failed during capturing but there are still instances left to
-  // capture from.
+  // capture from. The detailed message should contain information about the
+  // stopped party.
   INSTANCE_DISCONNECTED = 1;
-  // Starting the capture from a specific instance has failed.
+  // Starting the capture request has failed because the request could not be
+  // fulfilled (e.g. no matching instances, pcap feature not enabled).
   START_CAPTURE_FAILED = 2;
-  DISCARDING_MESSAGES = 3;
+  // The request could not be fulfilled, e.g. because the app or BOSH deployment
+  // with the requested name do not exist.
+  INVALID_REQUEST = 3;
+  // Some participant on the path is congested to the point of discarding data.
+  // The detailed message should contain the congested party.
+  CONGESTED = 4;
+  // Some limit has been reached, e.g. number of concurrent requests, time,
+  // bytes, etc.; Message details identifies, which limit has been reached.
+  LIMIT_REACHED = 5;
 }
 
 message StatusResponse {
@@ -125,19 +131,28 @@ service Agent {
   // Status returns the current status of the agent. It indicates whether the agent is ready to
   // accept new capture requests or is currently unavailable.
   rpc Status(StatusRequest) returns (StatusResponse);
+  // Capture is the main handler for the pcap agent. It contains the logic to open an interface
+  // and start a packet capture. The resulting packets will be streamed back to the caller together
+  // with messages informing the caller of any abnormal conditions that occur. The first message
+  // sent must contain a payload of type StartAgentCapture, this will trigger the start of the capture.
+  // The only messages that can be sent next is a StopAgentCapture which stops the capture gracefully
+  // still sending any packets that are remaining and closing the stream afterwards.
   rpc Capture(stream AgentRequest) returns (stream CaptureResponse);
 }
 
+// AgentRequest contains either the start or stop request.
 message AgentRequest {
+  // payload wraps the start and stop requests.
   oneof payload {
     StartAgentCapture start = 1;
     StopAgentCapture stop = 2;
   }
 }
 
+// StartAgentCapture holds all parameters needed to start a capture.
 message StartAgentCapture {
   CaptureOptions capture = 1;
-  Context context = 2;
 }
 
+// StopAgentCapture signals the agent to stop the current capture.
 message StopAgentCapture {}

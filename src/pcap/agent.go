@@ -8,9 +8,10 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/metadata"
 )
 
 // Agent is the central struct to which the handlers are attached.
@@ -70,7 +71,7 @@ func (a *Agent) draining() bool {
 	}
 }
 
-// Status endpoint. See interface documentation for details.
+// Status handler for the pcap-agent. See AgentServer.Status documentation for details.
 func (a *Agent) Status(_ context.Context, _ *StatusRequest) (*StatusResponse, error) {
 	// TODO: how to do versioning?
 	s := &StatusResponse{
@@ -87,41 +88,38 @@ func (a *Agent) Status(_ context.Context, _ *StatusRequest) (*StatusResponse, er
 	return s, nil
 }
 
-// Capture
-// TODO: write doc
+// Capture handler for the pcap-agent. See AgentServer.Capture documentation for details.
 func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	a.wg.Add(1)
 	defer a.wg.Done()
 
 	log := a.log.With(zap.String("handler", "capture"))
-
-	ctx, cancel := WithCancelCause(stream.Context())
-	defer cancel(nil)
-
 	defer func() {
 		if err != nil {
 			log.Error("capture ended unsuccessfully", zap.Error(err))
 		}
 	}()
 
+	ctx, cancel := WithCancelCause(stream.Context())
+	defer cancel(nil)
+
+	log = setVcapId(ctx, log)
+
 	if a.draining() {
-		return status.Error(codes.Unavailable, "agent is draining")
+		return errorf(codes.Unavailable, "agent is draining")
 	}
 
 	req, err := stream.Recv()
 	if err != nil {
 		return errorf(codes.Unknown, "unable to receive message: %w", err)
-		// return status.Errorf(codes.Unknown, "unable to receive message: %s", err.Error())
 	}
 
 	err = validateAgentStartRequest(req)
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, err.Error())
+		return errorf(codes.InvalidArgument, "%w", err)
 	}
 
 	opts := req.Payload.(*AgentRequest_Start).Start.Capture
-
-	log = log.With(zap.String("trace_id", req.Payload.(*AgentRequest_Start).Start.Context.TraceId))
 	log.Info("starting capture", zap.String("device", opts.Device), zap.Uint32("snapLen", opts.SnapLen), zap.String("filter", opts.Filter))
 
 	handle, err := openHandle(opts)
@@ -152,12 +150,30 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	// Cancelling the context with nil causes context.Cancelled to be set
 	// which is a non-error in our case.
 	if err != nil && !errors.Is(err, context.Canceled) {
-		s := status.Code(err)
-		return status.Error(s, err.Error())
+		return err
 	}
 
 	log.Info("capture done")
+	// TODO: forwardToApi could still be running, we should probably introduce a wait group to wait for its termination
 	return nil
+}
+
+func setVcapId(ctx context.Context, log *zap.Logger) *zap.Logger {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		log = log.With(zap.String(LogKeyVcapId, uuid.Must(uuid.NewRandom()).String()))
+		log.Warn("request does not contain metadata, generated vcap request id")
+		return log
+	}
+
+	vcapReqId := md.Get("x-vcap-request-id")
+	if len(vcapReqId) == 0 {
+		log = log.With(zap.String(LogKeyVcapId, uuid.Must(uuid.NewRandom()).String()))
+		log.Warn("request does not contain request id, generating one")
+		return log
+	}
+
+	return log.With(zap.String("vcap", vcapReqId[0]))
 }
 
 // validateAgentStartRequest returns an error describing the issue or nil if
@@ -185,27 +201,24 @@ func validateAgentStartRequest(req *AgentRequest) error {
 		return fmt.Errorf("invalid message: capture options: %w", errNilField)
 	}
 
-	if startCmd.Start.Context == nil {
-		return fmt.Errorf("invalid message: capture context: %w", errNilField)
-	}
-
 	err := startCmd.Start.Capture.validate()
 	if err != nil {
 		return fmt.Errorf("invalid message: %w", err)
 	}
+
 	return nil
 }
 
 func openHandle(opts *CaptureOptions) (*pcap.Handle, error) {
 	handle, err := pcap.OpenLive(opts.Device, int32(opts.SnapLen), true, pcap.BlockForever)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "open handle: %s", err.Error())
+		return nil, errorf(codes.Internal, "open handle: %w", err)
 	}
 
 	err = handle.SetBPFFilter(opts.Filter)
 	if err != nil {
 		// TODO: this could be codes.InvalidArgument since we set the user provided filter
-		return nil, status.Errorf(codes.Unknown, "open handle: %s", err.Error())
+		return nil, errorf(codes.Unknown, "open handle: %w", err)
 	}
 
 	return handle, nil
@@ -300,7 +313,7 @@ func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream
 			case len(src) >= upperLimit && !isMsg:
 				discarding = true
 				// this only is sent when we start discarding (and discards the current data packet)
-				res = newMessageResponse(MessageType_DISCARDING_MESSAGES, "too much back pressure, discarding packets")
+				res = newMessageResponse(MessageType_CONGESTED, "too much back pressure, discarding packets")
 			}
 
 			err := stream.Send(res)

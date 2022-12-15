@@ -31,8 +31,8 @@ func init() {
 }
 
 func main() {
-	log := zap.L().With(zap.String("component", "agent"))
-	log.Info("init phase done, starting agent", zap.String("version", pcap.Version))
+	log := zap.L().With(zap.String("component", "pcap-agent"))
+	log.Info("init phase done, starting agent", zap.Int("compatibilityLevel", pcap.CompatibilityLevel))
 
 	var err error
 	var config Config

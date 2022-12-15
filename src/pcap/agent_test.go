@@ -11,11 +11,11 @@ import (
 )
 
 var (
-	errTestEnded = fmt.Errorf("test ended")
+	errTestEnded    = fmt.Errorf("test ended")
 	errDiscardedMsg = fmt.Errorf("discarding packets")
-	bufSize = 5
-	bufUpperLimit = 4
-	bufLowerLimit = 3
+	bufSize         = 5
+	bufUpperLimit   = 4
+	bufLowerLimit   = 3
 )
 
 type mockStreamReceiver struct {
@@ -113,7 +113,7 @@ func TestReadPackets(t *testing.T) {
 	}{
 		{
 			name:     "Error during reading of packet data",
-			handle:   mockPcapHandle{data: []byte{}, ci: gopacket.CaptureInfo{}, err: fmt.Errorf("Error")},
+			handle:   mockPcapHandle{data: []byte{}, ci: gopacket.CaptureInfo{}, err: fmt.Errorf("error")},
 			wantErr:  true,
 			wantData: "",
 		},
@@ -123,6 +123,7 @@ func TestReadPackets(t *testing.T) {
 			wantErr:  false,
 			wantData: "ABC",
 		},
+		// TODO: test case where context is cancelled and readPackets has to exit
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -162,10 +163,10 @@ func (m *mockPacketSender) Send(res *CaptureResponse) error {
 	message, isMsg := res.Payload.(*CaptureResponse_Message)
 	m.resCounter++
 
-    if m.sentRes != -1 && m.sentRes == m.resCounter {
+	if m.sentRes != -1 && m.sentRes == m.resCounter {
 		return errTestEnded
 	}
-	if m.sentRes == -1 && isMsg && message.Message.Type == MessageType_DISCARDING_MESSAGES{
+	if m.sentRes == -1 && isMsg && message.Message.Type == MessageType_CONGESTED {
 		return fmt.Errorf("%w", errDiscardedMsg)
 	}
 	return m.err
@@ -176,8 +177,8 @@ func TestForwardToStream(t *testing.T) {
 		name        string
 		resToBeSent int
 		stream      responseSender
-		response *CaptureResponse
-		expectedErr   error
+		response    *CaptureResponse
+		expectedErr error
 	}{
 		{
 			name:        "error during sending of packets",
@@ -188,7 +189,7 @@ func TestForwardToStream(t *testing.T) {
 		},
 		{
 			name:        "buffer is filled with PacketResponse, one Packet discarded",
-			resToBeSent: bufUpperLimit+2,
+			resToBeSent: bufUpperLimit + 2,
 			stream:      &mockPacketSender{err: nil, sentRes: 5},
 			response:    newPacketResponse([]byte("ABC")),
 			expectedErr: errTestEnded,
@@ -203,18 +204,17 @@ func TestForwardToStream(t *testing.T) {
 		{
 			name:        "buffer is filled with PacketResponse, discarding packets",
 			stream:      &mockPacketSender{err: nil, sentRes: -1},
-			resToBeSent: bufUpperLimit+1,
+			resToBeSent: bufUpperLimit + 1,
 			response:    newPacketResponse([]byte("ABC")),
 			expectedErr: errDiscardedMsg,
 		},
 		{
 			name:        "happy path",
-			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit-1},
-			resToBeSent: bufUpperLimit-1,
+			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit - 1},
+			resToBeSent: bufUpperLimit - 1,
 			response:    newPacketResponse([]byte("ABC")),
 			expectedErr: errTestEnded,
 		},
-
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -242,7 +242,6 @@ func TestForwardToStream(t *testing.T) {
 		})
 	}
 }
-
 
 func TestValidateAgentStartRequest(t *testing.T) {
 	tests := []struct {
@@ -283,28 +282,19 @@ func TestValidateAgentStartRequest(t *testing.T) {
 		},
 		{
 			name:        "Request Payload capture options is nil",
-			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Context: &Context{TraceId: "12344"}}}},
-			wantErr:     true,
-			expectedErr: errNilField,
-		},
-		{
-			name:        "Request Payload context options is nil",
-			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
+			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{}}},
 			wantErr:     true,
 			expectedErr: errNilField,
 		},
 		{
 			name:        "Request Payload capture options invalid",
-			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "", Filter: "", SnapLen: 0}, Context: &Context{TraceId: "12344"}}}},
+			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "", Filter: "", SnapLen: 0}}}},
 			wantErr:     true,
 			expectedErr: nil,
 		},
 		{
-			name: "Happy path",
-			req: &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{
-				Context: &Context{TraceId: "12344"},
-				Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000},
-			}}},
+			name:        "Happy path",
+			req:         &AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
 			wantErr:     false,
 			expectedErr: nil,
 		},

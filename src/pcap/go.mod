@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/go-playground/validator/v10 v10.11.1
 	github.com/google/gopacket v1.1.19
+	github.com/google/uuid v1.1.2
 	github.com/prometheus/client_golang v1.14.0
 	go.uber.org/zap v1.24.0
 	google.golang.org/grpc v1.51.0

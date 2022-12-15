@@ -7,55 +7,34 @@ import (
 func TestCaptureOptions_validate(t *testing.T) {
 	tests := []struct {
 		name    string
-		opts  *CaptureOptions
+		opts    *CaptureOptions
 		wantErr bool
 	}{
 		{
-			name: "Empty device name",
-			opts: &CaptureOptions{Filter: "host 10.0.0.1", SnapLen: 65000},
+			name:    "Empty device name",
+			opts:    &CaptureOptions{Filter: "host 10.0.0.1", SnapLen: 65000},
 			wantErr: true,
 		},
 		{
-			name: "Invalid device name",
-			opts: &CaptureOptions{Device: "eth0-=",Filter: "host 10.0.0.1", SnapLen: 65000},
+			name:    "Invalid device name",
+			opts:    &CaptureOptions{Device: "eth0-=", Filter: "host 10.0.0.1", SnapLen: 65000},
 			wantErr: true,
 		},
 		{
-			name: "Empty SnapLen",
-			opts: &CaptureOptions{Device: "eth0",Filter: "host 10.0.0.1", SnapLen: 0},
+			name:    "Empty SnapLen",
+			opts:    &CaptureOptions{Device: "eth0", Filter: "host 10.0.0.1", SnapLen: 0},
 			wantErr: true,
 		},
 		{
-			name: "Valid values ",
-			opts: &CaptureOptions{Device: "eth0",Filter: "host 10.0.0.1", SnapLen: 65000},
+			name:    "Valid values ",
+			opts:    &CaptureOptions{Device: "eth0", Filter: "host 10.0.0.1", SnapLen: 65000},
 			wantErr: false,
 		},
 	}
-		for _, tt := range tests {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.opts.validate(); (err != nil) != tt.wantErr {
 				t.Errorf("validate() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestTargetString(t *testing.T) {
-	tests := []struct {
-		name   string
-		target Target
-		want   string
-	}{
-		{
-			name: "Valid values",
-			target: Target{IP: "10.0.0.1", Port: 8080},
-			want: "10.0.0.1:8080",
-		},
-	}
-		for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.target.String(); got != tt.want {
-				t.Errorf("String() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -68,7 +47,7 @@ func TestBufferConf_validate(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "Size negativ",
+			name:    "Size negative",
 			bc:      BufferConf{Size: -1},
 			wantErr: true,
 		},
@@ -108,7 +87,7 @@ func TestBufferConf_validate(t *testing.T) {
 			wantErr: false,
 		},
 	}
-		for _, tt := range tests {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.bc.validate(); (err != nil) != tt.wantErr {
 				t.Errorf("validate() error = %v, wantErr %v", err, tt.wantErr)
