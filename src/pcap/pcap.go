@@ -5,6 +5,7 @@ package pcap
 
 import (
 	"fmt"
+	"github.com/go-playground/validator/v10"
 	"unicode"
 
 	"go.uber.org/zap"
@@ -20,6 +21,7 @@ import (
 
 // then run the bosh.go as client. It will capture 100 responses and then gracefully close the connection from the client side.
 
+// TODO: compatibilityLevel is unused
 // compatibilityLevel indicates whether two parties are compatible. Once there is a change
 // that requires both parties to be updated this value MUST be incremented by one. The calling
 // party has to ensure that the compatibility level match and refuse operation if they don't.
@@ -41,6 +43,10 @@ type BufferConf struct {
 	// LowerLimit controls when the agent will stop discarding messages.
 	// The condition is len(buf) <= LowerLimit
 	LowerLimit int `yaml:"lowerLimit" validate:"gte=0,ltefield=UpperLimit"`
+}
+
+func (bc BufferConf) validate() error {
+	return validator.New().Struct(bc)
 }
 
 type Target struct {
