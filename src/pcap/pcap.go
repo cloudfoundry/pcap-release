@@ -20,10 +20,28 @@ import (
 
 // then run the bosh.go as client. It will capture 100 responses and then gracefully close the connection from the client side.
 
+// compatibilityLevel indicates whether two parties are compatible. Once there is a change
+// that requires both parties to be updated this value MUST be incremented by one. The calling
+// party has to ensure that the compatibility level match and refuse operation if they don't.
+const compatibilityLevel = 0
+
 var (
 	errNilField       = fmt.Errorf("field is nil")
 	errInvalidPayload = fmt.Errorf("invalid payload")
 )
+
+// BufferConf allows to specify the behaviour of buffers.
+// TODO: can this be re-used within the pcap-api?
+type BufferConf struct {
+	// Size is the number of responses that can be buffered per stream.
+	Size int `yaml:"size" validate:"gte=0"`
+	// UpperLimit controls when the agent will start discarding messages.
+	// The condition is len(buf) >= UpperLimit
+	UpperLimit int `yaml:"upperLimit" validate:"gte=0,ltefield=Size"`
+	// LowerLimit controls when the agent will stop discarding messages.
+	// The condition is len(buf) <= LowerLimit
+	LowerLimit int `yaml:"lowerLimit" validate:"gte=0,ltefield=UpperLimit"`
+}
 
 type Target struct {
 	IP   string `json:"ip"`

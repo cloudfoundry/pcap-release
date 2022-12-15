@@ -1,8 +1,6 @@
 syntax = "proto3";
 option go_package = "github.com/cloudfoundry/pcap-release/src/pcap";
 
-// TODO: trace ID?
-
 package pcap;
 
 message Context {

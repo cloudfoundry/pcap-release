@@ -32,6 +32,7 @@ func init() {
 
 func main() {
 	log := zap.L().With(zap.String("component", "agent"))
+	log.Info("init phase done, starting agent", zap.String("version", pcap.Version))
 
 	var err error
 	var config Config
@@ -47,7 +48,12 @@ func main() {
 		log.Fatal("unable to load config", zap.Error(err))
 	}
 
-	agent, err := pcap.NewAgent(log)
+	err = config.validate()
+	if err != nil {
+		log.Fatal("unable to validate config", zap.Error(err))
+	}
+
+	agent, err := pcap.NewAgent(log, config.Buffer)
 	if err != nil {
 		log.Fatal("unable to create agent", zap.Error(err))
 	}

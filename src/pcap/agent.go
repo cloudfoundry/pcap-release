@@ -13,17 +13,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type BufferConf struct {
-	// Size is the number of responses that can be buffered per stream.
-	Size int
-	// UpperLimit controls when the agent will start discarding messages.
-	// The condition is len(buf) >= UpperLimit
-	UpperLimit int
-	// LowerLimit controls when the agent will stop discarding messages.
-	// The condition is len(buf) <= LowerLimit
-	LowerLimit int
-}
-
 // Agent is the central struct to which the handlers are attached.
 type Agent struct {
 	// done is used to gracefully shut down the agent, it will terminate all
@@ -304,7 +293,7 @@ func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream
 			// 1        | false      | 6
 
 			switch {
-			case len(src) <= lowerLimit:
+			case len(src) <= lowerLimit: // if there is no buffer this case will always match
 				discarding = false
 			case discarding && !isMsg:
 				continue
@@ -347,8 +336,6 @@ func agentStopCmd(cancel CancelCauseFunc, stream agentRequestReceiver) {
 		// request is empty, no need to save it
 		_, ok := msg.Payload.(*AgentRequest_Stop)
 		if !ok {
-			// TODO: in such cases we would like to wrap our error inside a gRPC status
-			//  however those currently do not support wrapping.
 			cancel(errorf(codes.InvalidArgument, "read payload: expected Payload of type StopAgentCapture: %w", errInvalidPayload))
 			return
 		}
