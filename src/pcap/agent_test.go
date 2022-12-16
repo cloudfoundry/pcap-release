@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/grpc/metadata"
 	"io"
 	"testing"
 
@@ -345,7 +348,7 @@ func TestAgentDraining(t *testing.T) {
 	}
 }
 
-func TestAgent_Status(t *testing.T) {
+func TestAgentStatus(t *testing.T) {
 	tests := []struct {
 		name          string
 		agentDraining bool
@@ -381,6 +384,61 @@ func TestAgent_Status(t *testing.T) {
 			if got.Health != tt.wantHealth {
 				t.Errorf("Status() health = %v, wantHealth %v", got.Health, tt.wantHealth)
 			}
+		})
+	}
+}
+
+func TestSetVcapId(t *testing.T) {
+	tests := []struct {
+		name string
+		md metadata.MD
+		expectedLogFieldKey  string
+		expectedLogFieldValue string
+	}{
+		{
+			name: "Request without metadata",
+			md: nil,
+			expectedLogFieldKey: LogKeyVcapId,
+		},
+
+		{
+			name: "Metadata without vcap request id",
+			md: metadata.MD{},
+			expectedLogFieldKey: LogKeyVcapId,
+		},
+		{
+			name: "Metadata with vcap request id",
+			md: metadata.MD{vcap_rq_id:[]string{"123"}},
+			expectedLogFieldKey: LogKeyVcapId,
+			expectedLogFieldValue: "123",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			ctxWithMD := metadata.NewIncomingContext(ctx, tt.md)
+
+			observedZapCore, observedLogs := observer.New(zap.InfoLevel)
+			observedLogger := zap.New(observedZapCore)
+
+			setVcapId(ctxWithMD, observedLogger)
+
+			if observedLogs == nil || observedLogs.Len() == 0 {
+				t.Fatal("No logs are written")
+			}
+
+			entry := observedLogs.All()[0]
+			if len(entry.Context) == 0 {
+				t.Fatal("Log entry has no context")
+			}
+
+			if entry.Context[0].Key != tt.expectedLogFieldKey {
+				t.Errorf("Expected %s but got %s", tt.expectedLogFieldKey, entry.Context[0].Key)
+			}
+			if tt.expectedLogFieldValue != "" && entry.Context[0].String != tt.expectedLogFieldValue {
+				t.Errorf("Expected %s but got %s", tt.expectedLogFieldValue, entry.Context[0].String)
+			}
+
 		})
 	}
 }
