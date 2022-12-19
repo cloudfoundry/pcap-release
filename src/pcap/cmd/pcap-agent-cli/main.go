@@ -1,5 +1,19 @@
-//nolint:all // this is just a dirty hack to test the agent stand-alone
+// pcap-agent-cli is a simple client to manually test the pcap-agent and confirm
+// it's operating as expected.
+//
+// NOT MEANT FOR PRODUCTION USE!
+//
+// It will connect to port 8083 on the loopback
+// interface and request a capture from the `en0` device. The first 10 packets are
+// read and each packet causes a print to the console. After ten packets have been
+// read a message to stop the capture is sent and any remaining packets (but at most
+// 10.000) are read.
+//
+// Any messages that occur while performing the test are also printed to the console
+// and any errors cause the cli to exit.
 package main
+
+//nolint:all // this is just a dirty hack to test the agent stand-alone
 
 import (
 	"context"
@@ -55,7 +69,7 @@ func main() {
 	})
 	p(err)
 
-	readN(10000, stream)
+	readN(10_000, stream)
 }
 
 func readN(n int, stream pcap.Agent_CaptureClient) {

@@ -4,18 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io"
 	"testing"
 	"time"
 
+	"github.com/google/gopacket"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/google/gopacket"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -415,51 +414,51 @@ func (m *mockCaptureServer) Context() context.Context {
 
 func TestAgentCapture(t *testing.T) {
 	tests := []struct {
-		name    string
-		stream mockCaptureServer
-		agentRunning bool
-		wantErr bool
+		name           string
+		stream         mockCaptureServer
+		agentRunning   bool
+		wantErr        bool
 		wantStatusCode codes.Code
 	}{
 		{
-			name: "Agent is draining",
-			stream: mockCaptureServer{nil, nil, nil,context.Background()},
-			agentRunning: false,
-			wantErr: true,
+			name:           "Agent is draining",
+			stream:         mockCaptureServer{nil, nil, nil, context.Background()},
+			agentRunning:   false,
+			wantErr:        true,
 			wantStatusCode: codes.Unavailable,
 		},
 		{
-			name: "Receiving of incoming request finished with error",
-			stream: mockCaptureServer{nil, errNilField, nil,context.Background()},
-			agentRunning: true,
-			wantErr: true,
+			name:           "Receiving of incoming request finished with error",
+			stream:         mockCaptureServer{nil, errNilField, nil, context.Background()},
+			agentRunning:   true,
+			wantErr:        true,
 			wantStatusCode: codes.Unknown,
 		},
 		{
-			name: "Incoming Request is invalid",
-			stream: mockCaptureServer{nil, nil, nil,context.Background()},
-			agentRunning: true,
-			wantErr: true,
+			name:           "Incoming Request is invalid",
+			stream:         mockCaptureServer{nil, nil, nil, context.Background()},
+			agentRunning:   true,
+			wantErr:        true,
 			wantStatusCode: codes.InvalidArgument,
 		},
 		{
-			name: "open handle error",
-			stream: mockCaptureServer{&AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "12as", Filter: "", SnapLen: 65000}}}}, nil, nil,context.Background()},
-			agentRunning: true,
-			wantErr: true,
+			name:           "open handle error",
+			stream:         mockCaptureServer{&AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "12as", Filter: "", SnapLen: 65000}}}}, nil, nil, context.Background()},
+			agentRunning:   true,
+			wantErr:        true,
 			wantStatusCode: codes.Internal,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			a, err := NewAgent(nil,BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
+			a, err := NewAgent(nil, BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
 			if err != nil {
 				t.Errorf("Unexpected error %v", err)
 			}
 
 			if !test.agentRunning {
 				a.Stop()
-				time.Sleep(1*time.Second)
+				time.Sleep(1 * time.Second)
 			}
 
 			err = a.Capture(&test.stream)
@@ -479,7 +478,7 @@ func TestSetVcapId(t *testing.T) {
 	tests := []struct {
 		name   string
 		md     metadata.MD
-		vcapId string
+		vcapID string
 	}{
 		{
 			name: "Request without metadata",
@@ -492,8 +491,8 @@ func TestSetVcapId(t *testing.T) {
 		},
 		{
 			name:   "Metadata with vcap request id",
-			md:     metadata.MD{HeaderVcapId: []string{"123"}},
-			vcapId: "123",
+			md:     metadata.MD{HeaderVcapID: []string{"123"}},
+			vcapID: "123",
 		},
 	}
 	for _, tt := range tests {
@@ -503,7 +502,7 @@ func TestSetVcapId(t *testing.T) {
 			observedZapCore, observedLogs := observer.New(zap.InfoLevel)
 			log := zap.New(observedZapCore)
 
-			log = setVcapId(ctx, log)
+			log = setVcapID(ctx, log)
 
 			// ensure that at least one log has been observed
 			log.Info("test")
@@ -515,12 +514,12 @@ func TestSetVcapId(t *testing.T) {
 			entry := observedLogs.All()[observedLogs.Len()-1]
 
 			for _, logField := range entry.Context {
-				if logField.Key == LogKeyVcapId && (tt.vcapId == "" || logField.String == tt.vcapId) {
+				if logField.Key == LogKeyVcapID && (tt.vcapID == "" || logField.String == tt.vcapID) {
 					return
 				}
 			}
 
-			t.Errorf("missing field %s or field has wrong value", LogKeyVcapId)
+			t.Errorf("missing field %s or field has wrong value", LogKeyVcapID)
 		})
 	}
 }

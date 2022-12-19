@@ -16,17 +16,16 @@ import (
 
 // Agent is the central struct to which the handlers are attached.
 type Agent struct {
-	// done is used to gracefully shut down the agent, it will terminate all
-	// ongoing streams.
+	// done is used to gracefully shut down the agent, all ongoing streams terminate
+	// whenever this channel is closed.
 	done chan struct{}
 	// wg tracks any running streams.
 	// TODO: expose as metric?
 	wg sync.WaitGroup
 	// log carries the logger all session loggers are derived from.
-	log *zap.Logger
-    // buffer configuration with lower and upper limits
-	BufferConf BufferConf
-    // pcap.UnimplementedAgentServer for details
+	log     *zap.Logger
+	bufConf BufferConf
+
 	UnimplementedAgentServer
 }
 
@@ -37,9 +36,9 @@ func NewAgent(log *zap.Logger, bufConf BufferConf) (*Agent, error) {
 		log = zap.L()
 	}
 	return &Agent{
-		done:       make(chan struct{}),
-		log:        log,
-		BufferConf: bufConf,
+		done:    make(chan struct{}),
+		log:     log,
+		bufConf: bufConf,
 	}, nil
 }
 
@@ -60,7 +59,7 @@ func (a *Agent) Wait() {
 	a.wg.Wait()
 }
 
-// draining checks if agent has been stopped or not
+// draining returns true after Agent.Stop has been called.
 func (a *Agent) draining() bool {
 	select {
 	case <-a.done:
@@ -103,7 +102,7 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	ctx, cancel := WithCancelCause(stream.Context())
 	defer cancel(nil)
 
-	setVcapId(ctx, log)
+	setVcapID(ctx, log)
 
 	if a.draining() {
 		return errorf(codes.Unavailable, "agent is draining")
@@ -129,10 +128,10 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	defer handle.Close()
 
 	// source / producer
-	responses := readPackets(ctx, cancel, handle, a.BufferConf.Size)
+	responses := readPackets(ctx, cancel, handle, a.bufConf.Size)
 
 	// sink / consumer
-	forwardToStream(cancel, responses, stream, a.BufferConf.LowerLimit, a.BufferConf.UpperLimit)
+	forwardToStream(cancel, responses, stream, a.bufConf.LowerLimit, a.bufConf.UpperLimit)
 
 	agentStopCmd(cancel, stream)
 
@@ -158,21 +157,21 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	return nil
 }
 
-func setVcapId(ctx context.Context, log *zap.Logger) *zap.Logger {
+func setVcapID(ctx context.Context, log *zap.Logger) *zap.Logger {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		log = log.With(zap.String(LogKeyVcapId, uuid.Must(uuid.NewRandom()).String()))
+		log = log.With(zap.String(LogKeyVcapID, uuid.Must(uuid.NewRandom()).String()))
 		log.Warn("request does not contain metadata, generated vcap request id")
 		return log
 	}
 
-	vcapReqId := md.Get(HeaderVcapId)
-	if len(vcapReqId) == 0 {
-		log = log.With(zap.String(LogKeyVcapId, uuid.Must(uuid.NewRandom()).String()))
+	vcapReqID := md.Get(HeaderVcapID)
+	if len(vcapReqID) == 0 {
+		log = log.With(zap.String(LogKeyVcapID, uuid.Must(uuid.NewRandom()).String()))
 		log.Warn("request does not contain request id, generating one")
 		return log
 	}
-	return log.With(zap.String(LogKeyVcapId, vcapReqId[0]))
+	return log.With(zap.String(LogKeyVcapID, vcapReqID[0]))
 }
 
 // validateAgentStartRequest returns an error describing the issue or nil if
@@ -207,7 +206,9 @@ func validateAgentStartRequest(req *AgentRequest) error {
 
 	return nil
 }
-// TODO: docu
+
+// openHandle is a helper function to open the packet capturing handle that reads from the
+// network interface and returns the data. Puts the network interface into promiscuous mode.
 func openHandle(opts *CaptureOptions) (*pcap.Handle, error) {
 	handle, err := pcap.OpenLive(opts.Device, int32(opts.SnapLen), true, pcap.BlockForever)
 	if err != nil {

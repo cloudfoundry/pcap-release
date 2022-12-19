@@ -13,14 +13,6 @@ import (
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pcap.proto
 
-// docker image build -f agent.Dockerfile -t pcap:agent .
-// docker image build -f api.Dockerfile -t pcap:api .
-// docker network create pcap
-// for i in {1..4}; do docker container run --rm -d --name pcap-agent-$i --network pcap pcap:agent; done
-// docker container run -d --rm --name pcap-api --network pcap -v "$(pwd)/static-targets.json:/usr/local/etc/static-targets.json" -v "$(pwd)/cmd/api/.api.config.yml:/usr/local/etc/pcap-api.yml" -e PCAP_TARGETS=/usr/local/etc/static-targets.json -p 8080:8080 pcap:api
-
-// then run the bosh.go as client. It will capture 100 responses and then gracefully close the connection from the client side.
-
 const (
 	// CompatibilityLevel indicates whether two parties are compatible. Once there is a change
 	// that requires both parties to be updated this value MUST be incremented by one. The calling
@@ -28,9 +20,9 @@ const (
 	// refuse operation if it isn't.
 	CompatibilityLevel int64 = 0
 
-	// LogKeyVcapId sets on which field the vcap request id will be logged.
-	LogKeyVcapId = "vcap-id"
-	HeaderVcapId = "x-vcap-request-id"
+	// LogKeyVcapID sets on which field the vcap request id will be logged.
+	LogKeyVcapID = "vcap-id"
+	HeaderVcapID = "x-vcap-request-id"
 )
 
 var (
@@ -39,15 +31,23 @@ var (
 )
 
 // BufferConf allows to specify the behaviour of buffers.
-// TODO: can this be re-used within the pcap-api?
+//
+// The recommendation is to set the upper limit slightly below the size
+// to account for data put into the buffer while checking the fill condition
+// or performing work. The lower limit should be low enough to make some room
+// for new data but not too low (which would cause a lot of data to be
+// discarded). After all the buffer should mainly soften short spikes in data
+// transfer and these limits only protect against uncontrolled back pressure.
 type BufferConf struct {
 	// Size is the number of responses that can be buffered per stream.
 	Size int `yaml:"size" validate:"gte=0"`
-	// UpperLimit controls when the agent will start discarding messages.
-	// The condition is len(buf) >= UpperLimit
+	// UpperLimit tells the manager of the buffer to start discarding messages
+	// once the limit is exceeded. The condition looks like this:
+	//   len(buf) >= UpperLimit
 	UpperLimit int `yaml:"upperLimit" validate:"gte=0,ltefield=Size"`
-	// LowerLimit controls when the agent will stop discarding messages.
-	// The condition is len(buf) <= LowerLimit
+	// LowerLimit tells the manager of the buffer to stop discarding messages
+	// once the limit is reached/undercut. The condition looks like this:
+	//   len(buf) <= LowerLimit
 	LowerLimit int `yaml:"lowerLimit" validate:"gte=0,ltefield=UpperLimit"`
 }
 
@@ -60,9 +60,6 @@ func (bc BufferConf) validate() error {
 func drain[T any](c <-chan T) {
 	for m := range c {
 		zap.L().Warn("discarding message", zap.Any("message", m))
-
-		// FIXME: Disabled metric as this led to an error of 'unknown metric'
-		// MetricsServer().MessageDrained()
 	}
 }
 
