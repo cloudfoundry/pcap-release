@@ -24,9 +24,9 @@ type Agent struct {
 	wg sync.WaitGroup
 	// log carries the logger all session loggers are derived from.
 	log *zap.Logger
-
+    // buffer configuration with lower and upper limits
 	BufferConf BufferConf
-
+    // pcap.UnimplementedAgentServer for details
 	UnimplementedAgentServer
 }
 
@@ -60,6 +60,7 @@ func (a *Agent) Wait() {
 	a.wg.Wait()
 }
 
+// draining checks if agent has been stopped or not
 func (a *Agent) draining() bool {
 	select {
 	case <-a.done:
@@ -206,7 +207,7 @@ func validateAgentStartRequest(req *AgentRequest) error {
 
 	return nil
 }
-
+// TODO: docu
 func openHandle(opts *CaptureOptions) (*pcap.Handle, error) {
 	handle, err := pcap.OpenLive(opts.Device, int32(opts.SnapLen), true, pcap.BlockForever)
 	if err != nil {

@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
@@ -384,6 +388,88 @@ func TestAgentStatus(t *testing.T) {
 			}
 			if got.Health != tt.wantHealth {
 				t.Errorf("Status() health = %v, wantHealth %v", got.Health, tt.wantHealth)
+			}
+		})
+	}
+}
+
+type mockCaptureServer struct {
+	req *AgentRequest
+	err error
+	grpc.ServerStream
+	context context.Context
+}
+
+func (m *mockCaptureServer) Send(res *CaptureResponse) error {
+	_, _ = res.Payload.(*CaptureResponse_Message)
+	return nil
+}
+
+func (m *mockCaptureServer) Recv() (*AgentRequest, error) {
+	return m.req, m.err
+}
+
+func (m *mockCaptureServer) Context() context.Context {
+	return m.context
+}
+
+func TestAgentCapture(t *testing.T) {
+	tests := []struct {
+		name    string
+		stream mockCaptureServer
+		agentRunning bool
+		wantErr bool
+		wantStatusCode codes.Code
+	}{
+		{
+			name: "Agent is draining",
+			stream: mockCaptureServer{nil, nil, nil,context.Background()},
+			agentRunning: false,
+			wantErr: true,
+			wantStatusCode: codes.Unavailable,
+		},
+		{
+			name: "Receiving of incoming request finished with error",
+			stream: mockCaptureServer{nil, errNilField, nil,context.Background()},
+			agentRunning: true,
+			wantErr: true,
+			wantStatusCode: codes.Unknown,
+		},
+		{
+			name: "Incoming Request is invalid",
+			stream: mockCaptureServer{nil, nil, nil,context.Background()},
+			agentRunning: true,
+			wantErr: true,
+			wantStatusCode: codes.InvalidArgument,
+		},
+		{
+			name: "open handle error",
+			stream: mockCaptureServer{&AgentRequest{Payload: &AgentRequest_Start{Start: &StartAgentCapture{Capture: &CaptureOptions{Device: "12as", Filter: "", SnapLen: 65000}}}}, nil, nil,context.Background()},
+			agentRunning: true,
+			wantErr: true,
+			wantStatusCode: codes.Internal,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			a, err := NewAgent(nil,BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
+			if err != nil {
+				t.Errorf("Unexpected error %v", err)
+			}
+
+			if !test.agentRunning {
+				a.Stop()
+				time.Sleep(1*time.Second)
+			}
+
+			err = a.Capture(&test.stream)
+			if (err != nil) != test.wantErr {
+				t.Errorf("Capture() error = %v, wantErr %v", err, test.wantErr)
+			}
+
+			code := status.Code(err)
+			if test.wantErr && code != test.wantStatusCode {
+				t.Errorf("Capture() statusCode = %v, wantStatusCode = %v", code, test.wantStatusCode)
 			}
 		})
 	}
