@@ -26,10 +26,11 @@ const (
 	// that requires both parties to be updated this value MUST be incremented by one. The calling
 	// party has to ensure that the compatibility level of the called party is equal or larger and
 	// refuse operation if it isn't.
-	CompatibilityLevel = 0
+	CompatibilityLevel int64 = 0
 
 	// LogKeyVcapId sets on which field the vcap request id will be logged.
 	LogKeyVcapId = "vcap-id"
+	HeaderVcapId = "x-vcap-request-id"
 )
 
 var (

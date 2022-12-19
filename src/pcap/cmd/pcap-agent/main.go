@@ -18,21 +18,40 @@ import (
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 )
 
 func init() {
-	// TODO: proper logging config
-	l, err := zap.NewDevelopment()
-	if err != nil {
-		panic(err.Error())
-	}
-	zap.ReplaceGlobals(l)
+	zap.ReplaceGlobals(zap.Must(zap.Config{
+		Level:         zap.NewAtomicLevelAt(zap.DebugLevel),
+		DisableCaller: true,
+		Encoding:      "json",
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:        "ts",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			FunctionKey:    zapcore.OmitKey,
+			MessageKey:     "msg",
+			StacktraceKey:  "stacktrace",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.LowercaseLevelEncoder,
+			EncodeTime:     zapcore.RFC3339TimeEncoder,
+			EncodeDuration: zapcore.SecondsDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		},
+		OutputPaths:      []string{"stdout"},
+		ErrorOutputPaths: []string{"stderr"},
+		InitialFields:    map[string]interface{}{"component": "pcap-agent"}, // TODO: this is probably already done by syslog_shipper?
+	}.Build()))
+
+	zap.NewProductionEncoderConfig()
 }
 
 func main() {
-	log := zap.L().With(zap.String("component", "pcap-agent"))
-	log.Info("init phase done, starting agent", zap.Int("compatibilityLevel", pcap.CompatibilityLevel))
+	log := zap.L()
+	log.Info("init phase done, starting agent", zap.Int64("compatibilityLevel", pcap.CompatibilityLevel))
 
 	var err error
 	var config Config

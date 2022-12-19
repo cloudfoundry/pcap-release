@@ -29,7 +29,7 @@ func main() {
 	p(err)
 	fmt.Println("status:")
 	fmt.Printf("  health : %s\n", statusRes.Health.String())
-	fmt.Printf("  version: %s\n", statusRes.Version)
+	fmt.Printf("  compLvl: %d\n", statusRes.CompatibilityLevel)
 	fmt.Printf("  status : %s\n", statusRes.Status)
 
 	stream, err := agentClient.Capture(ctx)

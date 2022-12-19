@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"testing"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc/metadata"
-	"io"
-	"testing"
 
 	"github.com/google/gopacket"
 )
@@ -390,55 +391,50 @@ func TestAgentStatus(t *testing.T) {
 
 func TestSetVcapId(t *testing.T) {
 	tests := []struct {
-		name string
-		md metadata.MD
-		expectedLogFieldKey  string
-		expectedLogFieldValue string
+		name   string
+		md     metadata.MD
+		vcapId string
 	}{
 		{
 			name: "Request without metadata",
-			md: nil,
-			expectedLogFieldKey: LogKeyVcapId,
+			md:   nil,
 		},
 
 		{
 			name: "Metadata without vcap request id",
-			md: metadata.MD{},
-			expectedLogFieldKey: LogKeyVcapId,
+			md:   metadata.MD{},
 		},
 		{
-			name: "Metadata with vcap request id",
-			md: metadata.MD{vcap_rq_id:[]string{"123"}},
-			expectedLogFieldKey: LogKeyVcapId,
-			expectedLogFieldValue: "123",
+			name:   "Metadata with vcap request id",
+			md:     metadata.MD{HeaderVcapId: []string{"123"}},
+			vcapId: "123",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			ctxWithMD := metadata.NewIncomingContext(ctx, tt.md)
+			ctx := metadata.NewIncomingContext(context.Background(), tt.md)
 
 			observedZapCore, observedLogs := observer.New(zap.InfoLevel)
-			observedLogger := zap.New(observedZapCore)
+			log := zap.New(observedZapCore)
 
-			setVcapId(ctxWithMD, observedLogger)
+			log = setVcapId(ctx, log)
+
+			// ensure that at least one log has been observed
+			log.Info("test")
 
 			if observedLogs == nil || observedLogs.Len() == 0 {
 				t.Fatal("No logs are written")
 			}
 
-			entry := observedLogs.All()[0]
-			if len(entry.Context) == 0 {
-				t.Fatal("Log entry has no context")
+			entry := observedLogs.All()[observedLogs.Len()-1]
+
+			for _, logField := range entry.Context {
+				if logField.Key == LogKeyVcapId && (tt.vcapId == "" || logField.String == tt.vcapId) {
+					return
+				}
 			}
 
-			if entry.Context[0].Key != tt.expectedLogFieldKey {
-				t.Errorf("Expected %s but got %s", tt.expectedLogFieldKey, entry.Context[0].Key)
-			}
-			if tt.expectedLogFieldValue != "" && entry.Context[0].String != tt.expectedLogFieldValue {
-				t.Errorf("Expected %s but got %s", tt.expectedLogFieldValue, entry.Context[0].String)
-			}
-
+			t.Errorf("missing field %s or field has wrong value", LogKeyVcapId)
 		})
 	}
 }

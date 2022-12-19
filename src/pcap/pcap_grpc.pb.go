@@ -264,6 +264,12 @@ type AgentClient interface {
 	// Status returns the current status of the agent. It indicates whether the agent is ready to
 	// accept new capture requests or is currently unavailable.
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	// Capture is the main handler for the pcap agent. It contains the logic to open an interface
+	// and start a packet capture. The resulting packets will be streamed back to the caller together
+	// with messages informing the caller of any abnormal conditions that occur. The first message
+	// sent must contain a payload of type StartAgentCapture, this will trigger the start of the capture.
+	// The only messages that can be sent next is a StopAgentCapture which stops the capture gracefully
+	// still sending any packets that are remaining and closing the stream afterwards.
 	Capture(ctx context.Context, opts ...grpc.CallOption) (Agent_CaptureClient, error)
 }
 
@@ -322,6 +328,12 @@ type AgentServer interface {
 	// Status returns the current status of the agent. It indicates whether the agent is ready to
 	// accept new capture requests or is currently unavailable.
 	Status(context.Context, *StatusRequest) (*StatusResponse, error)
+	// Capture is the main handler for the pcap agent. It contains the logic to open an interface
+	// and start a packet capture. The resulting packets will be streamed back to the caller together
+	// with messages informing the caller of any abnormal conditions that occur. The first message
+	// sent must contain a payload of type StartAgentCapture, this will trigger the start of the capture.
+	// The only messages that can be sent next is a StopAgentCapture which stops the capture gracefully
+	// still sending any packets that are remaining and closing the stream afterwards.
 	Capture(Agent_CaptureServer) error
 	mustEmbedUnimplementedAgentServer()
 }

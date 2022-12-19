@@ -62,7 +62,7 @@ enum MessageType {
 
 message StatusResponse {
   Health health = 1;
-  string Version = 2;
+  int64 compatibilityLevel = 2;
   string status = 3;
   optional bool bosh = 4;
   optional bool cf = 5;

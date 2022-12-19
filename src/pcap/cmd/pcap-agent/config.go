@@ -14,9 +14,10 @@ var DefaultConfig = Config{
 	Port: 8083,
 	Buffer: pcap.BufferConf{
 		Size:       100,
-		UpperLimit: 105,
+		UpperLimit: 95,
 		LowerLimit: 60,
 	},
+	LogLevel: "debug",
 }
 
 type Config struct {
@@ -31,7 +32,8 @@ type Config struct {
 		// to request and verify client certificates.
 		CertificateAuthority string `yaml:"certificateAuthority" validate:"file"`
 	} `yaml:"tls,omitempty"`
-	Buffer pcap.BufferConf `yaml:"buffer"`
+	Buffer   pcap.BufferConf `yaml:"buffer"`
+	LogLevel string          `yaml:"logLevel"`
 }
 
 func (c Config) validate() error {

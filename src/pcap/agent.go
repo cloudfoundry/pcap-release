@@ -14,8 +14,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-const vcap_rq_id = "x-vcap-request-id"
-
 // Agent is the central struct to which the handlers are attached.
 type Agent struct {
 	// done is used to gracefully shut down the agent, it will terminate all
@@ -75,11 +73,10 @@ func (a *Agent) draining() bool {
 
 // Status handler for the pcap-agent. See AgentServer.Status documentation for details.
 func (a *Agent) Status(_ context.Context, _ *StatusRequest) (*StatusResponse, error) {
-	// TODO: how to do versioning?
 	s := &StatusResponse{
-		Version: "devel",
-		Health:  Health_UP,
-		Status:  "ok",
+		CompatibilityLevel: CompatibilityLevel,
+		Health:             Health_UP,
+		Status:             "ok",
 	}
 
 	if a.draining() {
@@ -160,19 +157,21 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	return nil
 }
 
-func setVcapId(ctx context.Context, log *zap.Logger){
+func setVcapId(ctx context.Context, log *zap.Logger) *zap.Logger {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		log.With(zap.String(LogKeyVcapId, uuid.Must(uuid.NewRandom()).String())).Warn("request does not contain metadata, generated vcap request id")
-		return
+		log = log.With(zap.String(LogKeyVcapId, uuid.Must(uuid.NewRandom()).String()))
+		log.Warn("request does not contain metadata, generated vcap request id")
+		return log
 	}
 
-	vcapReqId := md.Get(vcap_rq_id)
+	vcapReqId := md.Get(HeaderVcapId)
 	if len(vcapReqId) == 0 {
-		log.With(zap.String(LogKeyVcapId, uuid.Must(uuid.NewRandom()).String())).Warn("request does not contain request id, generating one")
-		return
+		log = log.With(zap.String(LogKeyVcapId, uuid.Must(uuid.NewRandom()).String()))
+		log.Warn("request does not contain request id, generating one")
+		return log
 	}
-	log.With(zap.String(LogKeyVcapId, vcapReqId[0])).Info("test")
+	return log.With(zap.String(LogKeyVcapId, vcapReqId[0]))
 }
 
 // validateAgentStartRequest returns an error describing the issue or nil if
