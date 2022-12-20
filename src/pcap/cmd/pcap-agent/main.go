@@ -24,17 +24,16 @@ import (
 
 func init() {
 	zap.ReplaceGlobals(zap.Must(zap.Config{
-		Level:         zap.NewAtomicLevelAt(zap.DebugLevel),
-		DisableCaller: true,
-		Encoding:      "json",
+		Level:             zap.NewAtomicLevelAt(zap.DebugLevel),
+		DisableCaller:     true,
+		DisableStacktrace: true,
+		Encoding:          "json",
 		EncoderConfig: zapcore.EncoderConfig{
 			TimeKey:        "ts",
 			LevelKey:       "level",
 			NameKey:        "logger",
 			CallerKey:      "caller",
-			FunctionKey:    zapcore.OmitKey,
 			MessageKey:     "msg",
-			StacktraceKey:  "stacktrace",
 			LineEnding:     zapcore.DefaultLineEnding,
 			EncodeLevel:    zapcore.LowercaseLevelEncoder,
 			EncodeTime:     zapcore.RFC3339TimeEncoder,

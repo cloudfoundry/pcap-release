@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -235,7 +236,10 @@ func TestForwardToStream(t *testing.T) {
 				}
 			}()
 
-			forwardToStream(cancel, src, test.stream, bufLowerLimit, bufUpperLimit)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+
+			forwardToStream(cancel, src, test.stream, BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, wg)
 
 			<-ctx.Done()
 

@@ -131,7 +131,11 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	responses := readPackets(ctx, cancel, handle, a.bufConf.Size)
 
 	// sink / consumer
-	forwardToStream(cancel, responses, stream, a.bufConf.LowerLimit, a.bufConf.UpperLimit)
+	// we need a wait group only for this function because it could still be forwarding packets
+	// when we are closing the stream.
+	forwardWG := &sync.WaitGroup{}
+	forwardWG.Add(1)
+	forwardToStream(cancel, responses, stream, a.bufConf, forwardWG)
 
 	agentStopCmd(cancel, stream)
 
@@ -152,8 +156,10 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 		return err
 	}
 
+	log.Debug("waiting for stream forwarding to finish")
+	forwardWG.Wait()
+
 	log.Info("capture done")
-	// TODO: forwardToApi could still be running, we should probably introduce a wait group to wait for its termination
 	return nil
 }
 
@@ -272,13 +278,14 @@ type responseSender interface {
 // forwardToStream reads Packets from src until it's closed and writes them to stream.
 // If it encounters an error while doing so the error is set to cause and the cancel function
 // is called. Any data that is forwarded after an error is discarded.
-func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, lowerLimit, upperLimit int) {
+func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, bufConf BufferConf, wg *sync.WaitGroup) {
 	go func() {
 		// After this function returns we want to make sure that this channel is
 		// drained properly if there is anything left in it. This avoids responses
 		// left after the connection to the client broke and no more responses are
 		// read from the channel.
 		defer drain(src)
+		defer wg.Done()
 
 		discarding := false
 		for res := range src {
@@ -306,11 +313,11 @@ func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream
 			// 1        | false      | 6
 
 			switch {
-			case len(src) <= lowerLimit: // if there is no buffer this case will always match
+			case len(src) <= bufConf.LowerLimit: // if there is no buffer this case will always match
 				discarding = false
 			case discarding && !isMsg:
 				continue
-			case len(src) >= upperLimit && !isMsg:
+			case len(src) >= bufConf.UpperLimit && !isMsg:
 				discarding = true
 				// this only is sent when we start discarding (and discards the current data packet)
 				res = newMessageResponse(MessageType_CONGESTED, "too much back pressure, discarding packets")

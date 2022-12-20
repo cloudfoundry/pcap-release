@@ -59,7 +59,7 @@ func (bc BufferConf) validate() error {
 // discarded messages are logged on the trace level.
 func drain[T any](c <-chan T) {
 	for m := range c {
-		zap.L().Warn("discarding message", zap.Any("message", m))
+		zap.L().Warn("draining channel: discarding message", zap.Any("message", m))
 	}
 }
 
