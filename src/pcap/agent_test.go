@@ -20,6 +20,7 @@ import (
 
 var (
 	errTestEnded    = fmt.Errorf("test ended")
+	errContextCancelled    = fmt.Errorf("context error")
 	errDiscardedMsg = fmt.Errorf("discarding packets")
 	bufSize         = 5
 	bufUpperLimit   = 4
@@ -116,44 +117,53 @@ func TestReadPackets(t *testing.T) {
 	tests := []struct {
 		name     string
 		handle   mockPcapHandle
-		wantErr  bool
-		wantData string
+		contextCancelled bool
+		expectedErr  error
+		expectedData string
 	}{
 		{
-			name:     "Error during reading of packet data",
-			handle:   mockPcapHandle{data: []byte{}, ci: gopacket.CaptureInfo{}, err: fmt.Errorf("error")},
-			wantErr:  true,
-			wantData: "",
+			name:             "Error during reading of packet data",
+			handle:           mockPcapHandle{data: []byte{}, ci: gopacket.CaptureInfo{}, err: io.EOF},
+			contextCancelled: false,
+			expectedErr:      io.EOF,
 		},
 		{
-			name:     "Happy path",
-			handle:   mockPcapHandle{data: []byte("ABC"), ci: gopacket.CaptureInfo{}, err: nil},
-			wantErr:  false,
-			wantData: "ABC",
+			name:             "Error context cancelled",
+			handle:           mockPcapHandle{data: []byte{}, ci: gopacket.CaptureInfo{}, err: nil},
+			contextCancelled: true,
+			expectedErr:      errContextCancelled,
 		},
-		// TODO: test case where context is cancelled and readPackets has to exit
+		{
+			name:             "Happy path",
+			handle:           mockPcapHandle{data: []byte("ABC"), ci: gopacket.CaptureInfo{}, err: nil},
+			contextCancelled: false,
+			expectedData:     "ABC",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			ctx, cancel := WithCancelCause(ctx)
+			if test.contextCancelled{
+				// cancel context before read packets in order to get edge case
+				cancel(errContextCancelled)
+			}
 
 			out := readPackets(ctx, cancel, &test.handle, bufSize)
 
 			<-ctx.Done()
 
 			err := Cause(ctx)
-
-			if (err != nil) != test.wantErr && test.wantData == "" {
-				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
+			if err != nil && !errors.Is(err, test.expectedErr) && !errors.Is(err,errTestEnded) {
+				t.Errorf("expectedErr = %v, got err = %v", test.expectedErr, err)
 			}
 
-			if test.wantData != "" {
+			if test.expectedData != "" {
 				data := ""
 				for s := range out {
 					data += string(s.GetPacket().Data)
 				}
-				if test.wantData != data {
+				if test.expectedData != data {
 					t.Errorf("Invalid data response %s", data)
 				}
 			}
@@ -165,18 +175,21 @@ type mockPacketSender struct {
 	err        error
 	resCounter int
 	sentRes    int
+	stopAfterErrorOccurs bool
 }
 
 func (m *mockPacketSender) Send(res *CaptureResponse) error {
 	message, isMsg := res.Payload.(*CaptureResponse_Message)
 	m.resCounter++
 
-	if m.sentRes != -1 && m.sentRes == m.resCounter {
-		return errTestEnded
-	}
-	if m.sentRes == -1 && isMsg && message.Message.Type == MessageType_CONGESTED {
+	if m.stopAfterErrorOccurs && isMsg && message.Message.Type == MessageType_CONGESTED {
 		return fmt.Errorf("%w", errDiscardedMsg)
 	}
+
+	if !m.stopAfterErrorOccurs && m.sentRes == m.resCounter {
+		return errTestEnded
+	}
+
 	return m.err
 }
 
@@ -190,20 +203,20 @@ func TestForwardToStream(t *testing.T) {
 	}{
 		{
 			name:        "error during sending of packets",
-			stream:      &mockPacketSender{err: io.EOF, sentRes: -1},
+			stream:      &mockPacketSender{err: io.EOF, stopAfterErrorOccurs: true},
 			resToBeSent: 2,
 			response:    newPacketResponse([]byte("ABC")),
 			expectedErr: io.EOF,
 		},
 		{
-			name:        "buffer is filled with PacketResponse, one Packet discarded",
+			name:        "buffer is filled with PacketResponse, one packet discarded",
+			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
 			resToBeSent: bufUpperLimit + 2,
-			stream:      &mockPacketSender{err: nil, sentRes: 5},
 			response:    newPacketResponse([]byte("ABC")),
 			expectedErr: errTestEnded,
 		},
 		{
-			name:        "buffer is filled with MessageResponse, no packets",
+			name:        "buffer is filled with MessageResponse, no packets discarded",
 			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
 			resToBeSent: bufUpperLimit + 1,
 			response:    newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"),
@@ -211,7 +224,7 @@ func TestForwardToStream(t *testing.T) {
 		},
 		{
 			name:        "buffer is filled with PacketResponse, discarding packets",
-			stream:      &mockPacketSender{err: nil, sentRes: -1},
+			stream:      &mockPacketSender{err: nil, stopAfterErrorOccurs: true},
 			resToBeSent: bufUpperLimit + 1,
 			response:    newPacketResponse([]byte("ABC")),
 			expectedErr: errDiscardedMsg,
