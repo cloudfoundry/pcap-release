@@ -2,39 +2,38 @@
 
 **Table of Content**
 <!-- TOC -->
-- [PCAP Release API Documentation](#pcap-release-api-documentation)
-  - [CF Case Overview](#cf-case-overview)
-    - [Target Identification via Cloud Controller (Option)](#target-identification-via-cloud-controller-option)
-    - [Target Registration via NATS (Option)](#target-registration-via-nats-option)
-  - [BOSH Case Overview](#bosh-case-overview)
-  - [Interactions](#interactions)
-    - [pcap-cli -\> pcap-api](#pcap-cli---pcap-api)
-    - [pcap-bosh-cli -\> BOSH Director UAA](#pcap-bosh-cli---bosh-director-uaa)
-    - [pcap-cf-cli](#pcap-cf-cli)
-    - [pcap-api](#pcap-api)
-    - [NATS -\> pcap-api (option)](#nats---pcap-api-option)
-    - [pcap-agent -\> pcap-api](#pcap-agent---pcap-api)
-    - [Diego route registrar -\> NATS (Option)](#diego-route-registrar---nats-option)
-    - [pcap-api -\> pcap-cli](#pcap-api---pcap-cli)
-  - [Data Structures](#data-structures)
-    - [Capture Request](#capture-request)
-      - [Common Fields for `pcap-agent`](#common-fields-for-pcap-agent)
-      - [CF App Start Capture Request](#cf-app-start-capture-request)
-      - [BOSH Start Capture Request](#bosh-start-capture-request)
-      - [Stop Capture Request](#stop-capture-request)
-    - [Message](#message)
-      - [Enum `MessageType`](#enum-messagetype)
-    - [Status](#status)
-      - [Enum `Health`](#enum-health)
-    - [PCAP Data](#pcap-data)
-    - [Capture Response](#capture-response)
-  - [Use Cases](#use-cases)
-    - [Initialization](#initialization)
-    - [Regular Request with Clean Shutdown](#regular-request-with-clean-shutdown)
-    - [Authentication and Authorization Failures](#authentication-and-authorization-failures)
-    - [Unexpected Disconnects](#unexpected-disconnects)
-    - [Invalid Requests](#invalid-requests)
-    - [Resource Limits](#resource-limits)
+* [PCAP Release API Documentation](#pcap-release-api-documentation)
+  * [CF Case Overview](#cf-case-overview)
+    * [Target Identification via Cloud Controller (Option)](#target-identification-via-cloud-controller--option-)
+    * [Target Registration via NATS (Option)](#target-registration-via-nats--option-)
+  * [BOSH Case Overview](#bosh-case-overview)
+  * [Interactions](#interactions)
+    * [pcap-cli -> pcap-api](#pcap-cli----pcap-api)
+    * [pcap-bosh-cli -> BOSH Director UAA](#pcap-bosh-cli----bosh-director-uaa)
+    * [pcap-cf-cli](#pcap-cf-cli)
+    * [pcap-api](#pcap-api)
+    * [NATS -> pcap-api (option)](#nats----pcap-api--option-)
+    * [pcap-agent -> pcap-api](#pcap-agent----pcap-api)
+    * [Diego route registrar -> NATS (Option)](#diego-route-registrar----nats--option-)
+    * [pcap-api -> pcap-cli](#pcap-api----pcap-cli)
+  * [Data Structures](#data-structures)
+    * [Capture Request](#capture-request)
+      * [Common Fields for `pcap-agent`](#common-fields-for-pcap-agent)
+      * [CF App Start Capture Request](#cf-app-start-capture-request)
+      * [BOSH Start Capture Request](#bosh-start-capture-request)
+      * [Stop Capture Request](#stop-capture-request)
+    * [Message](#message)
+      * [Enum `MessageType`](#enum-messagetype)
+    * [Status](#status)
+    * [PCAP Data](#pcap-data)
+    * [Capture Response](#capture-response)
+  * [Use Cases](#use-cases)
+    * [Initialization](#initialization)
+    * [Regular Request with Clean Shutdown](#regular-request-with-clean-shutdown)
+    * [Authentication and Authorization Failures](#authentication-and-authorization-failures)
+    * [Unexpected Disconnects](#unexpected-disconnects)
+    * [Invalid Requests](#invalid-requests)
+    * [Resource Limits](#resource-limits)
 <!-- TOC -->
 
 This document contains the API specification for the PCAP release.
@@ -335,7 +334,6 @@ Example request, serialized as JSON:
 | `token`          | `string`   | yes       |         | The BOSH UAA token for the user sending the capture request.                                                                                                 |
 | `deployment`     | `string`   | yes       |         | The name of the target BOSH deployment.                                                                                                                      |
 | `groups`         | `[]string` | yes       |         | A list of instance groups from which to capture. **Must contain at least one instance group**.                                                               |
-| `instance_ids`   | `[]int`    | no        | `[]`    | List of instance indexes of the application. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_guids`.    |
 | `instance_guids` | `[]string` | no        | `[]`    | List of instance IDs for finer-grained targeting. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_ids`. |
 
 Example request, serialized as JSON:
@@ -421,24 +419,24 @@ If the cause of the error is not clear (e.g. because it could be multiple things
 
 ### Status
 
-The status is provided by `pcap-agent` and `pcap-api`. It SHALL be used by the connecting party to ensure that communication happens with the appropriate endpoint and that version numbers are compatible. A request MAY be denied if the version is deemed incompatible.
+The status is provided by `pcap-agent` and `pcap-api`. It SHALL be used by the connecting party to ensure that communication happens with the appropriate endpoint and that two parties are compatible. The calling party has to ensure that the compatibility level of the called party is equal or larger and refuse request if it isn't.
 
-Version information is particularly important to stop communication with outdated (and potentially vulnerable) `pcap-agent`s.
+Compatibility level is particularly important to stop communication with outdated (and potentially vulnerable) `pcap-agent`s.
 
-| Parameter | Type          | Required? | Description                                                                                                                                      |
-|-----------|---------------|-----------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| `health`  | `enum Health` | yes       | The health state of the agent in question                                                                                                        |
-| `version` | `string`      | yes       | Semantic version number of the component. Can be used to ensure communication with compatible versions, and cut-off of unsupported old versions. |
-| `status`  | `string`      | yes       | A human readable status message.                                                                                                                 |
-| `cf`      | `boolean`     | no        | Supports CF requests (only for pcap-api)                                                                                                         |                                                                                               
-| `bosh`    | `boolean`     | no        | Supports BOSH requests (only for pcap-api)                                                                                                       |                                                                                                
+| Parameter            | Type      | Required? | Description                                                                                                                                             |
+|----------------------|-----------|-----------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `healthy`            | `boolean` | yes       | The health state of the agent in question                                                                                                               |
+| `compatibilityLevel` | `integer` | yes       | The compatibility level. Once there is a change (like a security issue) that requires both parties to be updated this value MUST be incremented by one. |
+| `message`            | `string`  | yes       | A human readable status message.                                                                                                                        |
+| `cf`                 | `boolean` | no        | Supports CF requests (only for pcap-api)                                                                                                                |                                                                                               
+| `bosh`               | `boolean` | no        | Supports BOSH requests (only for pcap-api)                                                                                                              |                                                                                                
 
 Examples:
 ```json
 {
-  "health": "UP",
-  "version": "0.1.0",
-  "status": "Up with CF and BOSH endpoints",
+  "healthy": true,
+  "compatibilityLevel": 1,
+  "message": "Up with CF and BOSH endpoints",
   "cf": true,
   "bosh": true
 }
@@ -447,19 +445,11 @@ Examples:
 Example for an agent status
 ```json
 {
-  "health": "UP",
-  "version": "0.1.0",
-  "status": "Up, on BOSH instance router/d55baeba-f645-4219-8b49-2b4654a17165" 
+  "healthy": true,
+  "compatibilityLevel": 1,
+  "message": "Up, on BOSH instance router/d55baeba-f645-4219-8b49-2b4654a17165" 
 }
 ```
-
-#### Enum `Health`
-
-| Value      | Description                                                                                                                                  |
-|------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| `UP`       | Everything is nominal.                                                                                                                       |
-| `DRAINING` | This instance is currently being shut down and is draining its remaining connections.                                                        |
-| `DOWN`     | Communication to some of the components is interrupted, e.g. BOSH Director, UAA, Cloud Controller, pcap-api (in the case of the pcap-agent)? |
 
 ### PCAP Data
 
