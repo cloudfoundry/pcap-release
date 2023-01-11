@@ -58,6 +58,12 @@ enum MessageType {
   // Some limit has been reached, e.g. number of concurrent requests, time,
   // bytes, etc.; Message details identifies, which limit has been reached.
   LIMIT_REACHED = 5;
+  // A single agent or the overall capture has stopped gracefully.
+  // The detailed message should contain information about the stopped party.
+  CAPTURE_STOPPED =6;
+  // An error happened while attempting communication with PCAP components,
+  // independent of the client.
+  CONNECTION_ERROR=7;
 }
 
 message StatusResponse {

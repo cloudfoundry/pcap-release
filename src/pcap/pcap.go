@@ -17,7 +17,7 @@ const (
 	// that requires both parties to be updated this value MUST be incremented by one. The calling
 	// party has to ensure that the compatibility level of the called party is equal or larger and
 	// refuse operation if it isn't.
-	CompatibilityLevel int64 = 0
+	CompatibilityLevel int64 = 1
 
 	// LogKeyVcapID sets on which field the vcap request id will be logged.
 	LogKeyVcapID = "vcap-id"
@@ -26,6 +26,7 @@ const (
 
 var (
 	errNilField         = fmt.Errorf("field is nil")
+	errEmptyField       = fmt.Errorf("field is empty")
 	errInvalidPayload   = fmt.Errorf("invalid payload")
 	errIllegalCharacter = fmt.Errorf("illegal character")
 )
