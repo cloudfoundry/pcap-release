@@ -546,15 +546,15 @@ func TestCommonFunc2(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
-			got, err := commonFunc2(context.Background(), &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, log)
+			got, err := capture(context.Background(), &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, log)
 			if (err != nil) != tt.wantErr && status.Code(err) != codes.FailedPrecondition {
-				t.Errorf("commonFunc2() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("capture() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != nil {
 				for m := range got {
 					if m.GetMessage().GetType() != MessageType_CAPTURE_STOPPED {
-						t.Errorf("commonFunc2() message type = %v, wantErr %v", m.GetMessage().GetType(), MessageType_CAPTURE_STOPPED)
+						t.Errorf("capture() message type = %v, wantErr %v", m.GetMessage().GetType(), MessageType_CAPTURE_STOPPED)
 					}
 				}
 			}

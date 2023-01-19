@@ -62,7 +62,7 @@ func main() {
 		log.Fatal("unable to validate config", zap.Error(err))
 	}
 
-	api, err := pcap.NewApi(log, config.Buffer)
+	api, err := pcap.NewApi(log, config.Buffer, pcap.ApiConf{[]string{"localhost:8083"}})
 	if err != nil {
 		log.Fatal("unable to create api", zap.Error(err))
 	}

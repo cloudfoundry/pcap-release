@@ -15,13 +15,18 @@ import (
 
 type Api struct {
 	log     *zap.Logger
+	apiConf ApiConf
 	bufConf BufferConf
 	UnimplementedAPIServer
 }
 
+type ApiConf struct {
+	Targets []string
+}
+
 // NewAgent creates a new ready-to-use agent. If the given logger is nil zap.L will
 // be used.
-func NewApi(log *zap.Logger, bufConf BufferConf) (*Api, error) {
+func NewApi(log *zap.Logger, bufConf BufferConf, apiConf ApiConf) (*Api, error) {
 	if log == nil {
 		log = zap.L()
 	}
@@ -29,20 +34,10 @@ func NewApi(log *zap.Logger, bufConf BufferConf) (*Api, error) {
 	return &Api{
 		log:     log,
 		bufConf: bufConf,
+		apiConf: apiConf,
 	}, nil
 }
 
-/*
-	func (api *Api) CaptureBosh(stream API_CaptureBoshServer) (err error) {
-	  // create context with cancel
-	  // get start request from upstream and validate
-	  // communicate with bosh and validate -> out of scope for now
-	  // iterate over targets and start capture with downstream. Each capture should get own goroutine. Convert error to msg. Wait for ctx.Done()
-	  // merge "out"-channels to one
-	  // forward to upstream -> own goroutine
-	  // wait for stop from upstream -> own goroutine. Call cancel()
-	}
-*/
 func (api *Api) boshEnabled() bool {
 	// TODO implement
 	return true
@@ -82,14 +77,13 @@ func (api *Api) CaptureBosh(stream API_CaptureBoshServer) (err error) {
 
 	// TODO Validate & get targets from bosh
 	var targets []string
-
-	targets = append(targets, "localhost:8083")
+	targets = api.apiConf.Targets
 
 	opts := req.Payload.(*BoshRequest_Start).Start.Capture
 
 	streamPreparer := &streamPrep{}
 
-	out, err := commonFunc2(ctx, stream, streamPreparer, opts, targets, api.log)
+	out, err := capture(ctx, stream, streamPreparer, opts, targets, api.log)
 	if err != nil {
 		return err
 	}
@@ -408,7 +402,7 @@ func (api *Api) CaptureCloudfoundry(stream API_CaptureCloudfoundryServer) (err e
 
 	streamPreparer := &streamPrep{}
 
-	out, err := commonFunc2(ctx, stream, streamPreparer, opts, targets, api.log)
+	out, err := capture(ctx, stream, streamPreparer, opts, targets, api.log)
 	if err != nil {
 		return err
 	}
@@ -472,7 +466,7 @@ type streamPreparer interface {
 	prepareStream(context.Context, *CaptureOptions, string) (captureReceiver, error)
 }
 
-func commonFunc2(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []string, log *zap.Logger) (<-chan *CaptureResponse, error) {
+func capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []string, log *zap.Logger) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
 
 	runningCaptures := 0
