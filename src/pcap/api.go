@@ -13,41 +13,40 @@ import (
 	"sync"
 )
 
-type Api struct {
+type API struct {
 	log     *zap.Logger
-	apiConf ApiConf
+	apiConf APIConf
 	bufConf BufferConf
 	UnimplementedAPIServer
 }
 
-type ApiConf struct {
+type APIConf struct {
 	Targets []string
 }
 
-// NewAgent creates a new ready-to-use agent. If the given logger is nil zap.L will
-// be used.
-func NewApi(log *zap.Logger, bufConf BufferConf, apiConf ApiConf) (*Api, error) {
+func NewAPI(log *zap.Logger, bufConf BufferConf, apiConf APIConf) (*API, error) {
 	if log == nil {
 		log = zap.L()
 	}
 
-	return &Api{
+	return &API{
 		log:     log,
 		bufConf: bufConf,
 		apiConf: apiConf,
 	}, nil
 }
 
-func (api *Api) boshEnabled() bool {
+func (api *API) boshEnabled() bool {
 	// TODO implement
 	return true
 }
 
-func (api *Api) cfEnabled() bool {
+func (api *API) cfEnabled() bool {
 	// TODO implement
 	return true
 }
-func (api *Api) CaptureBosh(stream API_CaptureBoshServer) (err error) {
+func (api *API) CaptureBosh(stream API_CaptureBoshServer) (err error) {
+	// Receive and validate capture Bosh request
 	api.log.Info("received new stream on CaptureBosh handler")
 
 	if !api.boshEnabled() {
@@ -70,7 +69,7 @@ func (api *Api) CaptureBosh(stream API_CaptureBoshServer) (err error) {
 		return errorf(codes.Unknown, "unable to receive message: %w", err)
 	}
 
-	err = validateApiBoshRequest(req)
+	err = validateAPIBoshRequest(req)
 	if err != nil {
 		return errorf(codes.InvalidArgument, "%w", err)
 	}
@@ -83,6 +82,7 @@ func (api *Api) CaptureBosh(stream API_CaptureBoshServer) (err error) {
 
 	streamPreparer := &streamPrep{}
 
+	// Start capture
 	out, err := capture(ctx, stream, streamPreparer, opts, targets, api.log)
 	if err != nil {
 		return err
@@ -93,6 +93,7 @@ func (api *Api) CaptureBosh(stream API_CaptureBoshServer) (err error) {
 
 	forwardToStream(cancel, out, stream, api.bufConf, forwardWG)
 
+	// Wait for capture stop
 	boshStopCmd(cancel, stream)
 
 	err = Cause(ctx)
@@ -113,14 +114,14 @@ func checkAgentStatus(statusRes *StatusResponse, err error, target string) error
 		return err
 	}
 
-	if statusRes.Healthy == false {
-		err := fmt.Errorf("agent unhealthy '%s': %s", target, statusRes.Message)
-		return err
+	if !(statusRes.Healthy) {
+		statusErr := fmt.Errorf("agent unhealthy '%s': %s", target, statusRes.Message)
+		return statusErr
 	}
 
 	if CompatibilityLevel > statusRes.CompatibilityLevel {
-		err := fmt.Errorf("incompatible versions for '%s': expected compatibility level %d+ but got %d ", target, CompatibilityLevel, statusRes.CompatibilityLevel)
-		return err
+		statusErr := fmt.Errorf("incompatible versions for '%s': expected compatibility level %d+ but got %d ", target, CompatibilityLevel, statusRes.CompatibilityLevel)
+		return statusErr
 	}
 	return nil
 }
@@ -153,12 +154,13 @@ func mergeResponseChannels(cs []<-chan *CaptureResponse) <-chan *CaptureResponse
 type streamPrep struct {
 }
 
-func (p *streamPrep) prepareStream(ctx context.Context, req *CaptureOptions, target string) (captureReceiver, error) {
-	//func prepareStream(ctx context.Context, req *CaptureOptions, target string) (Agent_CaptureClient, error) {
+// prepareStreamToTarget creates a client connection to the given target, contacts the client API for the Agent service
+// to start the Capture.
+func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target string) (captureReceiver, error) {
 	cc, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials())) // TODO: TLS
 	if err != nil {
 		err = fmt.Errorf("start capture from '%s': %w", target, err)
-		//out <- newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error())
+		// out <- newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error())
 		return nil, err
 	}
 
@@ -170,7 +172,7 @@ func (p *streamPrep) prepareStream(ctx context.Context, req *CaptureOptions, tar
 		return nil, err
 	}
 
-	// Do not use the same context as for readMsg. Otherwise, the call of cancel function will cancel the agent
+	// Do not use the same context as for readMsgFromStream. Otherwise, the call of cancel function will cancel the agent
 	// before the stop capture request will be sent
 	captureStream, err := agent.Capture(context.Background())
 
@@ -191,7 +193,7 @@ func (p *streamPrep) prepareStream(ctx context.Context, req *CaptureOptions, tar
 		},
 	})
 	if err != nil {
-		//out <- convertStatusCodeToMsg(err, target)
+		// out <- convertStatusCodeToMsg(err, target)
 		return nil, err
 	}
 	return captureStream, nil
@@ -203,12 +205,15 @@ type captureReceiver interface {
 	CloseSend() error
 }
 
-func readMsg(ctx context.Context, captureStream captureReceiver, target string) <-chan *CaptureResponse {
+// readMsgFromStream reads Capture messages from stream and outputs them to the out channel.If the given context errors
+// an AgentRequest_Stop is sent and the messages continue to be read.if context will be cancelled from other routine
+// (mostly  because client requests to stop capture), the stop request will be forwarded to agent. The data from the agent will be read till stream ends with EOF.
+func readMsgFromStream(ctx context.Context, captureStream captureReceiver, target string) <-chan *CaptureResponse {
 	out := make(chan *CaptureResponse, 100)
 	stopped := false
 	go func() {
 		defer close(out)
-		//defer wg.Done()
+		// defer wg.Done()
 		defer captureStream.CloseSend()
 		for {
 			if ctx.Err() != nil && !stopped {
@@ -253,7 +258,7 @@ func convertStatusCodeToMsg(err error, target string) *CaptureResponse {
 		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error())
 	}
 }
-func validateApiBoshRequest(req *BoshRequest) error {
+func validateAPIBoshRequest(req *BoshRequest) error {
 	if req == nil {
 		return fmt.Errorf("invalid message: message: %w", errNilField)
 	}
@@ -295,7 +300,7 @@ func validateApiBoshRequest(req *BoshRequest) error {
 	return nil
 }
 
-// boshRequestReceiver is an interface used by stopCmd to simplify testing.
+// boshRequestReceiver is an interface used by boshStopCmd to simplify testing.
 type boshRequestReceiver interface {
 	Recv() (*BoshRequest, error)
 }
@@ -363,7 +368,7 @@ func cfStopCmd(cancel CancelCauseFunc, stream cfRequestReceiver) {
 	}()
 }
 
-func (api *Api) CaptureCloudfoundry(stream API_CaptureCloudfoundryServer) (err error) {
+func (api *API) CaptureCloudfoundry(stream API_CaptureCloudfoundryServer) (err error) {
 	api.log.Info("received new stream on CaptureCloudfoundry handler")
 
 	if !api.cfEnabled() {
@@ -387,7 +392,7 @@ func (api *Api) CaptureCloudfoundry(stream API_CaptureCloudfoundryServer) (err e
 		return errorf(codes.Unknown, "unable to receive message: %w", err)
 	}
 
-	err = validateApiCfRequest(req)
+	err = validateAPICfRequest(req)
 	if err != nil {
 		return errorf(codes.InvalidArgument, "%w", err)
 	}
@@ -424,7 +429,7 @@ func (api *Api) CaptureCloudfoundry(stream API_CaptureCloudfoundryServer) (err e
 	return nil
 }
 
-func validateApiCfRequest(req *CloudfoundryRequest) error {
+func validateAPICfRequest(req *CloudfoundryRequest) error {
 	if req == nil {
 		return fmt.Errorf("invalid message: message: %w", errNilField)
 	}
@@ -463,7 +468,7 @@ func validateApiCfRequest(req *CloudfoundryRequest) error {
 }
 
 type streamPreparer interface {
-	prepareStream(context.Context, *CaptureOptions, string) (captureReceiver, error)
+	prepareStreamToTarget(context.Context, *CaptureOptions, string) (captureReceiver, error)
 }
 
 func capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []string, log *zap.Logger) (<-chan *CaptureResponse, error) {
@@ -471,10 +476,10 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 
 	runningCaptures := 0
 	for _, target := range targets {
-		log := log.With(zap.String("target", target))
+		log = log.With(zap.String("target", target))
 		log.Info("starting capture")
 
-		captureStream, err := streamPrep.prepareStream(ctx, opts, target)
+		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target)
 		if err != nil {
 			stream.Send(newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error()))
 
@@ -487,9 +492,8 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 
 		log.Info("Add capture waiting group")
 
-		c := readMsg(ctx, captureStream, target)
+		c := readMsgFromStream(ctx, captureStream, target)
 		captureCs = append(captureCs, c)
-
 	}
 
 	if runningCaptures == 0 {

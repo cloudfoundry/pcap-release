@@ -149,7 +149,7 @@ func createAgent(port int) (pcap.AgentClient, *grpc.Server, string) {
 
 func createApi(port int, targets []string) (pcap.APIClient, *grpc.Server) {
 	var server *grpc.Server
-	api, err := pcap.NewApi(nil, pcap.BufferConf{100, 98, 80}, pcap.ApiConf{targets})
+	api, err := pcap.NewAPI(nil, pcap.BufferConf{100, 98, 80}, pcap.APIConf{targets})
 	Expect(err).NotTo(HaveOccurred())
 
 	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", port))

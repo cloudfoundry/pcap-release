@@ -46,13 +46,12 @@ func main() {
 	log.Info("init phase done, starting api")
 
 	var err error
-	var config = DefaultApiConfig
-
+	var config = DefaultAPIConfig
 	switch len(os.Args) {
 	case 1:
-		config = DefaultApiConfig
+		config = DefaultAPIConfig
 	case 2:
-		config, err = parseApiConfig(os.Args[1])
+		config, err = parseAPIConfig(os.Args[1])
 	default:
 		err = fmt.Errorf("invalid number of arguments, expected 1 or 2 but got %d", len(os.Args))
 	}
@@ -62,7 +61,7 @@ func main() {
 		log.Fatal("unable to validate config", zap.Error(err))
 	}
 
-	api, err := pcap.NewApi(log, config.Buffer, pcap.ApiConf{[]string{"localhost:8083"}})
+	api, err := pcap.NewAPI(log, config.Buffer, pcap.APIConf{[]string{"localhost:8083"}})
 	if err != nil {
 		log.Fatal("unable to create api", zap.Error(err))
 	}
@@ -71,7 +70,6 @@ func main() {
 	if err != nil {
 		log.Fatal("unable to create listener", zap.Error(err))
 	}
-
 	server := grpc.NewServer()
 	pcap.RegisterAPIServer(server, api)
 
@@ -86,21 +84,21 @@ func main() {
 	log.Info("serve returned successfully")
 }
 
-// listen creates a new listener based off of the given Config. If Config.Tls is
+// listen creates a new listener based off of the given Config. If Config.TLS is
 // nil a TCP listener is returned, otherwise a TLS listener is returned.
 //
 // Note: the TLS version is currently hard-coded to TLSv1.3.
-func listen(c ApiConfig) (net.Listener, error) {
-	if c.Tls == nil {
+func listen(c APIConfig) (net.Listener, error) {
+	if c.TLS == nil {
 		return net.Listen("tcp", fmt.Sprintf(":%d", c.Port))
 	}
 
-	cert, err := tls.LoadX509KeyPair(c.Tls.Certificate, c.Tls.PrivateKey)
+	cert, err := tls.LoadX509KeyPair(c.TLS.Certificate, c.TLS.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	caFile, err := os.ReadFile(c.Tls.CertificateAuthority)
+	caFile, err := os.ReadFile(c.TLS.CertificateAuthority)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +135,7 @@ func listen(c ApiConfig) (net.Listener, error) {
 	return tls.Listen("tcp", fmt.Sprintf(":%d", c.Port), &tlsConf)
 }
 
-func waitForSignal(log *zap.Logger, api *pcap.Api, server *grpc.Server) {
+func waitForSignal(log *zap.Logger, api *pcap.API, server *grpc.Server) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGUSR1, syscall.SIGINT)
 	for {

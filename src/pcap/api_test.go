@@ -76,7 +76,7 @@ func TestValidateBoshStartRequest(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateApiBoshRequest(test.req)
+			err := validateAPIBoshRequest(test.req)
 			if (err != nil) != test.wantErr {
 				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
 			}
@@ -144,7 +144,7 @@ func TestReadMsg(t *testing.T) {
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 
-			out := readMsg(ctx, tt.captureStream, tt.target)
+			out := readMsgFromStream(ctx, tt.captureStream, tt.target)
 
 			var got MessageType
 
@@ -336,7 +336,7 @@ func TestValidateCloudfoundryStartRequest(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateApiCfRequest(test.req)
+			err := validateAPICfRequest(test.req)
 			if (err != nil) != test.wantErr {
 				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
 			}
@@ -413,9 +413,7 @@ func writeToChannel(captureResponses []*CaptureResponse) chan *CaptureResponse {
 	}()
 	return chanAgent
 }
-
 func TestMergeResponseChannels(t *testing.T) {
-
 	tests := []struct {
 		name       string
 		crAgent1   []*CaptureResponse
@@ -460,9 +458,7 @@ func TestMergeResponseChannels(t *testing.T) {
 		})
 	}
 }
-
 func TestConvertStatusCodeToMsg(t *testing.T) {
-
 	tests := []struct {
 		name        string
 		err         error
@@ -516,7 +512,7 @@ type mockStreamPreparer struct {
 	err    error
 }
 
-func (m *mockStreamPreparer) prepareStream(context.Context, *CaptureOptions, string) (captureReceiver, error) {
+func (m *mockStreamPreparer) prepareStreamToTarget(context.Context, *CaptureOptions, string) (captureReceiver, error) {
 	return m.stream, m.err
 }
 
