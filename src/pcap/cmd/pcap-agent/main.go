@@ -16,7 +16,6 @@ import (
 	"syscall"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"

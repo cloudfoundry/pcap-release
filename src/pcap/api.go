@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"sync"
+
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"io"
-	"sync"
 )
 
 type API struct {
@@ -75,8 +76,8 @@ func (api *API) CaptureBosh(stream API_CaptureBoshServer) (err error) {
 	}
 
 	// TODO Validate & get targets from bosh
-	var targets []string
-	targets = api.apiConf.Targets
+
+	targets := api.apiConf.Targets
 
 	opts := req.Payload.(*BoshRequest_Start).Start.Capture
 
@@ -214,7 +215,13 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 	go func() {
 		defer close(out)
 		// defer wg.Done()
-		defer captureStream.CloseSend()
+		defer func(captureStream captureReceiver) {
+			closeSendErr := captureStream.CloseSend()
+			if closeSendErr != nil {
+				out <- convertStatusCodeToMsg(closeSendErr, target)
+				return
+			}
+		}(captureStream)
 		for {
 			if ctx.Err() != nil && !stopped {
 				stopped = true
@@ -228,7 +235,7 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 			}
 			msg, err := captureStream.Recv()
 			if err != nil && errors.Is(err, io.EOF) {
-				msg := fmt.Sprintf("capture has stopped gracefully: %s", target)
+				msg := fmt.Sprintf("Capturing stopped on agent pcap-agent %s", target)
 				out <- newMessageResponse(MessageType_CAPTURE_STOPPED, msg)
 				return
 			}
@@ -481,7 +488,10 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 
 		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target)
 		if err != nil {
-			stream.Send(newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error()))
+			sendErr := stream.Send(newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error()))
+			if sendErr != nil {
+				return nil, sendErr
+			}
 
 			log.Info("capture cannot be started")
 

@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io"
 	"sync"
 	"testing"
+
+	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestValidateBoshStartRequest(t *testing.T) {
@@ -449,7 +450,7 @@ func TestMergeResponseChannels(t *testing.T) {
 			cs := []<-chan *CaptureResponse{chanAgent1, chanAgent2}
 			got := mergeResponseChannels(cs)
 			resCount := 0
-			for _ = range got {
+			for range got {
 				resCount++
 			}
 			if resCount != tt.wantOutLen {
