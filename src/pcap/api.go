@@ -67,7 +67,7 @@ type CaptureHandler interface {
 }
 
 func (api *API) Capture(stream API_CaptureServer) (err error) {
-	// Receive and validate capture Bosh request
+	// Receive and validate capture request
 	api.log.Info("received new stream on Capture handler")
 
 	ctx, cancel := WithCancelCause(stream.Context())
@@ -88,8 +88,14 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 
 	if opts, isStart := req.Operation.(*CaptureRequest_Start); isStart {
 
-		// TODO: Extract into separate function
 		targets, err := api.resolveAgentEndpoints(opts.Start.Capture)
+		if errors.Is(err, errValidationFailed) {
+			return errorf(codes.InvalidArgument, "capture targets not found: %w", err)
+		}
+
+		if err != nil {
+			return err
+		}
 
 		streamPreparer := &streamPrep{}
 
@@ -130,9 +136,8 @@ func (api *API) resolveAgentEndpoints(capture *Capture) ([]AgentEndpoint, error)
 			api.log.Info("Handling request via", zap.String("handler", "name"), zap.Any("capture", capture))
 
 			agents, err := handler.handle(capture)
-
 			if err != nil {
-				fmt.Errorf("error while handling %v via %s: %v", capture, name, err)
+				return nil, fmt.Errorf("error while handling %v via %s: %w", capture, name, err)
 			}
 
 			return agents, nil

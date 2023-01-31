@@ -25,10 +25,11 @@ const (
 )
 
 var (
-	errNilField         = fmt.Errorf("field is nil")
-	errEmptyField       = fmt.Errorf("field is empty")
-	errInvalidPayload   = fmt.Errorf("invalid payload")
-	errIllegalCharacter = fmt.Errorf("illegal character")
+	errValidationFailed = fmt.Errorf("validation failed")
+	errNilField         = fmt.Errorf("field is nil: %w", errValidationFailed)
+	errEmptyField       = fmt.Errorf("field is empty: %w", errValidationFailed)
+	errInvalidPayload   = fmt.Errorf("invalid payload: %w", errValidationFailed)
+	errIllegalCharacter = fmt.Errorf("illegal character: %w", errValidationFailed)
 )
 
 // BufferConf allows to specify the behaviour of buffers.
