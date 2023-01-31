@@ -19,15 +19,15 @@ func (bosh *BoshHandler) canHandle(request *Capture) bool {
 }
 
 func (bosh *BoshHandler) handle(request *Capture) ([]AgentEndpoint, error) {
-	zap.L().Info("Handling request for ")
+	zap.L().Info("Handling request for bosh")
 
-	// TODO Validate & get targets from bosh
+	err := bosh.validate(request)
+	if err != nil {
+		return nil, err
+	}
 
-	_ = bosh.config.Targets
-
-	_ = request
-	// TODO: Add the static IP addresses here, if needed
-	return []AgentEndpoint{}, nil
+	// TODO: This is a temporary shim and should be retrieved from the BOSH director.
+	return bosh.config.Targets, nil
 }
 
 func (bosh *BoshHandler) validate(capture *Capture) error {
