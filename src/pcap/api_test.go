@@ -4,89 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
+	"google.golang.org/grpc/status"
 	"io"
 	"sync"
 	"testing"
 
-	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-func TestValidateBoshStartRequest(t *testing.T) {
-	tests := []struct {
-		name        string
-		req         *BoshRequest
-		wantErr     bool
-		expectedErr error
-	}{
-		{
-			name:        "Request is nil",
-			req:         nil,
-			wantErr:     true,
-			expectedErr: errNilField,
-		},
-		{
-			name:        "Request Payload is nil",
-			req:         &BoshRequest{},
-			wantErr:     true,
-			expectedErr: errNilField,
-		},
-		{
-			name:        "Request Payload invalid type",
-			req:         &BoshRequest{Payload: &BoshRequest_Stop{}},
-			wantErr:     true,
-			expectedErr: errInvalidPayload,
-		},
-		{
-			name:        "Request Payload start is nil",
-			req:         &BoshRequest{Payload: &BoshRequest_Start{}},
-			wantErr:     true,
-			expectedErr: errNilField,
-		},
-		{
-			name:        "Request Token is not present",
-			req:         &BoshRequest{Payload: &BoshRequest_Start{Start: &StartBoshCapture{Deployment: "cf", Groups: []string{"router"}, Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
-			wantErr:     true,
-			expectedErr: errEmptyField,
-		},
-		{
-			name:        "Request Deployment field is not present",
-			req:         &BoshRequest{Payload: &BoshRequest_Start{Start: &StartBoshCapture{Token: "123d24", Groups: []string{"router"}, Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
-			wantErr:     true,
-			expectedErr: errEmptyField,
-		},
-		{
-			name:        "Request Groups field is not present",
-			req:         &BoshRequest{Payload: &BoshRequest_Start{Start: &StartBoshCapture{Token: "123d24", Deployment: "cf", Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
-			wantErr:     true,
-			expectedErr: errEmptyField,
-		},
-		{
-			name:        "Request Capture Options not complete",
-			req:         &BoshRequest{Payload: &BoshRequest_Start{Start: &StartBoshCapture{Token: "123d24", Deployment: "cf", Groups: []string{"router"}}}},
-			wantErr:     true,
-			expectedErr: errNilField,
-		},
-		{
-			name:        "Valid request",
-			req:         &BoshRequest{Payload: &BoshRequest_Start{Start: &StartBoshCapture{Token: "123d24", Deployment: "cf", Groups: []string{"router"}, Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
-			wantErr:     false,
-			expectedErr: nil,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := validateAPIBoshRequest(test.req)
-			if (err != nil) != test.wantErr {
-				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
-			}
-			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
-				t.Errorf("expectedErr = %v, error = %v", test.expectedErr, err)
-			}
-		})
-	}
-}
+// Add test for capture options
+
+//{
+//name:        "Request Capture Options not complete",
+//req:         &BoshRequest{Payload: &BoshRequest_Start{Start: &StartBoshCapture{Token: "123d24", Deployment: "cf", Groups: []string{"router"}}}},
+//wantErr:     true,
+//expectedErr: errNilField,
+//},
 
 type mockCaptureStream struct {
 	msg *CaptureResponse
@@ -108,28 +42,28 @@ func TestReadMsg(t *testing.T) {
 	tests := []struct {
 		name             string
 		captureStream    captureReceiver
-		target           string
+		target           AgentEndpoint
 		contextCancelled bool
 		expectedData     MessageType
 	}{
 		{
 			name:             "EOF during capture",
 			captureStream:    &mockCaptureStream{nil, io.EOF},
-			target:           "172.20.0.2",
+			target:           AgentEndpoint{Ip: "172.20.0.2"},
 			contextCancelled: false,
 			expectedData:     MessageType_CAPTURE_STOPPED,
 		},
 		{
 			name:             "Unexpected error from capture stream",
 			captureStream:    &mockCaptureStream{nil, errorf(codes.Unknown, "unexpected error")},
-			target:           "172.20.0.2",
+			target:           AgentEndpoint{Ip: "172.20.0.2"},
 			contextCancelled: false,
 			expectedData:     MessageType_CONNECTION_ERROR,
 		},
 		{
 			name:             "Capture stop request from client and capture stopped with EOF",
 			captureStream:    &mockCaptureStream{nil, io.EOF},
-			target:           "172.20.0.2",
+			target:           AgentEndpoint{Ip: "172.20.0.2"},
 			contextCancelled: true,
 			expectedData:     MessageType_CAPTURE_STOPPED,
 		},
@@ -195,7 +129,7 @@ func TestCheckAgentStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checkAgentStatus(tt.statusRes, tt.err, "localhost:8083")
+			err := checkAgentStatus(tt.statusRes, tt.err, AgentEndpoint{Ip: "localhost", Port: 8083})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("checkAgentStatus() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -205,17 +139,17 @@ func TestCheckAgentStatus(t *testing.T) {
 }
 
 type mockBoshRequestReceiver struct {
-	req *BoshRequest
+	req *CaptureRequest
 	err error
 }
 
-func (m *mockBoshRequestReceiver) Recv() (*BoshRequest, error) {
+func (m *mockBoshRequestReceiver) Recv() (*CaptureRequest, error) {
 	return m.req, m.err
 }
-func TestBoshStopCmd(t *testing.T) {
+func TestStopCmd(t *testing.T) {
 	tests := []struct {
 		name        string
-		recv        boshRequestReceiver
+		recv        requestReceiver
 		expectedErr error
 		wantErr     bool
 	}{
@@ -227,7 +161,7 @@ func TestBoshStopCmd(t *testing.T) {
 		},
 		{
 			name:        "Empty payload",
-			recv:        &mockBoshRequestReceiver{req: &BoshRequest{}, err: nil},
+			recv:        &mockBoshRequestReceiver{req: &CaptureRequest{Operation: nil}, err: nil},
 			expectedErr: errNilField,
 			wantErr:     true,
 		},
@@ -239,13 +173,13 @@ func TestBoshStopCmd(t *testing.T) {
 		},
 		{
 			name:        "Invalid payload type",
-			recv:        &mockBoshRequestReceiver{req: &BoshRequest{Payload: &BoshRequest_Start{}}, err: nil},
+			recv:        &mockBoshRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Capture: &Capture{Capture: &Capture_Bosh{Bosh: &BoshCapture{}}}}}}, err: nil},
 			expectedErr: errInvalidPayload,
 			wantErr:     true,
 		},
 		{
 			name:        "Happy path",
-			recv:        &mockBoshRequestReceiver{req: &BoshRequest{Payload: &BoshRequest_Stop{}}, err: nil},
+			recv:        &mockBoshRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Stop{Stop: &StopCapture{}}}, err: nil},
 			expectedErr: context.Canceled,
 			wantErr:     true,
 		},
@@ -254,7 +188,7 @@ func TestBoshStopCmd(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			ctx, cancel := WithCancelCause(ctx)
-			boshStopCmd(cancel, test.recv)
+			stopCmd(cancel, test.recv)
 			<-ctx.Done()
 
 			err := Cause(ctx)
@@ -270,140 +204,6 @@ func TestBoshStopCmd(t *testing.T) {
 	}
 }
 
-type mockCfRequestReceiver struct {
-	req *CloudfoundryRequest
-	err error
-}
-
-func (m *mockCfRequestReceiver) Recv() (*CloudfoundryRequest, error) {
-	return m.req, m.err
-}
-
-func TestValidateCloudfoundryStartRequest(t *testing.T) {
-	tests := []struct {
-		name        string
-		req         *CloudfoundryRequest
-		wantErr     bool
-		expectedErr error
-	}{
-		{
-			name:        "Request is nil",
-			req:         nil,
-			wantErr:     true,
-			expectedErr: errNilField,
-		},
-		{
-			name:        "Request Payload is nil",
-			req:         &CloudfoundryRequest{},
-			wantErr:     true,
-			expectedErr: errNilField,
-		},
-		{
-			name:        "Request Payload invalid type",
-			req:         &CloudfoundryRequest{Payload: &CloudfoundryRequest_Stop{}},
-			wantErr:     true,
-			expectedErr: errInvalidPayload,
-		},
-		{
-			name:        "Request Payload start is nil",
-			req:         &CloudfoundryRequest{Payload: &CloudfoundryRequest_Start{}},
-			wantErr:     true,
-			expectedErr: errNilField,
-		},
-		{
-			name:        "Request Token is not present",
-			req:         &CloudfoundryRequest{Payload: &CloudfoundryRequest_Start{Start: &StartCloudfoundryCapture{AppId: "123abc", Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
-			wantErr:     true,
-			expectedErr: errEmptyField,
-		},
-		{
-			name:        "Request Application ID field is not present",
-			req:         &CloudfoundryRequest{Payload: &CloudfoundryRequest_Start{Start: &StartCloudfoundryCapture{Token: "123d24", Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
-			wantErr:     true,
-			expectedErr: errEmptyField,
-		},
-		{
-			name:        "Request Capture Options not complete",
-			req:         &CloudfoundryRequest{Payload: &CloudfoundryRequest_Start{Start: &StartCloudfoundryCapture{Token: "123d24", AppId: "123abc"}}},
-			wantErr:     true,
-			expectedErr: errNilField,
-		},
-		{
-			name:        "Valid request",
-			req:         &CloudfoundryRequest{Payload: &CloudfoundryRequest_Start{Start: &StartCloudfoundryCapture{Token: "123d24", AppId: "123abc", Capture: &CaptureOptions{Device: "en0", Filter: "", SnapLen: 65000}}}},
-			wantErr:     false,
-			expectedErr: nil,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := validateAPICfRequest(test.req)
-			if (err != nil) != test.wantErr {
-				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
-			}
-			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
-				t.Errorf("expectedErr = %v, error = %v", test.expectedErr, err)
-			}
-		})
-	}
-}
-func TestCfStopCmd(t *testing.T) {
-	tests := []struct {
-		name        string
-		recv        cfRequestReceiver
-		expectedErr error
-		wantErr     bool
-	}{
-		{
-			name:        "EOF during reading of message",
-			recv:        &mockCfRequestReceiver{req: nil, err: io.EOF},
-			expectedErr: io.EOF,
-			wantErr:     true,
-		},
-		{
-			name:        "Empty payload",
-			recv:        &mockCfRequestReceiver{req: &CloudfoundryRequest{}, err: nil},
-			expectedErr: errNilField,
-			wantErr:     true,
-		},
-		{
-			name:        "Empty message",
-			recv:        &mockCfRequestReceiver{req: nil, err: nil},
-			expectedErr: errNilField,
-			wantErr:     true,
-		},
-		{
-			name:        "Invalid payload type",
-			recv:        &mockCfRequestReceiver{req: &CloudfoundryRequest{Payload: &CloudfoundryRequest_Start{}}, err: nil},
-			expectedErr: errInvalidPayload,
-			wantErr:     true,
-		},
-		{
-			name:        "Happy path",
-			recv:        &mockCfRequestReceiver{req: &CloudfoundryRequest{Payload: &CloudfoundryRequest_Stop{}}, err: nil},
-			expectedErr: context.Canceled,
-			wantErr:     true,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
-			cfStopCmd(cancel, test.recv)
-			<-ctx.Done()
-
-			err := Cause(ctx)
-
-			if (err != nil) != test.wantErr {
-				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
-			}
-
-			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
-				t.Errorf("expectedErr = %v, error = %v", test.expectedErr, err)
-			}
-		})
-	}
-}
 func writeToChannel(captureResponses []*CaptureResponse) chan *CaptureResponse {
 	chanAgent := make(chan *CaptureResponse)
 	go func() {
@@ -493,7 +293,7 @@ func TestConvertStatusCodeToMsg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := convertStatusCodeToMsg(tt.err, "localhost:8083")
+			got := convertStatusCodeToMsg(tt.err, AgentEndpoint{"localhost", 8083})
 			if got.GetMessage().GetType() != tt.wantMsgType {
 				t.Errorf("convertStatusCodeToMsg() = %v, want %v", got.GetMessage().GetType(), tt.wantMsgType)
 			}
@@ -504,7 +304,7 @@ func TestConvertStatusCodeToMsg(t *testing.T) {
 type mockResponseSender struct {
 }
 
-func (m *mockResponseSender) Send(res *CaptureResponse) error {
+func (m *mockResponseSender) Send(_ *CaptureResponse) error {
 	return nil
 }
 
@@ -513,28 +313,28 @@ type mockStreamPreparer struct {
 	err    error
 }
 
-func (m *mockStreamPreparer) prepareStreamToTarget(context.Context, *CaptureOptions, string) (captureReceiver, error) {
+func (m *mockStreamPreparer) prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint) (captureReceiver, error) {
 	return m.stream, m.err
 }
 
 func TestCommonFunc2(t *testing.T) {
 	tests := []struct {
 		name           string
-		targets        []string
+		targets        []AgentEndpoint
 		streamPreparer streamPreparer
 		opts           *CaptureOptions
 		wantErr        bool
 	}{
 		{
 			name:           "Capture cannot be started for all targets due to error",
-			targets:        []string{"localhost:8083", "localhost:8084"},
+			targets:        []AgentEndpoint{{"localhost", 8083}, {"localhost", 8084}},
 			streamPreparer: &mockStreamPreparer{err: errNilField},
 			opts:           &CaptureOptions{},
 			wantErr:        true,
 		},
 		{
 			name:           "Test capture finished successfully with EOF",
-			targets:        []string{"localhost:8083", "localhost:8084"},
+			targets:        []AgentEndpoint{{"localhost", 8083}, {"localhost", 8084}},
 			streamPreparer: &mockStreamPreparer{stream: &mockCaptureStream{nil, io.EOF}, err: nil},
 			opts:           &CaptureOptions{},
 			wantErr:        false,

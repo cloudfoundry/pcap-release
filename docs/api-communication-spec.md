@@ -9,11 +9,12 @@
   - [BOSH Case Overview](#bosh-case-overview)
   - [Interactions](#interactions)
     - [pcap-cli -\> pcap-api](#pcap-cli---pcap-api)
-    - [pcap-cli -\> BOSH Director UAA](#pcap-cli---bosh-director-uaa)
+    - [pcap-bosh-cli -\> BOSH Director UAA](#pcap-bosh-cli---bosh-director-uaa)
+    - [pcap-cf-cli](#pcap-cf-cli)
     - [pcap-api](#pcap-api)
     - [NATS -\> pcap-api (option)](#nats---pcap-api-option)
     - [pcap-agent -\> pcap-api](#pcap-agent---pcap-api)
-    - [pcap-agent -\> NATS (Option)](#pcap-agent---nats-option)
+    - [Diego route registrar -\> NATS (Option)](#diego-route-registrar---nats-option)
     - [pcap-api -\> pcap-cli](#pcap-api---pcap-cli)
   - [Data Structures](#data-structures)
     - [Capture Request](#capture-request)
@@ -30,7 +31,7 @@
   - [Use Cases](#use-cases)
     - [Initialization](#initialization)
     - [Regular Request with Clean Shutdown](#regular-request-with-clean-shutdown)
-    - [Authentication Failures](#authentication-failures)
+    - [Authentication and Authorization Failures](#authentication-and-authorization-failures)
     - [Unexpected Disconnects](#unexpected-disconnects)
     - [Invalid Requests](#invalid-requests)
     - [Resource Limits](#resource-limits)
@@ -1024,3 +1025,5 @@ sequenceDiagram
 
     pcap-api ->>- pcap-cli: OK
 ```
+
+FIXME: Add draining use case description

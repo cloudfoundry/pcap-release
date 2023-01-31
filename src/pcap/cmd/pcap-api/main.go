@@ -62,7 +62,8 @@ func main() {
 		log.Fatal("unable to validate config", zap.Error(err))
 	}
 
-	api, err := pcap.NewAPI(log, config.Buffer, pcap.APIConf{[]string{"localhost:8083"}})
+	// FIXME: Move this to some dummy config, not the main.
+	api, err := pcap.NewAPI(log, config.Buffer, pcap.APIConf{Targets: []pcap.AgentEndpoint{{Ip: "localhost", Port: 8083}}})
 	if err != nil {
 		log.Fatal("unable to create api", zap.Error(err))
 	}
@@ -117,9 +118,9 @@ func listen(c APIConfig) (net.Listener, error) {
 			return nil, fmt.Errorf("ca file contains non-certificate blocks")
 		}
 
-		ca, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return nil, err
+		ca, caErr := x509.ParseCertificate(block.Bytes)
+		if caErr != nil {
+			return nil, caErr
 		}
 
 		caPool.AddCert(ca)
@@ -143,6 +144,7 @@ func waitForSignal(log *zap.Logger, api *pcap.API, server *grpc.Server) {
 		sig := <-signals
 		switch sig {
 		case syscall.SIGUSR1, syscall.SIGINT:
+			// FIXME: Allow graceful shutdown.
 			/*log.Info("received signal, stopping agent", zap.String("signal", sig.String()))
 			api.Stop()
 

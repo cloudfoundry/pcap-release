@@ -1,9 +1,18 @@
+// pcap-api-cli is a simple client to manually test the pcap-api and confirm
+// it's operating as expected.
+//
+// NOT MEANT FOR PRODUCTION USE!
+//
+// It will connect to port 8080 on the loopback
+// interface and interactively guide through creating a CF or BOSH request.
+//
+// Any messages that occur while performing the test are also printed to the console
+// and any errors cause the cli to exit.
 package main
 
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"time"
@@ -16,8 +25,6 @@ import (
 )
 
 func main() {
-	captureTypeFlag := flag.String("capture", "bosh", "Specify the capture type bosh or cf")
-	flag.Parse()
 	cc, err := grpc.Dial("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	p(err)
 
@@ -26,54 +33,42 @@ func main() {
 	defer cancel()
 
 	api := pcap.NewAPIClient(cc)
-	if *captureTypeFlag == "cf" {
-		stream, err := api.CaptureCloudfoundry(ctx)
-		err = stream.Send(&pcap.CloudfoundryRequest{Payload: &pcap.CloudfoundryRequest_Start{
-			Start: &pcap.StartCloudfoundryCapture{
-				Token: "123",
-				AppId: "abc123",
-				Capture: &pcap.CaptureOptions{
+	stream, err := api.Capture(ctx)
+
+	request := &pcap.CaptureRequest{
+		Operation: &pcap.CaptureRequest_Start{
+			Start: &pcap.StartCapture{
+				Capture: &pcap.Capture{
+					Capture: &pcap.Capture_Bosh{
+						Bosh: &pcap.BoshCapture{
+							Token:      "123",
+							Deployment: "cf",
+							Groups:     []string{"router"}},
+					},
+				},
+				Options: &pcap.CaptureOptions{
 					Device:  "en0",
 					Filter:  "",
 					SnapLen: 65000,
 				},
-			}}})
-		p(err)
-
-		readN(10, stream)
-
-		err = stream.Send(&pcap.CloudfoundryRequest{
-			Payload: &pcap.CloudfoundryRequest_Stop{},
-		})
-		p(err)
-
-		readN(10_000, stream)
-
-	} else {
-		stream, err := api.CaptureBosh(ctx)
-		err = stream.Send(&pcap.BoshRequest{Payload: &pcap.BoshRequest_Start{
-			Start: &pcap.StartBoshCapture{
-				Token:      "123",
-				Deployment: "cf",
-				Groups:     []string{"router"},
-				Capture: &pcap.CaptureOptions{
-					Device:  "en0",
-					Filter:  "",
-					SnapLen: 65000,
-				},
-			}}})
-		p(err)
-
-		readN(10, stream)
-
-		err = stream.Send(&pcap.BoshRequest{
-			Payload: &pcap.BoshRequest_Stop{},
-		})
-		p(err)
-
-		readN(10_000, stream)
-
+			},
+		},
 	}
+
+	err = stream.Send(request)
+	p(err)
+
+	readN(10, stream)
+
+	stop := &pcap.CaptureRequest{
+		Operation: &pcap.CaptureRequest_Stop{},
+	}
+
+	err = stream.Send(stop)
+	p(err)
+
+	readN(10_000, stream)
+
 }
 
 type genericStreamReceiver interface {

@@ -126,9 +126,9 @@ func listen(c Config) (net.Listener, error) {
 			return nil, fmt.Errorf("ca file contains non-certificate blocks")
 		}
 
-		ca, error := x509.ParseCertificate(block.Bytes)
-		if error != nil {
-			return nil, error
+		ca, caErr := x509.ParseCertificate(block.Bytes)
+		if caErr != nil {
+			return nil, caErr
 		}
 
 		caPool.AddCert(ca)

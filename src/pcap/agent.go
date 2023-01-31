@@ -248,7 +248,7 @@ func readPackets(ctx context.Context, cancel CancelCauseFunc, handle pcapHandle,
 
 		for {
 			if ctx.Err() != nil {
-				// This will call pcap.Handle.pcapClose which sets the underlying handle to nil.
+				// This will call pcap.Handle.pcapClose which sets the underlying resolveAgentEndpoints to nil.
 				// doing so makes every future call to pcap.Handle.ReadPacketData return io.EOF
 				// so there is no point in trying to continue reading packets. This could
 				// result in lost packets.

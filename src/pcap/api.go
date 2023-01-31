@@ -15,14 +15,15 @@ import (
 )
 
 type API struct {
-	log     *zap.Logger
-	apiConf APIConf
-	bufConf BufferConf
+	log      *zap.Logger
+	apiConf  APIConf
+	bufConf  BufferConf
+	handlers map[string]CaptureHandler
 	UnimplementedAPIServer
 }
 
 type APIConf struct {
-	Targets []string
+	Targets []AgentEndpoint
 }
 
 func NewAPI(log *zap.Logger, bufConf BufferConf, apiConf APIConf) (*API, error) {
@@ -30,29 +31,44 @@ func NewAPI(log *zap.Logger, bufConf BufferConf, apiConf APIConf) (*API, error) 
 		log = zap.L()
 	}
 
+	// TODO: Init, register, enable based on configuration
+	handlers := map[string]CaptureHandler{
+		"bosh": &BoshHandler{config: apiConf},
+	}
+
 	return &API{
-		log:     log,
-		bufConf: bufConf,
-		apiConf: apiConf,
+		log:      log,
+		bufConf:  bufConf,
+		apiConf:  apiConf,
+		handlers: handlers,
 	}, nil
 }
 
-func (api *API) boshEnabled() bool {
-	// TODO implement
-	return true
+// AgentEndpoint defines the endpoint for a pcap-agent.
+type AgentEndpoint struct {
+	Ip   string
+	Port int
 }
 
-func (api *API) cfEnabled() bool {
-	// TODO implement
-	return true
+func (a AgentEndpoint) String() string {
+	return fmt.Sprintf("%s:%d", a.Ip, a.Port)
 }
-func (api *API) CaptureBosh(stream API_CaptureBoshServer) (err error) {
+
+// CaptureHandler defines handlers for different request types that ultimately lead to a selection of AgentEndpoints.
+type CaptureHandler interface {
+	// enabled identifies whether this handler is available and configured
+	enabled() bool
+
+	// canHandle determines if this handler is responsible for handling the Capture
+	canHandle(*Capture) bool
+
+	// handle either resolves and returns the agents targeted by Capture or provides an error
+	handle(*Capture) ([]AgentEndpoint, error)
+}
+
+func (api *API) Capture(stream API_CaptureServer) (err error) {
 	// Receive and validate capture Bosh request
-	api.log.Info("received new stream on CaptureBosh handler")
-
-	if !api.boshEnabled() {
-		return status.Error(codes.FailedPrecondition, "capturing from bosh vms is not supported")
-	}
+	api.log.Info("received new stream on Capture handler")
 
 	ctx, cancel := WithCancelCause(stream.Context())
 	defer func() {
@@ -70,46 +86,63 @@ func (api *API) CaptureBosh(stream API_CaptureBoshServer) (err error) {
 		return errorf(codes.Unknown, "unable to receive message: %w", err)
 	}
 
-	err = validateAPIBoshRequest(req)
-	if err != nil {
-		return errorf(codes.InvalidArgument, "%w", err)
+	if opts, isStart := req.Operation.(*CaptureRequest_Start); isStart {
+
+		// TODO: Extract into separate function
+		targets, err := api.resolveAgentEndpoints(opts.Start.Capture)
+
+		streamPreparer := &streamPrep{}
+
+		// Start capture
+		out, err := capture(ctx, stream, streamPreparer, opts.Start.Options, targets, api.log)
+		if err != nil {
+			return err
+		}
+
+		forwardWG := &sync.WaitGroup{}
+		forwardWG.Add(1)
+
+		forwardToStream(cancel, out, stream, api.bufConf, forwardWG)
+
+		// Wait for capture stop
+		stopCmd(cancel, stream)
+
+		err = Cause(ctx)
+		// Cancelling the context with nil causes context.Cancelled to be set
+		// which is a non-error in our case.
+		if err != nil {
+			return err
+		}
+
+		forwardWG.Wait()
 	}
 
-	// TODO Validate & get targets from bosh
-
-	targets := api.apiConf.Targets
-
-	opts := req.Payload.(*BoshRequest_Start).Start.Capture
-
-	streamPreparer := &streamPrep{}
-
-	// Start capture
-	out, err := capture(ctx, stream, streamPreparer, opts, targets, api.log)
-	if err != nil {
-		return err
-	}
-
-	forwardWG := &sync.WaitGroup{}
-	forwardWG.Add(1)
-
-	forwardToStream(cancel, out, stream, api.bufConf, forwardWG)
-
-	// Wait for capture stop
-	boshStopCmd(cancel, stream)
-
-	err = Cause(ctx)
-	// Cancelling the context with nil causes context.Cancelled to be set
-	// which is a non-error in our case.
-	if err != nil {
-		return err
-	}
-
-	forwardWG.Wait()
+	// TODO: Handle isStop.
 
 	return nil
 }
 
-func checkAgentStatus(statusRes *StatusResponse, err error, target string) error {
+// resolveAgentEndpoints tries all registered api.handlers until one responds or none can be found that
+// support this capture request. The responsible handler is then queried for the applicable pcap-agent endpoints corresponding to this capture request.
+func (api *API) resolveAgentEndpoints(capture *Capture) ([]AgentEndpoint, error) {
+	for name, handler := range api.handlers {
+		if handler.canHandle(capture) {
+			api.log.Info("Handling request via", zap.String("handler", "name"), zap.Any("capture", capture))
+
+			agents, err := handler.handle(capture)
+
+			if err != nil {
+				fmt.Errorf("error while handling %v via %s: %v", capture, name, err)
+			}
+
+			return agents, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no handler for %v", capture)
+}
+
+func checkAgentStatus(statusRes *StatusResponse, err error, target AgentEndpoint) error {
 	if err != nil {
 		err = fmt.Errorf("status request finished with error for '%s': %w", target, err)
 		return err
@@ -157,8 +190,8 @@ type streamPrep struct {
 
 // prepareStreamToTarget creates a client connection to the given target, contacts the client API for the Agent service
 // to start the Capture.
-func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target string) (captureReceiver, error) {
-	cc, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials())) // TODO: TLS
+func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint) (captureReceiver, error) {
+	cc, err := grpc.Dial(target.String(), grpc.WithTransportCredentials(insecure.NewCredentials())) // TODO: TLS
 	if err != nil {
 		err = fmt.Errorf("start capture from '%s': %w", target, err)
 		// out <- newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error())
@@ -185,11 +218,7 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 	err = captureStream.Send(&AgentRequest{
 		Payload: &AgentRequest_Start{
 			Start: &StartAgentCapture{
-				Capture: &CaptureOptions{
-					Device:  req.Device,
-					Filter:  req.Filter,
-					SnapLen: req.SnapLen,
-				},
+				Capture: req,
 			},
 		},
 	})
@@ -209,7 +238,7 @@ type captureReceiver interface {
 // readMsgFromStream reads Capture messages from stream and outputs them to the out channel.If the given context errors
 // an AgentRequest_Stop is sent and the messages continue to be read.if context will be cancelled from other routine
 // (mostly  because client requests to stop capture), the stop request will be forwarded to agent. The data from the agent will be read till stream ends with EOF.
-func readMsgFromStream(ctx context.Context, captureStream captureReceiver, target string) <-chan *CaptureResponse {
+func readMsgFromStream(ctx context.Context, captureStream captureReceiver, target AgentEndpoint) <-chan *CaptureResponse {
 	out := make(chan *CaptureResponse, 100)
 	stopped := false
 	go func() {
@@ -250,10 +279,11 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 	return out
 }
 
-func convertStatusCodeToMsg(err error, target string) *CaptureResponse {
+func convertStatusCodeToMsg(err error, target AgentEndpoint) *CaptureResponse {
 	code := status.Code(err)
 	err = fmt.Errorf("capturing from agent %s: %w", target, err)
 
+	// FIXME: internal+unknown and default are the same. Is default really a connection error?
 	switch code {
 	case codes.InvalidArgument:
 		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error())
@@ -265,57 +295,16 @@ func convertStatusCodeToMsg(err error, target string) *CaptureResponse {
 		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error())
 	}
 }
-func validateAPIBoshRequest(req *BoshRequest) error {
-	if req == nil {
-		return fmt.Errorf("invalid message: message: %w", errNilField)
-	}
-
-	if req.Payload == nil {
-		return fmt.Errorf("invalid message: payload: %w", errNilField)
-	}
-
-	startReq, ok := req.Payload.(*BoshRequest_Start)
-	if !ok {
-		return fmt.Errorf("invalid message: expected Payload of type StartBoshRequest: %w", errInvalidPayload)
-	}
-
-	if startReq.Start == nil {
-		return fmt.Errorf("invalid message: start: %w", errNilField)
-	}
-
-	if startReq.Start.Token == "" {
-		return fmt.Errorf("invalid message: token: %w", errEmptyField)
-	}
-
-	if startReq.Start.Deployment == "" {
-		return fmt.Errorf("invalid message: deployment: %w", errEmptyField)
-	}
-
-	if len(startReq.Start.Groups) == 0 {
-		return fmt.Errorf("invalid message: instance group(s): %w", errEmptyField)
-	}
-
-	if startReq.Start.Capture == nil {
-		return fmt.Errorf("invalid message: capture options: %w", errNilField)
-	}
-
-	err := startReq.Start.Capture.validate()
-	if err != nil {
-		return fmt.Errorf("invalid message: %w", err)
-	}
-
-	return nil
-}
 
 // boshRequestReceiver is an interface used by boshStopCmd to simplify testing.
-type boshRequestReceiver interface {
-	Recv() (*BoshRequest, error)
+type requestReceiver interface {
+	Recv() (*CaptureRequest, error)
 }
 
 // stopCmd reads the next message from the stream. It ensures that the message
 // has a payload of StopBoshCapture. If any error is encountered or the payload is
 // of a different type an appropriate cause is set and the cancel function is called.
-func boshStopCmd(cancel CancelCauseFunc, stream boshRequestReceiver) {
+func stopCmd(cancel CancelCauseFunc, stream requestReceiver) {
 	go func() {
 		msg, err := stream.Recv()
 		if err != nil {
@@ -323,49 +312,15 @@ func boshStopCmd(cancel CancelCauseFunc, stream boshRequestReceiver) {
 			return
 		}
 
-		if msg == nil || msg.Payload == nil {
-			cancel(errorf(codes.InvalidArgument, "read message: message or payload: %w", errNilField))
+		if msg.GetOperation() == nil {
+			cancel(errorf(codes.InvalidArgument, "read operation: operation was nil: %w", errNilField))
 			return
 		}
 
-		// request is empty, no need to save it
-		_, ok := msg.Payload.(*BoshRequest_Stop)
-		if !ok {
-			cancel(errorf(codes.InvalidArgument, "read payload: expected Payload of type StopBoshCapture: %w", errInvalidPayload))
-			return
-		}
-
-		// cancel without cause - normal exit
-		zap.L().Debug("client requested stop of capture")
-		cancel(nil)
-	}()
-}
-
-// cfRequestReceiver is an interface used by cfStopCmd to simplify testing.
-type cfRequestReceiver interface {
-	Recv() (*CloudfoundryRequest, error)
-}
-
-// stopCmd reads the next message from the stream. It ensures that the message
-// has a payload of StopCloudfoundryCapture. If any error is encountered or the payload is
-// of a different type an appropriate cause is set and the cancel function is called.
-func cfStopCmd(cancel CancelCauseFunc, stream cfRequestReceiver) {
-	go func() {
-		msg, err := stream.Recv()
-		if err != nil {
-			cancel(errorf(codes.Unknown, "read message: %w", err))
-			return
-		}
-
-		if msg == nil || msg.Payload == nil {
-			cancel(errorf(codes.InvalidArgument, "read message: message or payload: %w", errNilField))
-			return
-		}
-
-		// request is empty, no need to save it
-		_, ok := msg.Payload.(*CloudfoundryRequest_Stop)
-		if !ok {
-			cancel(errorf(codes.InvalidArgument, "read payload: expected Payload of type StopCloudfoundryCapture: %w", errInvalidPayload))
+		// Gets a Stop message if it's there. Returns nil in any other case, also other message types.
+		stop := msg.GetStop()
+		if stop == nil {
+			cancel(errorf(codes.InvalidArgument, "read operation: expected message of type Stop: %w", errInvalidPayload))
 			return
 		}
 
@@ -373,117 +328,18 @@ func cfStopCmd(cancel CancelCauseFunc, stream cfRequestReceiver) {
 		zap.L().Debug("client requested stop of capture")
 		cancel(nil)
 	}()
-}
-
-func (api *API) CaptureCloudfoundry(stream API_CaptureCloudfoundryServer) (err error) {
-	api.log.Info("received new stream on CaptureCloudfoundry handler")
-
-	if !api.cfEnabled() {
-		return status.Error(codes.FailedPrecondition, "capturing from app container is not supported")
-	}
-
-	ctx, cancel := WithCancelCause(stream.Context())
-	defer func() {
-		api.log.Error("defer")
-		cancel(nil)
-	}()
-
-	defer func() {
-		if err != nil {
-			api.log.Error("capture ended unsuccessfully", zap.Error(err))
-		}
-	}()
-
-	req, err := stream.Recv()
-	if err != nil {
-		return errorf(codes.Unknown, "unable to receive message: %w", err)
-	}
-
-	err = validateAPICfRequest(req)
-	if err != nil {
-		return errorf(codes.InvalidArgument, "%w", err)
-	}
-
-	// TODO Validate with xsuaa
-	var targets []string
-	targets = append(targets, "localhost:8083")
-
-	api.log.Info("creating capture stream")
-
-	opts := req.Payload.(*CloudfoundryRequest_Start).Start.Capture
-
-	streamPreparer := &streamPrep{}
-
-	out, err := capture(ctx, stream, streamPreparer, opts, targets, api.log)
-	if err != nil {
-		return err
-	}
-
-	forwardWG := &sync.WaitGroup{}
-	forwardWG.Add(1)
-	forwardToStream(cancel, out, stream, api.bufConf, forwardWG)
-
-	cfStopCmd(cancel, stream)
-
-	err = Cause(ctx)
-	// Cancelling the context with nil causes context.Cancelled to be set
-	// which is a non-error in our case.
-	if err != nil {
-		return err
-	}
-
-	forwardWG.Wait()
-	return nil
-}
-
-func validateAPICfRequest(req *CloudfoundryRequest) error {
-	if req == nil {
-		return fmt.Errorf("invalid message: message: %w", errNilField)
-	}
-
-	if req.Payload == nil {
-		return fmt.Errorf("invalid message: payload: %w", errNilField)
-	}
-
-	startReq, ok := req.Payload.(*CloudfoundryRequest_Start)
-	if !ok {
-		return fmt.Errorf("invalid message: expected Payload of type StartCloudfoundryRequest: %w", errInvalidPayload)
-	}
-
-	if startReq.Start == nil {
-		return fmt.Errorf("invalid message: start: %w", errNilField)
-	}
-
-	if startReq.Start.Token == "" {
-		return fmt.Errorf("invalid message: token: %w", errEmptyField)
-	}
-
-	if startReq.Start.AppId == "" {
-		return fmt.Errorf("invalid message: application_id: %w", errEmptyField)
-	}
-
-	if startReq.Start.Capture == nil {
-		return fmt.Errorf("invalid message: capture options: %w", errNilField)
-	}
-
-	err := startReq.Start.Capture.validate()
-	if err != nil {
-		return fmt.Errorf("invalid message: %w", err)
-	}
-
-	return nil
 }
 
 type streamPreparer interface {
-	prepareStreamToTarget(context.Context, *CaptureOptions, string) (captureReceiver, error)
+	prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint) (captureReceiver, error)
 }
 
-func capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []string, log *zap.Logger) (<-chan *CaptureResponse, error) {
+func capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, log *zap.Logger) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
 
 	runningCaptures := 0
 	for _, target := range targets {
-		log = log.With(zap.String("target", target))
+		log = log.With(zap.String("target", target.String()))
 		log.Info("starting capture")
 
 		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target)

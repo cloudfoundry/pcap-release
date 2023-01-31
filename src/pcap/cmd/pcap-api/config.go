@@ -21,18 +21,20 @@ var DefaultAPIConfig = APIConfig{
 
 type APIConfig struct {
 	// Port is the port the agent will listen on.
-	Port int `yaml:"port" validate:"gt=0,lte=65535"`
-	TLS  *struct {
-		// Certificate holds the path to the PEM encoded certificate (chain).
-		Certificate string `yaml:"certificate" validate:"file"`
-		// PrivateKey holds the path to the PEM encoded private key.
-		PrivateKey string `yaml:"privateKey" validate:"file"`
-		// CertificateAuthority holds the path to the PEM encoded CA bundle which is used
-		// to request and verify client certificates.
-		CertificateAuthority string `yaml:"certificateAuthority" validate:"file"`
-	} `yaml:"tls,omitempty"`
+	Port     int             `yaml:"port" validate:"gt=0,lte=65535"`
+	TLS      *TLS            `yaml:"tls,omitempty"`
 	Buffer   pcap.BufferConf `yaml:"buffer"`
 	LogLevel string          `yaml:"logLevel"`
+}
+
+type TLS struct {
+	// Certificate holds the path to the PEM encoded certificate (chain).
+	Certificate string `yaml:"certificate" validate:"file"`
+	// PrivateKey holds the path to the PEM encoded private key.
+	PrivateKey string `yaml:"privateKey" validate:"file"`
+	// CertificateAuthority holds the path to the PEM encoded CA bundle which is used
+	// to request and verify client certificates.
+	CertificateAuthority string `yaml:"certificateAuthority" validate:"file"`
 }
 
 func (c APIConfig) validate() error {
