@@ -35,21 +35,21 @@ var _ = Describe("IntegrationTests", func() {
 		_, agentServer2, target = createAgent(8083)
 		targets = append(targets, target)
 
-		apiClient, apiServer = createApi(8080, targets)
+		apiClient, apiServer = createAPI(8080, targets)
 	})
 	AfterEach(func() {
 		agentServer1.GracefulStop()
 		agentServer2.GracefulStop()
 		apiServer.GracefulStop()
 	})
-	Describe("Running", func() {
+	Describe("Starting a capture", func() {
 
-		Context("two agents and one api", func() {
+		Context("with two agents and one API", func() {
 			It("finished without errors", func() {
 				ctx := context.Background()
 
-				stream, err := apiClient.CaptureBosh(ctx)
-				err = stream.Send(&pcap.BoshRequest{Payload: &pcap.BoshRequest_Start{
+				stream, _ := apiClient.CaptureBosh(ctx)
+				err := stream.Send(&pcap.BoshRequest{Payload: &pcap.BoshRequest_Start{
 					Start: &pcap.StartBoshCapture{
 						Token:      "123",
 						Deployment: "cf",
@@ -61,17 +61,17 @@ var _ = Describe("IntegrationTests", func() {
 						},
 					}}})
 				Expect(err).NotTo(HaveOccurred())
-				readN(10, stream)
+				recvCapture(10, stream)
 
 				err = stream.Send(&pcap.BoshRequest{
 					Payload: &pcap.BoshRequest_Stop{},
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				readN(10_000, stream)
+				recvCapture(10_000, stream)
 
 			})
-			It("finished with errors due to invalid request", func() {
+			It("finished with errors due to invalid start capture request", func() {
 				ctx := context.Background()
 
 				stream, err := apiClient.CaptureBosh(ctx)
@@ -87,7 +87,7 @@ var _ = Describe("IntegrationTests", func() {
 					}}})
 				Expect(err).NotTo(HaveOccurred())
 
-				err, errCode := readN(10, stream)
+				errCode, err := recvCapture(10, stream)
 				Expect(errCode).To(Equal(codes.InvalidArgument))
 			})
 			It("one agent unavailable", func() {
@@ -107,15 +107,36 @@ var _ = Describe("IntegrationTests", func() {
 						},
 					}}})
 				Expect(err).NotTo(HaveOccurred())
-				readN(10, stream)
+				recvCapture(10, stream)
 
 				err = stream.Send(&pcap.BoshRequest{
 					Payload: &pcap.BoshRequest_Stop{},
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				readN(10_000, stream)
+				recvCapture(10_000, stream)
 
+			})
+			It("No pcap-agents available", func() {
+				agentServer1.GracefulStop()
+				agentServer2.GracefulStop()
+				ctx := context.Background()
+
+				stream, err := apiClient.CaptureBosh(ctx)
+				err = stream.Send(&pcap.BoshRequest{Payload: &pcap.BoshRequest_Start{
+					Start: &pcap.StartBoshCapture{
+						Token:      "123",
+						Deployment: "cf",
+						Groups:     []string{"router"},
+						Capture: &pcap.CaptureOptions{
+							Device:  "en0",
+							Filter:  "",
+							SnapLen: 65000,
+						},
+					}}})
+				Expect(err).NotTo(HaveOccurred())
+				errCode, err := recvCapture(10, stream)
+				Expect(errCode).To(Equal(codes.FailedPrecondition))
 			})
 		})
 	})
@@ -148,7 +169,7 @@ func createAgent(port int) (pcap.AgentClient, *grpc.Server, string) {
 	return agentClient, server, target
 }
 
-func createApi(port int, targets []string) (pcap.APIClient, *grpc.Server) {
+func createAPI(port int, targets []string) (pcap.APIClient, *grpc.Server) {
 	var server *grpc.Server
 	api, err := pcap.NewAPI(nil, pcap.BufferConf{100, 98, 80}, pcap.APIConf{targets})
 	Expect(err).NotTo(HaveOccurred())
@@ -166,21 +187,21 @@ func createApi(port int, targets []string) (pcap.APIClient, *grpc.Server) {
 	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	Expect(err).NotTo(HaveOccurred())
 
-	apiClient := pcap.NewAPIClient(cc)
-	return apiClient, server
+	client := pcap.NewAPIClient(cc)
+	return client, server
 }
 
-func readN(n int, stream pcap.API_CaptureBoshClient) (error, codes.Code) {
+func recvCapture(n int, stream pcap.API_CaptureBoshClient) (codes.Code, error) {
 	for i := 0; i < n; i++ {
 		_, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
 			fmt.Println("clean stop, done")
-			return nil, codes.Unknown
+			return codes.Unknown, nil
 		}
 		code := status.Code(err)
 		if code != codes.OK {
-			return fmt.Errorf("receive non-OK code: %s: %s\n", code.String(), err.Error()), code
+			return code, fmt.Errorf("receive non-OK code: %s: %s\n", code.String(), err.Error())
 		}
 	}
-	return nil, codes.OK
+	return codes.OK, nil
 }

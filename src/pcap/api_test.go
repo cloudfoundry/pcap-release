@@ -477,7 +477,7 @@ func TestConvertStatusCodeToMsg(t *testing.T) {
 		},
 		{
 			name:        "Agent internal error",
-			err:         errorf(codes.Internal, "read message: %w", fmt.Errorf("internl error")),
+			err:         errorf(codes.Internal, "read message: %w", fmt.Errorf("internal error")),
 			wantMsgType: MessageType_CONNECTION_ERROR,
 		},
 		{
