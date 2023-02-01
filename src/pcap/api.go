@@ -58,12 +58,32 @@ func (a AgentEndpoint) String() string {
 type CaptureHandler interface {
 	// enabled identifies whether this handler is available and configured
 	enabled() bool
-
 	// canHandle determines if this handler is responsible for handling the Capture
 	canHandle(*Capture) bool
-
 	// handle either resolves and returns the agents targeted by Capture or provides an error
 	handle(*Capture) ([]AgentEndpoint, error)
+}
+
+func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
+	bosh := api.checkHandler("bosh")
+	cf := api.checkHandler("cf")
+
+	return &StatusResponse{
+		Healthy:            true,
+		CompatibilityLevel: 0,
+		Message:            "Ready.",
+		Bosh:               &bosh,
+		Cf:                 &cf,
+	}, nil
+}
+
+// checkHandler checks if handler is registered and if it is enabled.
+// returns false, if the handler is not registered or enabled.
+func (api *API) checkHandler(handler string) bool {
+	if handler, ok := api.handlers[handler]; ok {
+		return handler.enabled()
+	}
+	return false
 }
 
 func (api *API) Capture(stream API_CaptureServer) (err error) {
