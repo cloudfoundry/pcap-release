@@ -1,3 +1,8 @@
+// Package pcap-agent is the entry point for running the pcap-agent.
+//
+// Supported platforms are darwin and linux, either as arm64 or amd64 due to the os signals being used.
+//go:build unix && (amd64 || arm64)
+
 package main
 
 import (
@@ -16,9 +21,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+var zapConfig zap.Config
+
 func init() {
-	zap.ReplaceGlobals(zap.Must(zap.Config{
-		Level:             zap.NewAtomicLevelAt(zap.DebugLevel),
+	zapConfig = zap.Config{
+		Level:             zap.NewAtomicLevelAt(zap.InfoLevel),
 		DisableCaller:     true,
 		DisableStacktrace: true,
 		Encoding:          "json",
@@ -36,8 +43,9 @@ func init() {
 		},
 		OutputPaths:      []string{"stdout"},
 		ErrorOutputPaths: []string{"stderr"},
-		InitialFields:    map[string]interface{}{"component": "pcap-api"}, // TODO: this is probably already done by syslog_shipper?
-	}.Build()))
+		// InitialFields:    map[string]interface{}{"component": "pcap-api"},
+	}
+	zap.ReplaceGlobals(zap.Must(zapConfig.Build()))
 
 	zap.NewProductionEncoderConfig()
 }
@@ -57,10 +65,24 @@ func main() {
 		err = fmt.Errorf("invalid number of arguments, expected 1 or 2 but got %d", len(os.Args))
 	}
 
+	if err != nil {
+		log.Fatal("unable to initialize", zap.Error(err))
+	}
+
 	err = config.validate()
 	if err != nil {
 		log.Fatal("unable to validate config", zap.Error(err))
 	}
+
+	if level, levelErr := zap.ParseAtomicLevel(config.LogLevel); levelErr == nil {
+		zapConfig.Level.SetLevel(level.Level())
+	} else {
+		log.Sugar().Warnf("Configured log level '%s' could not be parsed: %v. Remaining at default level: '%s'", config.LogLevel, levelErr, zapConfig.Level.String())
+	}
+
+	log.Warn("Warn")
+	log.Info("Info")
+	log.Debug("Debug")
 
 	// FIXME: Move this to some dummy config, not the main.
 	api, err := pcap.NewAPI(log, config.Buffer, pcap.APIConf{Targets: []pcap.AgentEndpoint{{Ip: "localhost", Port: 8083}}})
@@ -84,6 +106,23 @@ func main() {
 	}
 
 	log.Info("serve returned successfully")
+}
+
+func setLogLevel(verbosity int) {
+	var level zapcore.Level
+
+	switch verbosity {
+	case 0:
+		level = zap.ErrorLevel
+	case 1:
+		level = zap.WarnLevel
+	case 2:
+		level = zap.InfoLevel
+	case 3:
+		level = zap.DebugLevel
+	}
+
+	zapConfig.Level.SetLevel(level)
 }
 
 // listen creates a new listener based off of the given Config. If Config.TLS is
