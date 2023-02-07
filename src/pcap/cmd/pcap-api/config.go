@@ -19,6 +19,7 @@ var DefaultAPIConfig = APIConfig{
 	},
 	LogLevel:           "debug",
 	AgentTLSSkipVerify: false,
+	ManualEndpoints:    pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083}}},
 }
 
 type APIConfig struct {
@@ -33,6 +34,7 @@ type APIConfig struct {
 	AgentTLSSkipVerify bool            `yaml:"agent_tls_skip_verify" validate:"boolean"`
 	AgentCommonName    string          `yaml:"agent_common_name,omitempty" validate:"required_if=AgentTLSSkipVerify false"`
 	AgentCA            string          `yaml:"agent_ca,omitempty" validate:"required_if=AgentTLSSkipVerify false"`
+	ManualEndpoints    pcap.ManualEndpoints
 }
 
 type TLS struct {

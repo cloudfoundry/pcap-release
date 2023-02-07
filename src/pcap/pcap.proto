@@ -79,18 +79,11 @@ message StatusRequest {}
 
 service API {
   rpc Status(StatusRequest) returns (StatusResponse);
-  // CaptureBosh starts capturing packets on bosh VMs. The capture can be
-  // stopped by closing the client-side send channel. The Api MUST listen for
-  // that close and MUST stop sending packets as soon as possible but SHOULD
-  // send packets that it still receives from the agents.
+  // Capture starts capturing packets on either BOSH or CF VMs. The capture can be
+  // stopped by closing the client-side send channel, or explicitly sending a Stop command.
+  // The Api MUST listen for that close and the stop command and MUST stop sending packets
+  // as soon as possible but SHOULD send packets that it still receives from the agents.
   rpc Capture(stream CaptureRequest) returns (stream CaptureResponse);
-
-//  rpc CaptureBosh (stream BoshRequest) returns (stream CaptureResponse);
-//  // CaptureCloudFoundry starts capturing packets on a cloud foundry app. The
-//  // capture can be stopped by closing the client-side send channel. The Api
-//  // MUST listen for that close and MUST stop sending packets as soon as
-//  // possible but SHOULD send packets that it still receives from the agents.
-//  rpc CaptureCloudfoundry (stream CloudfoundryRequest) returns (stream CaptureResponse);
 }
 
 message CaptureRequest {

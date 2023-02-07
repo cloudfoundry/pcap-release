@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/credentials"
 	"io"
 	"os"
 	"sync"
@@ -14,21 +13,20 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
 type API struct {
-	log       *zap.Logger
-	apiConf   APIConf
-	agentConf AgentTLSConf
-	bufConf   BufferConf
-	handlers  map[string]CaptureHandler
+	bufConf    BufferConf
+	handlers   map[string]CaptureHandler
+	agentConf  AgentTLSConf
+	mTLSConfig *ClientCert
 	UnimplementedAPIServer
 }
 
-type APIConf struct {
-	Targets              []AgentEndpoint
+type ClientCert struct {
 	ClientCertFile       string
 	ClientPrivateKeyFile string
 }
@@ -39,135 +37,154 @@ type AgentTLSConf struct {
 	AgentCA            string
 }
 
-func NewAPI(log *zap.Logger, bufConf BufferConf, apiConf APIConf, agentConf AgentTLSConf) (*API, error) {
-	if log == nil {
-		log = zap.L()
-	}
+// TODO: This type should be removed once we have resolvers for BOSH or CF.
+type ManualEndpoints struct {
+	Targets []AgentEndpoint
+}
 
-	// TODO: Init, register, enable based on configuration
-	handlers := map[string]CaptureHandler{
-		"bosh": &BoshHandler{config: apiConf},
-	}
-
+func NewAPI(bufConf BufferConf, mTLSConfig *ClientCert, agentConf AgentTLSConf) *API {
 	return &API{
-		log:       log,
-		bufConf:   bufConf,
-		apiConf:   apiConf,
-		agentConf: agentConf,
-		handlers:  handlers,
-	}, nil
+		bufConf:    bufConf,
+		handlers:   make(map[string]CaptureHandler),
+		agentConf:  agentConf,
+		mTLSConfig: mTLSConfig,
+	}
 }
 
 // AgentEndpoint defines the endpoint for a pcap-agent.
 type AgentEndpoint struct {
-	Ip   string
+	IP   string
 	Port int
 }
 
 func (a AgentEndpoint) String() string {
-	return fmt.Sprintf("%s:%d", a.Ip, a.Port)
+	return fmt.Sprintf("%s:%d", a.IP, a.Port)
 }
+
+var (
+	errUnexpectedMessage = fmt.Errorf("unexpected message")
+)
 
 // CaptureHandler defines handlers for different request types that ultimately lead to a selection of AgentEndpoints.
 type CaptureHandler interface {
-	// enabled identifies whether this handler is available and configured
-	enabled() bool
+	// name provides the name of the handler for outputs and internal mapping.
+	name() string
 	// canHandle determines if this handler is responsible for handling the Capture
 	canHandle(*Capture) bool
 	// handle either resolves and returns the agents targeted by Capture or provides an error
 	handle(*Capture) ([]AgentEndpoint, error)
 }
 
-func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
-	bosh := api.checkHandler("bosh")
-	cf := api.checkHandler("cf")
+func (api *API) RegisterHandler(handler CaptureHandler) {
+	(api.handlers)[handler.name()] = handler
+}
 
-	return &StatusResponse{
+// Status provides the current status information for the pcap-api service
+func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
+	bosh := api.handlerRegistered("bosh")
+	cf := api.handlerRegistered("cf")
+
+	status := &StatusResponse{
 		Healthy:            true,
 		CompatibilityLevel: 0,
 		Message:            "Ready.",
 		Bosh:               &bosh,
 		Cf:                 &cf,
-	}, nil
+	}
+
+	if api.draining() {
+		status.Healthy = false
+		status.Message = "api has been stopped and is draining remaining capture requests"
+	}
+
+	return status, nil
 }
 
-// checkHandler checks if handler is registered and if it is enabled.
-// returns false, if the handler is not registered or enabled.
-func (api *API) checkHandler(handler string) bool {
-	if handler, ok := api.handlers[handler]; ok {
-		return handler.enabled()
-	}
+// handlerRegistered checks if handler is registered.
+// returns false, if the handler is not registered.
+func (api *API) handlerRegistered(handler string) bool {
+	_, ok := api.handlers[handler]
+	return ok
+}
+
+// draining indicates whether this API instance is currently draining.
+func (api *API) draining() bool {
+	// FIXME: Implement
 	return false
 }
 
+// Capture receives messages (start or stop capture) from the client and streams payload (messages or pcap data) back.
 func (api *API) Capture(stream API_CaptureServer) (err error) {
-	// Receive and validate capture request
-	api.log.Info("received new stream on Capture handler")
+	log := zap.L().With(zap.String("handler", "capture"))
+
+	defer func() {
+		if err != nil {
+			log.Error("capture ended unsuccessfully", zap.Error(err))
+		}
+	}()
+
+	if api.draining() {
+		return fmt.Errorf("")
+	}
 
 	ctx, cancel := WithCancelCause(stream.Context())
 	defer func() {
 		cancel(nil)
 	}()
 
-	defer func() {
-		if err != nil {
-			api.log.Error("capture ended unsuccessfully", zap.Error(err))
-		}
-	}()
+	ctx, log = setVcapID(ctx, log)
+
+	log.Info("Started capture stream")
+
+	creds, err := api.prepareTLSToAgent(log)
+	if err != nil {
+		return err
+	}
 
 	req, err := stream.Recv()
 	if err != nil {
-		return errorf(codes.Unknown, "unable to receive message: %w", err)
+		return errorf(codes.Unimplemented, "unable to receive message: %w", err)
 	}
 
-	if opts, isStart := req.Operation.(*CaptureRequest_Start); isStart {
-
-		targets, err := api.resolveAgentEndpoints(opts.Start.Capture)
-		if errors.Is(err, errValidationFailed) {
-			return errorf(codes.InvalidArgument, "capture targets not found: %w", err)
-		}
-
-		if err != nil {
-			return err
-		}
-
-		creds, err := api.prepareTLSToAgent()
-		if err != nil {
-			return err
-		}
-
-		streamPreparer := &streamPrep{}
-
-		// Start capture
-		out, err := capture(ctx, stream, streamPreparer, opts.Start.Options, targets, creds, api.log)
-		if err != nil {
-			return err
-		}
-
-		forwardWG := &sync.WaitGroup{}
-		forwardWG.Add(1)
-
-		forwardToStream(cancel, out, stream, api.bufConf, forwardWG)
-
-		// Wait for capture stop
-		stopCmd(cancel, stream)
-
-		err = Cause(ctx)
-		// Cancelling the context with nil causes context.Cancelled to be set
-		// which is a non-error in our case.
-		if err != nil {
-			return err
-		}
-
-		forwardWG.Wait()
+	opts, isStart := req.Operation.(*CaptureRequest_Start)
+	if !isStart {
+		return fmt.Errorf("expected start message, got %v: %w", req.Operation, errUnexpectedMessage)
 	}
 
-	// TODO: Handle isStop.
+	targets, resolveErr := api.resolveAgentEndpoints(opts.Start.Capture, log)
+	if errors.Is(resolveErr, errValidationFailed) {
+		return errorf(codes.InvalidArgument, "capture targets not found: %w", err)
+	}
+
+	streamPreparer := &streamPrep{}
+
+	// Start capture
+	out, err := capture(ctx, stream, streamPreparer, opts.Start.Options, targets, creds, log)
+	if err != nil {
+		return err
+	}
+
+	forwardWG := &sync.WaitGroup{}
+	forwardWG.Add(1)
+
+	forwardToStream(cancel, out, stream, api.bufConf, forwardWG)
+
+	// Wait for capture stop
+	stopCmd(cancel, stream)
+
+	err = Cause(ctx)
+	// Cancelling the context with nil causes context.Cancelled to be set
+	// which is a non-error in our case.
+	if err != nil {
+		return err
+	}
+
+	forwardWG.Wait()
 
 	return nil
 }
 
-func (api *API) prepareTLSToAgent() (credentials.TransportCredentials, error) {
+func (api *API) prepareTLSToAgent(log *zap.Logger) (credentials.TransportCredentials, error) {
 	if api.agentConf.AgentTLSSkipVerify {
 		return insecure.NewCredentials(), nil
 	}
@@ -175,7 +192,7 @@ func (api *API) prepareTLSToAgent() (credentials.TransportCredentials, error) {
 	// Load certificate of the CA who signed agent's certificate
 	pemAgentCA, err := os.ReadFile(api.agentConf.AgentCA)
 	if err != nil {
-		api.log.Error("Load Agent CA certificate failed")
+		log.Error("Load Agent CA certificate failed")
 		return nil, err
 	}
 
@@ -191,10 +208,10 @@ func (api *API) prepareTLSToAgent() (credentials.TransportCredentials, error) {
 	}
 
 	// Load client's certificate and private key
-	if api.apiConf.ClientCertFile != "" && api.apiConf.ClientPrivateKeyFile != "" {
-		clientCert, err := tls.LoadX509KeyPair(api.apiConf.ClientCertFile, api.apiConf.ClientPrivateKeyFile)
+	if api.mTLSConfig.ClientCertFile != "" && api.mTLSConfig.ClientPrivateKeyFile != "" {
+		clientCert, err := tls.LoadX509KeyPair(api.mTLSConfig.ClientCertFile, api.mTLSConfig.ClientPrivateKeyFile)
 		if err != nil {
-			api.log.Error("Load API client certificate or private key failed")
+			log.Error("Load API client certificate or private key failed")
 			return nil, err
 		}
 		config.Certificates = []tls.Certificate{clientCert}
@@ -205,10 +222,10 @@ func (api *API) prepareTLSToAgent() (credentials.TransportCredentials, error) {
 
 // resolveAgentEndpoints tries all registered api.handlers until one responds or none can be found that
 // support this capture request. The responsible handler is then queried for the applicable pcap-agent endpoints corresponding to this capture request.
-func (api *API) resolveAgentEndpoints(capture *Capture) ([]AgentEndpoint, error) {
+func (api *API) resolveAgentEndpoints(capture *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
 	for name, handler := range api.handlers {
 		if handler.canHandle(capture) {
-			api.log.Info("Handling request via", zap.String("handler", "name"), zap.Any("capture", capture))
+			log.Sugar().Debugf("Resolving agent endpoints via handler %s for capture %s", name, capture)
 
 			agents, err := handler.handle(capture)
 			if err != nil {

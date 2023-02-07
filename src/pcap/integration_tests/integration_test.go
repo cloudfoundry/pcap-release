@@ -11,15 +11,15 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 	"io"
 	"math/big"
 	"net"
 	"os"
 	"path"
 	"time"
+
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	gopcap "github.com/google/gopacket/pcap"
 
@@ -28,6 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 )
 
 var lis net.Listener
@@ -73,6 +74,7 @@ var _ = Describe("IntegrationTests", func() {
 
 	var stop *pcap.CaptureRequest
 	var defaultOptions *pcap.CaptureOptions
+
 	Describe("Starting a capture", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
@@ -85,8 +87,7 @@ var _ = Describe("IntegrationTests", func() {
 			targets = append(targets, target)
 
 			agentTLSConf := pcap.AgentTLSConf{AgentTLSSkipVerify: true}
-			apiConf := pcap.APIConf{Targets: targets}
-			apiClient, apiServer = createAPI(8080, apiConf, agentTLSConf)
+			apiClient, apiServer = createAPI(8080, targets, nil, agentTLSConf)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -101,17 +102,17 @@ var _ = Describe("IntegrationTests", func() {
 				SnapLen: 65000,
 			}
 		})
+
 		AfterEach(func() {
 			agentServer1.GracefulStop()
 			agentServer2.GracefulStop()
 			apiServer.GracefulStop()
 		})
+
 		Context("with two agents and one API", func() {
 			It("finished without errors", func() {
 				ctx := context.Background()
-
 				stream, _ := apiClient.Capture(ctx)
-
 				request := boshRequest(&pcap.BoshCapture{
 					Token:      "123",
 					Deployment: "cf",
@@ -126,12 +127,178 @@ var _ = Describe("IntegrationTests", func() {
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-				code, messages, err := recvCapture(10_000, stream)
+				code, _, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
 
 				// FIXME: Should not be Unknown/EOF
 				Expect(code).To(Equal(codes.Unknown))
 
+			})
+			It("finished with errors due to invalid start capture request", func() {
+				ctx := context.Background()
+
+				stream, err := apiClient.Capture(ctx)
+
+				request := boshRequest(&pcap.BoshCapture{
+					Token:  "123",
+					Groups: []string{"router"},
+				}, defaultOptions)
+
+				err = stream.Send(request)
+
+				Expect(err).NotTo(HaveOccurred())
+
+				errCode, _, err := recvCapture(10, stream)
+				Expect(errCode).To(Equal(codes.InvalidArgument))
+			})
+			It("one agent unavailable", func() {
+				agentServer2.GracefulStop()
+				ctx := context.Background()
+
+				stream, err := apiClient.Capture(ctx)
+
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"}},
+					defaultOptions)
+				err = stream.Send(request)
+				Expect(err).NotTo(HaveOccurred())
+				errCode, messages, err := recvCapture(10, stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errCode).To(Equal(codes.OK))
+				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_NOT_FOUND)).To(BeTrue())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				code, _, err := recvCapture(10_000, stream)
+				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+
+				// FIXME: Should not be Unknown/EOF
+				Expect(code).To(Equal(codes.Unknown))
+
+			})
+			It("No pcap-agents available", func() {
+				agentServer1.GracefulStop()
+				agentServer2.GracefulStop()
+				ctx := context.Background()
+				stream, err := apiClient.Capture(ctx)
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"}}, defaultOptions)
+
+				err = stream.Send(request)
+				Expect(err).NotTo(HaveOccurred())
+				errCode, messages, err := recvCapture(10, stream)
+				fmt.Print(errCode)
+				Expect(errCode).To(Equal(codes.FailedPrecondition))
+				//FixMe expected message type
+				Expect(containsMsgType(messages, pcap.MessageType_START_CAPTURE_FAILED)).To(BeTrue())
+			})
+			It("One pcap-agent crashes", func() {
+				ctx := context.Background()
+				stream, _ := apiClient.Capture(ctx)
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"}}, defaultOptions)
+
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				go func() {
+					time.Sleep(1 * time.Second)
+					agentServer2.Stop()
+				}()
+				time.Sleep(2 * time.Second)
+				errCode, messages, err := recvCapture(500, stream)
+				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				//TODO change message type > instance disconnected
+				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_NOT_FOUND)).To(BeTrue())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				code, _, err := recvCapture(10_000, stream)
+				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+
+				// FIXME: Should not be Unknown/EOF
+				Expect(code).To(Equal(codes.Unknown))
+
+			})
+			It("One pcap-agent drains", func() {
+				ctx := context.Background()
+				stream, _ := apiClient.Capture(ctx)
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"}}, defaultOptions)
+
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				go func() {
+					time.Sleep(3 * time.Second)
+					agentServer2.GracefulStop()
+				}()
+				time.Sleep(2 * time.Second)
+				errCode, _, err := recvCapture(200, stream)
+				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				Expect(err).NotTo(HaveOccurred())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				code, _, err := recvCapture(10_000, stream)
+				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+
+				// FIXME: Should not be Unknown/EOF
+				Expect(code).To(Equal(codes.Unknown))
+
+			})
+			It("One pcap-agent is congested", func() {
+				ctx := context.Background()
+				stream, _ := apiClient.Capture(ctx)
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"}}, defaultOptions)
+
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				errCode, messages, err := recvCapture(10000, stream)
+				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(containsMsgType(messages, pcap.MessageType_CONGESTED)).To(BeTrue())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				code, _, err := recvCapture(10_000, stream)
+				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+
+				// FIXME: Should not be Unknown/EOF
+				Expect(code).To(Equal(codes.Unknown))
+
+			})
+		})
+		Context("with one agent and one API", func() {
+			BeforeEach(func() {
+				agentServer1.GracefulStop()
+			})
+			It("pcap-agent crashes", func() {
+				ctx := context.Background()
+				stream, _ := apiClient.Capture(ctx)
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"}}, defaultOptions)
+
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				go func() {
+					time.Sleep(3 * time.Second)
+					agentServer2.Stop()
+				}()
+				time.Sleep(3 * time.Second)
+				errCode, messages, err := recvCapture(500, stream)
+				//TODO check why it returns unknown
+				//Expect(errCode).To(Equal(codes.Unavailable))
+				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				//TODO change message type > instance disconnected
+				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_NOT_FOUND)).To(BeTrue())
 			})
 		})
 	})
@@ -155,9 +322,9 @@ var _ = Describe("IntegrationTests", func() {
 			targets = append(targets, target)
 
 			agentTLSConf := pcap.AgentTLSConf{AgentTLSSkipVerify: false, AgentCommonName: agentServerCertCN, AgentCA: caPath}
-			apiConf := pcap.APIConf{Targets: targets, ClientCertFile: clientCertFile, ClientPrivateKeyFile: clientKeyFile}
+			clientCert := &pcap.ClientCert{ClientCertFile: clientCertFile, ClientPrivateKeyFile: clientKeyFile}
 
-			apiClient, apiServer = createAPI(8080, apiConf, agentTLSConf)
+			apiClient, apiServer = createAPI(8080, targets, clientCert, agentTLSConf)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -220,7 +387,6 @@ func generateCerts(commonName string, dir string) (string, string, string, error
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(0, 0, 30),
 		IsCA:                  true,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
 	}
@@ -263,7 +429,6 @@ func generateCerts(commonName string, dir string) (string, string, string, error
 		NotBefore:    time.Now(),
 		NotAfter:     time.Now().AddDate(0, 0, 30),
 		SubjectKeyId: []byte{1, 2, 3, 4, 6},
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 	}
 
@@ -341,22 +506,21 @@ func configureServer(certFile string, keyFile string, clientCAFile string) (cred
 
 func createAgent(port int, tlsCreds credentials.TransportCredentials) (pcap.AgentClient, *grpc.Server, pcap.AgentEndpoint) {
 	var server *grpc.Server
-	agent, err := pcap.NewAgent(nil, pcap.BufferConf{100, 98, 80})
-	Expect(err).NotTo(HaveOccurred())
+	agent := pcap.NewAgent(pcap.BufferConf{100, 98, 80})
 
-	lis, err = net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	Expect(err).NotTo(HaveOccurred())
 	tcpAddr, ok := lis.Addr().(*net.TCPAddr)
 	Expect(ok).To(BeTrue())
 	fmt.Printf("create agent with listener  %s\n", lis.Addr().String())
 
-	target := pcap.AgentEndpoint{Ip: tcpAddr.IP.String(), Port: tcpAddr.Port}
+	target := pcap.AgentEndpoint{IP: tcpAddr.IP.String(), Port: tcpAddr.Port}
+	server = grpc.NewServer()
 	if tlsCreds != nil {
 		server = grpc.NewServer(grpc.Creds(tlsCreds))
 	} else {
 		server = grpc.NewServer()
 	}
-
 	pcap.RegisterAgentServer(server, agent)
 	go func() {
 		server.Serve(lis)
@@ -371,12 +535,12 @@ func createAgent(port int, tlsCreds credentials.TransportCredentials) (pcap.Agen
 	return agentClient, server, target
 }
 
-func createAPI(port int, apiConf pcap.APIConf, agentTLSConf pcap.AgentTLSConf) (pcap.APIClient, *grpc.Server) {
+func createAPI(port int, targets []pcap.AgentEndpoint, mTLSConfig *pcap.ClientCert, agentTLSConf pcap.AgentTLSConf) (pcap.APIClient, *grpc.Server) {
 	var server *grpc.Server
+	api := pcap.NewAPI(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, mTLSConfig, agentTLSConf)
+	api.RegisterHandler(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
-	api, err := pcap.NewAPI(nil, pcap.BufferConf{100, 98, 80}, apiConf, agentTLSConf)
-	Expect(err).NotTo(HaveOccurred())
-
+	var err error
 	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
 	Expect(err).NotTo(HaveOccurred())
 
@@ -405,9 +569,20 @@ func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.Capt
 		}
 		code := status.Code(err)
 		if code != codes.OK {
-			return code, messages, fmt.Errorf("receive non-OK code: %s: %s\n", code.String(), err.Error())
+			return code, messages, fmt.Errorf("receive code: %s: %s\n", code.String(), err.Error())
 		}
 		messages = append(messages, message)
 	}
 	return codes.OK, messages, nil
+}
+
+// contains checks if a string is present in a slice
+func containsMsgType(messages []*pcap.CaptureResponse, msgType pcap.MessageType) bool {
+	for _, msg := range messages {
+		if msg.GetPacket() == nil && msg.GetMessage().GetType() == msgType {
+			return true
+		}
+	}
+
+	return false
 }

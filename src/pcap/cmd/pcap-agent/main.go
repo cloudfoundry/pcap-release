@@ -72,10 +72,7 @@ func main() {
 		log.Fatal("unable to validate config", zap.Error(err))
 	}
 
-	agent, err := pcap.NewAgent(log, config.Buffer)
-	if err != nil {
-		log.Fatal("unable to create agent", zap.Error(err))
-	}
+	agent := pcap.NewAgent(config.Buffer)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Port))
 	if err != nil {

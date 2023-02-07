@@ -80,16 +80,10 @@ func main() {
 		log.Sugar().Warnf("Configured log level '%s' could not be parsed: %v. Remaining at default level: '%s'", config.LogLevel, levelErr, zapConfig.Level.String())
 	}
 
-	log.Warn("Warn")
-	log.Info("Info")
-	log.Debug("Debug")
+	agentConf := pcap.AgentTLSConf{AgentTLSSkipVerify: config.AgentTLSSkipVerify, AgentCommonName: config.AgentCommonName, AgentCA: config.AgentCA}
+	api := pcap.NewAPI(config.Buffer, nil, agentConf)
 
-	// FIXME: Move this to some dummy config, not the main.
-	agentConf := pcap.AgentTLSConf{config.AgentTLSSkipVerify, config.AgentCommonName, config.AgentCA}
-	api, err := pcap.NewAPI(log, config.Buffer, pcap.APIConf{Targets: []pcap.AgentEndpoint{{Ip: "localhost", Port: 8083}}}, agentConf)
-	if err != nil {
-		log.Fatal("unable to create api", zap.Error(err))
-	}
+	api.RegisterHandler(&pcap.BoshHandler{Config: config.ManualEndpoints})
 
 	lis, err := listen(config)
 	if err != nil {

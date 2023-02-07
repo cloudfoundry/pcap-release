@@ -355,10 +355,7 @@ func TestAgentDraining(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := NewAgent(nil, BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
+			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
 			if tt.expectedDone {
 				a.Stop()
 			}
@@ -391,10 +388,7 @@ func TestAgentStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := NewAgent(nil, BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
+			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
 			if tt.agentDraining {
 				a.Stop()
 			}
@@ -468,17 +462,14 @@ func TestAgentCapture(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			a, err := NewAgent(nil, BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
-			if err != nil {
-				t.Errorf("Unexpected error %v", err)
-			}
+			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
 
 			if !test.agentRunning {
 				a.Stop()
 				time.Sleep(1 * time.Second)
 			}
 
-			err = a.Capture(&test.stream)
+			err := a.Capture(&test.stream)
 			if (err != nil) != test.wantErr {
 				t.Errorf("Capture() error = %v, wantErr %v", err, test.wantErr)
 			}
@@ -519,7 +510,7 @@ func TestSetVcapId(t *testing.T) {
 			observedZapCore, observedLogs := observer.New(zap.InfoLevel)
 			log := zap.New(observedZapCore)
 
-			log = setVcapID(ctx, log)
+			_, log = setVcapID(ctx, log)
 
 			// ensure that at least one log has been observed
 			log.Info("test")

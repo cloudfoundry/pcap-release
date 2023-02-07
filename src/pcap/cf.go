@@ -6,12 +6,11 @@ import (
 )
 
 type CloudfoundryHandler struct {
-	config APIConf
+	config ManualEndpoints
 }
 
-func (cf *CloudfoundryHandler) enabled() bool {
-	// TODO: Determine this based on configuration
-	return true
+func (cf *CloudfoundryHandler) name() string {
+	return "cf"
 }
 
 func (cf *CloudfoundryHandler) canHandle(request *Capture) bool {

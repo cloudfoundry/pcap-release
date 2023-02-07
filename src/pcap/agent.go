@@ -8,10 +8,8 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 )
 
 // Agent is the central struct to which the handlers are attached.
@@ -23,23 +21,17 @@ type Agent struct {
 	// TODO: expose as metric?
 	streamsWG sync.WaitGroup
 	// log carries the logger all session loggers are derived from.
-	log     *zap.Logger
 	bufConf BufferConf
 
 	UnimplementedAgentServer
 }
 
-// NewAgent creates a new ready-to-use agent. If the given logger is nil zap.L will
-// be used.
-func NewAgent(log *zap.Logger, bufConf BufferConf) (*Agent, error) {
-	if log == nil {
-		log = zap.L()
-	}
+// NewAgent creates a new ready-to-use agent.
+func NewAgent(bufConf BufferConf) *Agent {
 	return &Agent{
 		done:    make(chan struct{}),
-		log:     log,
 		bufConf: bufConf,
-	}, nil
+	}
 }
 
 // Stop the server. This will gracefully stop any captures that are currently running
@@ -92,7 +84,7 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	a.streamsWG.Add(1)
 	defer a.streamsWG.Done()
 
-	log := a.log.With(zap.String("handler", "capture"))
+	log := zap.L().With(zap.String("handler", "capture"))
 	defer func() {
 		if err != nil {
 			log.Error("capture ended unsuccessfully", zap.Error(err))
@@ -102,7 +94,7 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	ctx, cancel := WithCancelCause(stream.Context())
 	defer cancel(nil)
 
-	setVcapID(ctx, log)
+	ctx, log = setVcapID(ctx, log)
 
 	if a.draining() {
 		return errorf(codes.Unavailable, "agent is draining")
@@ -161,23 +153,6 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 
 	log.Info("capture done")
 	return nil
-}
-
-func setVcapID(ctx context.Context, log *zap.Logger) *zap.Logger {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		log = log.With(zap.String(LogKeyVcapID, uuid.Must(uuid.NewRandom()).String()))
-		log.Warn("request does not contain metadata, generated new vcap request id")
-		return log
-	}
-
-	vcapReqID := md.Get(HeaderVcapID)
-	if len(vcapReqID) == 0 {
-		log = log.With(zap.String(LogKeyVcapID, uuid.Must(uuid.NewRandom()).String()))
-		log.Warn("request does not contain request id, generating one")
-		return log
-	}
-	return log.With(zap.String(LogKeyVcapID, vcapReqID[0]))
 }
 
 // validateAgentStartRequest returns an error describing the issue or nil if

@@ -4,10 +4,14 @@
 package pcap
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"unicode"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/metadata"
 )
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pcap.proto
@@ -30,6 +34,8 @@ var (
 	errEmptyField       = fmt.Errorf("field is empty: %w", errValidationFailed)
 	errInvalidPayload   = fmt.Errorf("invalid payload: %w", errValidationFailed)
 	errIllegalCharacter = fmt.Errorf("illegal character: %w", errValidationFailed)
+	errNoMetadata       = fmt.Errorf("no metadata")
+	errNoVcapId         = fmt.Errorf("no vcap-id")
 )
 
 // BufferConf allows to specify the behaviour of buffers.
@@ -138,4 +144,50 @@ func validateDevice(name string) (err error) {
 	}
 
 	return nil
+}
+
+// setVcapID expands log to include the vcap-id extracted from ctx, if available.
+//
+// When no vcap-id is defined in ctx, a new random GUID is generated and set in ctx and the logger.
+func setVcapID(ctx context.Context, log *zap.Logger) (context.Context, *zap.Logger) {
+	vcapID, err := vcapIDFromCtx(ctx)
+
+	if err != nil {
+		// No existing vcap-id found, creating a new one and adding it to the context.
+		newVcapID := uuid.Must(uuid.NewRandom()).String()
+		vcapID = &newVcapID
+		ctx = metadata.AppendToOutgoingContext(ctx, HeaderVcapID, *vcapID)
+
+		if errors.Is(err, errNoMetadata) {
+			defer log.Warn("request does not contain metadata, generated new vcap request id")
+		}
+		if errors.Is(err, errNoVcapId) {
+			defer log.Warn("request does not contain request id, generating one")
+		}
+	}
+
+	return ctx, log.With(zap.String(LogKeyVcapID, *vcapID))
+}
+
+// vcapIdFromCtx finds the vcap-id from the context metadata, if available.
+//
+// returns errNoMetadata if no metadata was found
+// returns errNoVcapId if no vcap-id was found in the metadata
+func vcapIDFromCtx(ctx context.Context) (*string, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+
+	if !ok {
+		return nil, errNoMetadata
+	}
+
+	if ok {
+		vcapReqIDs := md.Get(HeaderVcapID)
+
+		if len(vcapReqIDs) > 0 {
+			vcapID := vcapReqIDs[0]
+			return &vcapID, nil
+		}
+	}
+
+	return nil, errNoVcapId
 }

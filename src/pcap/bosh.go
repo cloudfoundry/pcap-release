@@ -7,11 +7,11 @@ import (
 
 type BoshHandler struct {
 	// TODO: add specifics for BOSH director configuration
-	config APIConf
+	Config ManualEndpoints
 }
 
-func (bosh *BoshHandler) enabled() bool {
-	return true
+func (bosh *BoshHandler) name() string {
+	return "bosh"
 }
 
 func (bosh *BoshHandler) canHandle(request *Capture) bool {
@@ -27,7 +27,7 @@ func (bosh *BoshHandler) handle(request *Capture) ([]AgentEndpoint, error) {
 	}
 
 	// TODO: This is a temporary shim and should be retrieved from the BOSH director.
-	return bosh.config.Targets, nil
+	return bosh.Config.Targets, nil
 }
 
 func (bosh *BoshHandler) validate(capture *Capture) error {

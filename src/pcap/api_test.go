@@ -51,21 +51,21 @@ func TestReadMsg(t *testing.T) {
 		{
 			name:             "EOF during capture",
 			captureStream:    &mockCaptureStream{nil, io.EOF},
-			target:           AgentEndpoint{Ip: "172.20.0.2"},
+			target:           AgentEndpoint{IP: "172.20.0.2"},
 			contextCancelled: false,
 			expectedData:     MessageType_CAPTURE_STOPPED,
 		},
 		{
 			name:             "Unexpected error from capture stream",
 			captureStream:    &mockCaptureStream{nil, errorf(codes.Unknown, "unexpected error")},
-			target:           AgentEndpoint{Ip: "172.20.0.2"},
+			target:           AgentEndpoint{IP: "172.20.0.2"},
 			contextCancelled: false,
 			expectedData:     MessageType_CONNECTION_ERROR,
 		},
 		{
 			name:             "Capture stop request from client and capture stopped with EOF",
 			captureStream:    &mockCaptureStream{nil, io.EOF},
-			target:           AgentEndpoint{Ip: "172.20.0.2"},
+			target:           AgentEndpoint{IP: "172.20.0.2"},
 			contextCancelled: true,
 			expectedData:     MessageType_CAPTURE_STOPPED,
 		},
@@ -131,7 +131,7 @@ func TestCheckAgentStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checkAgentStatus(tt.statusRes, tt.err, AgentEndpoint{Ip: "localhost", Port: 8083})
+			err := checkAgentStatus(tt.statusRes, tt.err, AgentEndpoint{IP: "localhost", Port: 8083})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("checkAgentStatus() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -298,6 +298,8 @@ func TestConvertStatusCodeToMsg(t *testing.T) {
 			got := convertStatusCodeToMsg(tt.err, AgentEndpoint{"localhost", 8083})
 			if got.GetMessage().GetType() != tt.wantMsgType {
 				t.Errorf("convertStatusCodeToMsg() = %v, want %v", got.GetMessage().GetType(), tt.wantMsgType)
+
+				t.Logf("message: %v", got.GetMessage().Message)
 			}
 		})
 	}
