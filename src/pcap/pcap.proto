@@ -42,11 +42,11 @@ message Message {
 enum MessageType {
   // One of the requested instances does not exist but there is at least one
   // instance to capture from. MUST be sent as soon as possible.
-  INSTANCE_NOT_FOUND = 0;
+  UNKNOWN = 0;
   // One instance failed during capturing but there are still instances left to
   // capture from. The detailed message should contain information about the
   // stopped party.
-  INSTANCE_DISCONNECTED = 1;
+  INSTANCE_UNAVAILABLE = 1;
   // Starting the capture request has failed because the request could not be
   // fulfilled (e.g. no matching instances, pcap feature not enabled).
   START_CAPTURE_FAILED = 2;

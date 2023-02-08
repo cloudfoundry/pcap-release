@@ -219,7 +219,7 @@ func TestForwardToStream(t *testing.T) {
 			name:        "buffer is filled with MessageResponse, no packets discarded",
 			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
 			resToBeSent: bufUpperLimit + 1,
-			response:    newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"),
+			response:    newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, "invalid id"),
 			expectedErr: errTestEnded,
 		},
 		{

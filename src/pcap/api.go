@@ -378,9 +378,11 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 
 func convertStatusCodeToMsg(err error, target AgentEndpoint) *CaptureResponse {
 	code := status.Code(err)
-	unwrappedError := errors.Unwrap(err)
-	if unwrappedError != nil {
-		code = status.Code(unwrappedError)
+	if code == codes.Unknown {
+		unwrappedError := errors.Unwrap(err)
+		if unwrappedError != nil {
+			code = status.Code(unwrappedError)
+		}
 	}
 	err = fmt.Errorf("capturing from agent %s: %w", target, err)
 
@@ -389,7 +391,7 @@ func convertStatusCodeToMsg(err error, target AgentEndpoint) *CaptureResponse {
 	case codes.InvalidArgument:
 		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error())
 	case codes.Aborted:
-		return newMessageResponse(MessageType_INSTANCE_DISCONNECTED, err.Error())
+		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error())
 	case codes.Internal, codes.Unknown:
 		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error())
 	case codes.FailedPrecondition:
@@ -397,7 +399,7 @@ func convertStatusCodeToMsg(err error, target AgentEndpoint) *CaptureResponse {
 	case codes.ResourceExhausted:
 		return newMessageResponse(MessageType_LIMIT_REACHED, err.Error())
 	case codes.Unavailable:
-		return newMessageResponse(MessageType_INSTANCE_NOT_FOUND, err.Error())
+		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error())
 	default:
 		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error())
 	}

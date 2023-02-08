@@ -17,18 +17,6 @@ type pcapError struct {
 	inner  error
 }
 
-// errorf creates a new error that is compatible with gRPC status and has support for
-// wrapping errors. It works like fmt.Errorf (because that's what's used under the hood).
-func errorf(c codes.Code, format string, a ...interface{}) error {
-	// we simply utilize fmt.Errorf instead of struggling with a custom implementation
-	e := fmt.Errorf(format, a...)
-	return pcapError{
-		status: status.New(c, e.Error()),
-		// if something has been wrapped, get it
-		inner: errors.Unwrap(e),
-	}
-}
-
 func (e pcapError) GRPCStatus() *status.Status {
 	return e.status
 }
@@ -39,4 +27,16 @@ func (e pcapError) Error() string {
 
 func (e pcapError) Unwrap() error {
 	return e.inner
+}
+
+// errorf creates a new error that is compatible with gRPC status and has support for
+// wrapping errors. It works like fmt.Errorf (because that's what's used under the hood).
+func errorf(c codes.Code, format string, a ...interface{}) error {
+	// we simply utilize fmt.Errorf instead of struggling with a custom implementation
+	e := fmt.Errorf(format, a...)
+	return pcapError{
+		status: status.New(c, e.Error()),
+		// if something has been wrapped, get it
+		inner: errors.Unwrap(e),
+	}
 }

@@ -275,7 +275,7 @@ func TestConvertStatusCodeToMsg(t *testing.T) {
 		{
 			name:        "Agent unavailable error",
 			err:         errorf(codes.Unavailable, "read message: %w", fmt.Errorf("unavailable")),
-			wantMsgType: MessageType_INSTANCE_DISCONNECTED,
+			wantMsgType: MessageType_INSTANCE_UNAVAILABLE,
 		},
 		{
 			name:        "Agent internal error",

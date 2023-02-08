@@ -23,10 +23,10 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type APIClient interface {
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
-	// Capture starts capturing packets on target VMs. The capture can be
-	// stopped by closing the client-side send channel. The Api MUST listen for
-	// that close and MUST stop sending packets as soon as possible but SHOULD
-	// send packets that it still receives from the agents.
+	// Capture starts capturing packets on either BOSH or CF VMs. The capture can be
+	// stopped by closing the client-side send channel, or explicitly sending a Stop command.
+	// The Api MUST listen for that close and the stop command and MUST stop sending packets
+	// as soon as possible but SHOULD send packets that it still receives from the agents.
 	Capture(ctx context.Context, opts ...grpc.CallOption) (API_CaptureClient, error)
 }
 
@@ -83,10 +83,10 @@ func (x *aPICaptureClient) Recv() (*CaptureResponse, error) {
 // for forward compatibility
 type APIServer interface {
 	Status(context.Context, *StatusRequest) (*StatusResponse, error)
-	// CaptureBosh starts capturing packets on bosh VMs. The capture can be
-	// stopped by closing the client-side send channel. The Api MUST listen for
-	// that close and MUST stop sending packets as soon as possible but SHOULD
-	// send packets that it still receives from the agents.
+	// Capture starts capturing packets on either BOSH or CF VMs. The capture can be
+	// stopped by closing the client-side send channel, or explicitly sending a Stop command.
+	// The Api MUST listen for that close and the stop command and MUST stop sending packets
+	// as soon as possible but SHOULD send packets that it still receives from the agents.
 	Capture(API_CaptureServer) error
 	mustEmbedUnimplementedAPIServer()
 }

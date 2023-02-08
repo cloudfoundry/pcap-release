@@ -167,7 +167,7 @@ var _ = Describe("IntegrationTests", func() {
 				errCode, messages, err := recvCapture(10, stream)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errCode).To(Equal(codes.OK))
-				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_NOT_FOUND)).To(BeTrue())
+				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_UNAVAILABLE)).To(BeTrue())
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 				code, _, err := recvCapture(10_000, stream)
@@ -213,7 +213,7 @@ var _ = Describe("IntegrationTests", func() {
 				errCode, messages, err := recvCapture(500, stream)
 				fmt.Printf("receive non-OK code: %s\n", errCode.String())
 				//TODO change message type > instance disconnected
-				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_NOT_FOUND)).To(BeTrue())
+				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_UNAVAILABLE)).To(BeTrue())
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 				code, _, err := recvCapture(10_000, stream)
@@ -298,7 +298,7 @@ var _ = Describe("IntegrationTests", func() {
 				//Expect(errCode).To(Equal(codes.Unavailable))
 				fmt.Printf("receive non-OK code: %s\n", errCode.String())
 				//TODO change message type > instance disconnected
-				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_NOT_FOUND)).To(BeTrue())
+				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_UNAVAILABLE)).To(BeTrue())
 			})
 		})
 	})
