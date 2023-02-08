@@ -85,7 +85,8 @@ func main() {
 	log.Debug("Debug")
 
 	// FIXME: Move this to some dummy config, not the main.
-	api, err := pcap.NewAPI(log, config.Buffer, pcap.APIConf{Targets: []pcap.AgentEndpoint{{Ip: "localhost", Port: 8083}}})
+	agentConf := pcap.AgentTLSConf{config.AgentTLSSkipVerify, config.AgentCommonName, config.AgentCA}
+	api, err := pcap.NewAPI(log, config.Buffer, pcap.APIConf{Targets: []pcap.AgentEndpoint{{Ip: "localhost", Port: 8083}}}, agentConf)
 	if err != nil {
 		log.Fatal("unable to create api", zap.Error(err))
 	}

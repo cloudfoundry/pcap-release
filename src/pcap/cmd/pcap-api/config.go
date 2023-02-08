@@ -10,31 +10,39 @@ import (
 )
 
 var DefaultAPIConfig = APIConfig{
-	Port: 8080,
+	Port:      8080,
+	AgentPort: 9494,
 	Buffer: pcap.BufferConf{
 		Size:       100,
 		UpperLimit: 95,
 		LowerLimit: 60,
 	},
-	LogLevel: "debug",
+	LogLevel:           "debug",
+	AgentTLSSkipVerify: false,
 }
 
 type APIConfig struct {
-	// Port is the port the agent will listen on.
-	Port     int             `yaml:"port" validate:"gt=0,lte=65535"`
-	TLS      *TLS            `yaml:"tls,omitempty"`
-	Buffer   pcap.BufferConf `yaml:"buffer"`
-	LogLevel string          `yaml:"logLevel"`
+	AgentPort int `yaml:"agent_port" validate:"gt=0,lte=65535"`
+	// TODO compare listen / api port with api/spec
+	Port               int             `yaml:"listen"`
+	ClientCert         string          `yaml:"client_certificate,omitempty" validate:"file"`
+	ClientKey          string          `yaml:"client_key,omitempty" validate:"file"`
+	TLS                *TLS            `yaml:"tls,omitempty"`
+	Buffer             pcap.BufferConf `yaml:"buffer"`
+	LogLevel           string          `yaml:"log_level"`
+	AgentTLSSkipVerify bool            `yaml:"agent_tls_skip_verify" validate:"boolean"`
+	AgentCommonName    string          `yaml:"agent_common_name,omitempty" validate:"required_if=AgentTLSSkipVerify false"`
+	AgentCA            string          `yaml:"agent_ca,omitempty" validate:"required_if=AgentTLSSkipVerify false"`
 }
 
 type TLS struct {
 	// Certificate holds the path to the PEM encoded certificate (chain).
 	Certificate string `yaml:"certificate" validate:"file"`
 	// PrivateKey holds the path to the PEM encoded private key.
-	PrivateKey string `yaml:"privateKey" validate:"file"`
+	PrivateKey string `yaml:"private_key" validate:"file"`
 	// CertificateAuthority holds the path to the PEM encoded CA bundle which is used
 	// to request and verify client certificates.
-	CertificateAuthority string `yaml:"certificateAuthority" validate:"file"`
+	CertificateAuthority string `yaml:"ca" validate:"file"`
 }
 
 func (c APIConfig) validate() error {

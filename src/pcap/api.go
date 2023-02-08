@@ -2,9 +2,13 @@ package pcap
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/credentials"
 	"io"
+	"os"
 	"sync"
 
 	"go.uber.org/zap"
@@ -15,18 +19,27 @@ import (
 )
 
 type API struct {
-	log      *zap.Logger
-	apiConf  APIConf
-	bufConf  BufferConf
-	handlers map[string]CaptureHandler
+	log       *zap.Logger
+	apiConf   APIConf
+	agentConf AgentTLSConf
+	bufConf   BufferConf
+	handlers  map[string]CaptureHandler
 	UnimplementedAPIServer
 }
 
 type APIConf struct {
-	Targets []AgentEndpoint
+	Targets              []AgentEndpoint
+	ClientCertFile       string
+	ClientPrivateKeyFile string
 }
 
-func NewAPI(log *zap.Logger, bufConf BufferConf, apiConf APIConf) (*API, error) {
+type AgentTLSConf struct {
+	AgentTLSSkipVerify bool
+	AgentCommonName    string
+	AgentCA            string
+}
+
+func NewAPI(log *zap.Logger, bufConf BufferConf, apiConf APIConf, agentConf AgentTLSConf) (*API, error) {
 	if log == nil {
 		log = zap.L()
 	}
@@ -37,10 +50,11 @@ func NewAPI(log *zap.Logger, bufConf BufferConf, apiConf APIConf) (*API, error) 
 	}
 
 	return &API{
-		log:      log,
-		bufConf:  bufConf,
-		apiConf:  apiConf,
-		handlers: handlers,
+		log:       log,
+		bufConf:   bufConf,
+		apiConf:   apiConf,
+		agentConf: agentConf,
+		handlers:  handlers,
 	}, nil
 }
 
@@ -117,10 +131,15 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 			return err
 		}
 
+		creds, err := api.prepareTLSToAgent()
+		if err != nil {
+			return err
+		}
+
 		streamPreparer := &streamPrep{}
 
 		// Start capture
-		out, err := capture(ctx, stream, streamPreparer, opts.Start.Options, targets, api.log)
+		out, err := capture(ctx, stream, streamPreparer, opts.Start.Options, targets, creds, api.log)
 		if err != nil {
 			return err
 		}
@@ -146,6 +165,42 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	// TODO: Handle isStop.
 
 	return nil
+}
+
+func (api *API) prepareTLSToAgent() (credentials.TransportCredentials, error) {
+	if api.agentConf.AgentTLSSkipVerify {
+		return insecure.NewCredentials(), nil
+	}
+
+	// Load certificate of the CA who signed agent's certificate
+	pemAgentCA, err := os.ReadFile(api.agentConf.AgentCA)
+	if err != nil {
+		api.log.Error("Load Agent CA certificate failed")
+		return nil, err
+	}
+
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(pemAgentCA) {
+		return nil, fmt.Errorf("failed to add agent CA's certificate")
+	}
+
+	// Create the credentials and return it
+	config := &tls.Config{
+		RootCAs:    certPool,
+		ServerName: api.agentConf.AgentCommonName,
+	}
+
+	// Load client's certificate and private key
+	if api.apiConf.ClientCertFile != "" && api.apiConf.ClientPrivateKeyFile != "" {
+		clientCert, err := tls.LoadX509KeyPair(api.apiConf.ClientCertFile, api.apiConf.ClientPrivateKeyFile)
+		if err != nil {
+			api.log.Error("Load API client certificate or private key failed")
+			return nil, err
+		}
+		config.Certificates = []tls.Certificate{clientCert}
+	}
+
+	return credentials.NewTLS(config), nil
 }
 
 // resolveAgentEndpoints tries all registered api.handlers until one responds or none can be found that
@@ -215,8 +270,8 @@ type streamPrep struct {
 
 // prepareStreamToTarget creates a client connection to the given target, contacts the client API for the Agent service
 // to start the Capture.
-func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint) (captureReceiver, error) {
-	cc, err := grpc.Dial(target.String(), grpc.WithTransportCredentials(insecure.NewCredentials())) // TODO: TLS
+func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials) (captureReceiver, error) {
+	cc, err := grpc.Dial(target.String(), grpc.WithTransportCredentials(creds))
 	if err != nil {
 		err = fmt.Errorf("start capture from '%s': %w", target, err)
 		// out <- newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error())
@@ -366,10 +421,10 @@ func stopCmd(cancel CancelCauseFunc, stream requestReceiver) {
 }
 
 type streamPreparer interface {
-	prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint) (captureReceiver, error)
+	prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials) (captureReceiver, error)
 }
 
-func capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, log *zap.Logger) (<-chan *CaptureResponse, error) {
+func capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
 
 	runningCaptures := 0
@@ -377,7 +432,7 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 		log = log.With(zap.String("target", target.String()))
 		log.Info("starting capture")
 
-		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target)
+		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target, creds)
 		if err != nil {
 
 			errMsg := convertStatusCodeToMsg(err, target)

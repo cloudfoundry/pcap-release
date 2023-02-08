@@ -22,9 +22,9 @@ properties:
     default: "info"
   pcap-api.enable_server_tls:
     default: true
-  pcap-api.cert:
+  pcap-api.tls.certificate:
     description: "TLS certificate for this server"
-  pcap-api.key:
+  pcap-api.tls.private_key:
     description: "Key for the TLS certificate"
   pcap-api.cf_api:
     description: "Endpoint of the cf API"
@@ -35,7 +35,7 @@ properties:
   pcap-api.agent_port:
     description: "Port of the pcap-agent that runs on the diego cells"
     default: "9494"
-  pcap-api.client_cert:
+  pcap-api.client_certificate:
     description: "mTLS client certificate to talk to the pcap-agent"
   pcap-api.client_key:
     description: "Key for mTLS client certificate"

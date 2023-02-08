@@ -10,6 +10,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"os"
 	"os/signal"
@@ -75,12 +77,17 @@ func main() {
 		log.Fatal("unable to create agent", zap.Error(err))
 	}
 
-	lis, err := listen(config)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Port))
 	if err != nil {
 		log.Fatal("unable to create listener", zap.Error(err))
 	}
 
-	server := grpc.NewServer()
+	tlsCredentials, err := loadTLSCredentials(config)
+	if err != nil {
+		log.Fatal("unable to load provided TLS credntials", zap.Error(err))
+	}
+
+	server := grpc.NewServer(grpc.Creds(tlsCredentials))
 	pcap.RegisterAgentServer(server, agent)
 
 	go waitForSignal(log, agent, server)
@@ -94,13 +101,13 @@ func main() {
 	log.Info("serve returned successfully")
 }
 
-// listen creates a new listener based off of the given Config. If Config.Tls is
-// nil a TCP listener is returned, otherwise a TLS listener is returned.
+// load server certificate and private key from the given Config. If Config.Tls is
+// nil a credentials which disable transport security will be used
 //
 // Note: the TLS version is currently hard-coded to TLSv1.3.
-func listen(c Config) (net.Listener, error) {
+func loadTLSCredentials(c Config) (credentials.TransportCredentials, error) {
 	if c.Tls == nil {
-		return net.Listen("tcp", fmt.Sprintf(":%d", c.Port))
+		return insecure.NewCredentials(), nil
 	}
 
 	cert, err := tls.LoadX509KeyPair(c.Tls.Certificate, c.Tls.PrivateKey)
@@ -134,7 +141,7 @@ func listen(c Config) (net.Listener, error) {
 		caPool.AddCert(ca)
 	}
 
-	tlsConf := tls.Config{
+	tlsConf := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS13,
 		MaxVersion:   tls.VersionTLS13,
@@ -142,7 +149,7 @@ func listen(c Config) (net.Listener, error) {
 		ClientCAs:    caPool,
 	}
 
-	return tls.Listen("tcp", fmt.Sprintf(":%d", c.Port), &tlsConf)
+	return credentials.NewTLS(tlsConf), nil
 }
 
 // waitForSignal to tell the agent to stop processing any streams. Will first tell the agent

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"io"
 	"sync"
@@ -313,11 +315,11 @@ type mockStreamPreparer struct {
 	err    error
 }
 
-func (m *mockStreamPreparer) prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint) (captureReceiver, error) {
+func (m *mockStreamPreparer) prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials) (captureReceiver, error) {
 	return m.stream, m.err
 }
 
-func TestCommonFunc2(t *testing.T) {
+func TestCapture(t *testing.T) {
 	tests := []struct {
 		name           string
 		targets        []AgentEndpoint
@@ -343,7 +345,7 @@ func TestCommonFunc2(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
-			got, err := capture(context.Background(), &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, log)
+			got, err := capture(context.Background(), &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, insecure.NewCredentials(), log)
 			if (err != nil) != tt.wantErr && status.Code(err) != codes.FailedPrecondition {
 				t.Errorf("capture() error = %v, wantErr %v", err, tt.wantErr)
 				return
