@@ -23,7 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type APIClient interface {
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
-	// CaptureBosh starts capturing packets on bosh VMs. The capture can be
+	// Capture starts capturing packets on target VMs. The capture can be
 	// stopped by closing the client-side send channel. The Api MUST listen for
 	// that close and MUST stop sending packets as soon as possible but SHOULD
 	// send packets that it still receives from the agents.

@@ -4,18 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
-	"io"
-	"net"
-
-	gopcap "github.com/google/gopacket/pcap"
-
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+	gopcap "github.com/google/gopacket/pcap"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"io"
+	"net"
+	"time"
 )
 
 var lis net.Listener
@@ -97,9 +96,7 @@ var _ = Describe("IntegrationTests", func() {
 		Context("with two agents and one API", func() {
 			It("finished without errors", func() {
 				ctx := context.Background()
-
 				stream, _ := apiClient.Capture(ctx)
-
 				request := boshRequest(&pcap.BoshCapture{
 					Token:      "123",
 					Deployment: "cf",
@@ -114,7 +111,7 @@ var _ = Describe("IntegrationTests", func() {
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-				code, messages, err := recvCapture(10_000, stream)
+				code, _, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
 
 				// FIXME: Should not be Unknown/EOF
@@ -151,13 +148,17 @@ var _ = Describe("IntegrationTests", func() {
 					defaultOptions)
 				err = stream.Send(request)
 				Expect(err).NotTo(HaveOccurred())
-				recvCapture(10, stream)
-
-				err = stream.Send(stop)
-
+				errCode, messages, err := recvCapture(10, stream)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(errCode).To(Equal(codes.OK))
+				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_NOT_FOUND)).To(BeTrue())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				code, _, err := recvCapture(10_000, stream)
+				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
 
-				recvCapture(10_000, stream)
+				// FIXME: Should not be Unknown/EOF
+				Expect(code).To(Equal(codes.Unknown))
 
 			})
 			It("No pcap-agents available", func() {
@@ -172,8 +173,116 @@ var _ = Describe("IntegrationTests", func() {
 
 				err = stream.Send(request)
 				Expect(err).NotTo(HaveOccurred())
-				errCode, _, err := recvCapture(10, stream)
+				errCode, messages, err := recvCapture(10, stream)
+				fmt.Print(errCode)
 				Expect(errCode).To(Equal(codes.FailedPrecondition))
+				//FixMe expected message type
+				Expect(containsMsgType(messages, pcap.MessageType_START_CAPTURE_FAILED)).To(BeTrue())
+			})
+			It("One pcap-agent crashes", func() {
+				ctx := context.Background()
+				stream, _ := apiClient.Capture(ctx)
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"}}, defaultOptions)
+
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				go func() {
+					time.Sleep(1 * time.Second)
+					agentServer2.Stop()
+				}()
+				time.Sleep(2 * time.Second)
+				errCode, messages, err := recvCapture(500, stream)
+				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				//TODO change message type > instance disconnected
+				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_NOT_FOUND)).To(BeTrue())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				code, _, err := recvCapture(10_000, stream)
+				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+
+				// FIXME: Should not be Unknown/EOF
+				Expect(code).To(Equal(codes.Unknown))
+
+			})
+			It("One pcap-agent drains", func() {
+				ctx := context.Background()
+				stream, _ := apiClient.Capture(ctx)
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"}}, defaultOptions)
+
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				go func() {
+					time.Sleep(3 * time.Second)
+					agentServer2.GracefulStop()
+				}()
+				time.Sleep(2 * time.Second)
+				errCode, _, err := recvCapture(200, stream)
+				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				Expect(err).NotTo(HaveOccurred())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				code, _, err := recvCapture(10_000, stream)
+				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+
+				// FIXME: Should not be Unknown/EOF
+				Expect(code).To(Equal(codes.Unknown))
+
+			})
+			It("One pcap-agent is congested", func() {
+				ctx := context.Background()
+				stream, _ := apiClient.Capture(ctx)
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"}}, defaultOptions)
+
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				errCode, messages, err := recvCapture(10000, stream)
+				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(containsMsgType(messages, pcap.MessageType_CONGESTED)).To(BeTrue())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				code, _, err := recvCapture(10_000, stream)
+				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+
+				// FIXME: Should not be Unknown/EOF
+				Expect(code).To(Equal(codes.Unknown))
+
+			})
+		})
+		Context("with one agent and one API", func() {
+			BeforeEach(func() {
+				agentServer1.GracefulStop()
+			})
+			It("pcap-agent crashes", func() {
+				ctx := context.Background()
+				stream, _ := apiClient.Capture(ctx)
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"}}, defaultOptions)
+
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				go func() {
+					time.Sleep(3 * time.Second)
+					agentServer2.Stop()
+				}()
+				time.Sleep(3 * time.Second)
+				errCode, messages, err := recvCapture(500, stream)
+				//TODO check why it returns unknown
+				//Expect(errCode).To(Equal(codes.Unavailable))
+				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				//TODO change message type > instance disconnected
+				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_NOT_FOUND)).To(BeTrue())
 			})
 		})
 	})
@@ -181,7 +290,7 @@ var _ = Describe("IntegrationTests", func() {
 
 func createAgent(port int) (pcap.AgentClient, *grpc.Server, pcap.AgentEndpoint) {
 	var server *grpc.Server
-	agent, err := pcap.NewAgent(nil, pcap.BufferConf{100, 98, 80})
+	agent, err := pcap.NewAgent(nil, pcap.BufferConf{100, 98, 90})
 	Expect(err).NotTo(HaveOccurred())
 
 	lis, err = net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
@@ -209,7 +318,7 @@ func createAgent(port int) (pcap.AgentClient, *grpc.Server, pcap.AgentEndpoint) 
 
 func createAPI(port int, targets []pcap.AgentEndpoint) (pcap.APIClient, *grpc.Server) {
 	var server *grpc.Server
-	api, err := pcap.NewAPI(nil, pcap.BufferConf{100, 98, 80}, pcap.APIConf{targets})
+	api, err := pcap.NewAPI(nil, pcap.BufferConf{100, 98, 90}, pcap.APIConf{targets})
 	Expect(err).NotTo(HaveOccurred())
 
 	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -240,9 +349,22 @@ func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.Capt
 		}
 		code := status.Code(err)
 		if code != codes.OK {
-			return code, messages, fmt.Errorf("receive non-OK code: %s: %s\n", code.String(), err.Error())
+			return code, messages, fmt.Errorf("receive code: %s: %s\n", code.String(), err.Error())
 		}
+		fmt.Println(message)
+		//fmt.Printf("Message Type:  %s\n", message.GetMessage().GetType().String())
 		messages = append(messages, message)
 	}
 	return codes.OK, messages, nil
+}
+
+// contains checks if a string is present in a slice
+func containsMsgType(messages []*pcap.CaptureResponse, msgType pcap.MessageType) bool {
+	for _, msg := range messages {
+		if msg.GetPacket() == nil && msg.GetMessage().GetType() == msgType {
+			return true
+		}
+	}
+
+	return false
 }

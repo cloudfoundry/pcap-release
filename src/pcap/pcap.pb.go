@@ -350,6 +350,7 @@ func (x *Message) GetType() MessageType {
 	if x != nil {
 		return x.Type
 	}
+	//TODO is this the intended type
 	return MessageType_INSTANCE_NOT_FOUND
 }
 

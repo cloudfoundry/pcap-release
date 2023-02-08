@@ -286,16 +286,26 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 
 func convertStatusCodeToMsg(err error, target AgentEndpoint) *CaptureResponse {
 	code := status.Code(err)
+	unwrappedError := errors.Unwrap(err)
+	if unwrappedError != nil {
+		code = status.Code(unwrappedError)
+	}
 	err = fmt.Errorf("capturing from agent %s: %w", target, err)
 
 	// FIXME: internal+unknown and default are the same. Is default really a connection error?
 	switch code {
 	case codes.InvalidArgument:
 		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error())
-	case codes.Unavailable:
+	case codes.Aborted:
 		return newMessageResponse(MessageType_INSTANCE_DISCONNECTED, err.Error())
 	case codes.Internal, codes.Unknown:
 		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error())
+	case codes.FailedPrecondition:
+		return newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error())
+	case codes.ResourceExhausted:
+		return newMessageResponse(MessageType_LIMIT_REACHED, err.Error())
+	case codes.Unavailable:
+		return newMessageResponse(MessageType_INSTANCE_NOT_FOUND, err.Error())
 	default:
 		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error())
 	}
@@ -349,7 +359,9 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 
 		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target)
 		if err != nil {
-			sendErr := stream.Send(newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error()))
+
+			errMsg := convertStatusCodeToMsg(err, target)
+			sendErr := stream.Send(errMsg)
 			if sendErr != nil {
 				return nil, sendErr
 			}
@@ -368,6 +380,7 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 	}
 
 	if runningCaptures == 0 {
+		stream.Send(newMessageResponse(MessageType_START_CAPTURE_FAILED, "Starting of all captures failed"))
 		log.Error("Starting of all captures failed during stream preparation")
 		return nil, errorf(codes.FailedPrecondition, "Starting of all captures failed")
 	}
