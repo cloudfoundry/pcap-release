@@ -24,6 +24,8 @@ import (
 //expectedErr: errNilField,
 //},
 
+var origin = "pcap-api-1234ab"
+
 type mockCaptureStream struct {
 	msg *CaptureResponse
 	err error
@@ -81,7 +83,7 @@ func TestReadMsg(t *testing.T) {
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 
-			out := readMsgFromStream(ctx, tt.captureStream, tt.target)
+			out := readMsgFromStream(ctx, tt.captureStream, tt.target, origin)
 
 			var got MessageType
 
@@ -295,7 +297,7 @@ func TestConvertStatusCodeToMsg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := convertStatusCodeToMsg(tt.err, AgentEndpoint{"localhost", 8083})
+			got := convertStatusCodeToMsg(tt.err, AgentEndpoint{"localhost", 8083}, origin)
 			if got.GetMessage().GetType() != tt.wantMsgType {
 				t.Errorf("convertStatusCodeToMsg() = %v, want %v", got.GetMessage().GetType(), tt.wantMsgType)
 
@@ -317,7 +319,7 @@ type mockStreamPreparer struct {
 	err    error
 }
 
-func (m *mockStreamPreparer) prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials) (captureReceiver, error) {
+func (m *mockStreamPreparer) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, origin string) (captureReceiver, error) {
 	return m.stream, m.err
 }
 
@@ -347,7 +349,7 @@ func TestCapture(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
-			got, err := capture(context.Background(), &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, insecure.NewCredentials(), log)
+			got, err := capture(context.Background(), &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, insecure.NewCredentials(), log, origin)
 			if (err != nil) != tt.wantErr && status.Code(err) != codes.FailedPrecondition {
 				t.Errorf("capture() error = %v, wantErr %v", err, tt.wantErr)
 				return

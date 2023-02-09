@@ -24,6 +24,7 @@ type API struct {
 	agentConf  AgentTLSConf
 	mTLSConfig *ClientCert
 	UnimplementedAPIServer
+	id string
 }
 
 type ClientCert struct {
@@ -42,12 +43,13 @@ type ManualEndpoints struct {
 	Targets []AgentEndpoint
 }
 
-func NewAPI(bufConf BufferConf, mTLSConfig *ClientCert, agentConf AgentTLSConf) *API {
+func NewAPI(bufConf BufferConf, mTLSConfig *ClientCert, agentConf AgentTLSConf, id string) *API {
 	return &API{
 		bufConf:    bufConf,
 		handlers:   make(map[string]CaptureHandler),
 		agentConf:  agentConf,
 		mTLSConfig: mTLSConfig,
+		id:         id,
 	}
 }
 
@@ -159,7 +161,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	streamPreparer := &streamPrep{}
 
 	// Start capture
-	out, err := capture(ctx, stream, streamPreparer, opts.Start.Options, targets, creds, log)
+	out, err := capture(ctx, stream, streamPreparer, opts.Start.Options, targets, creds, log, api.id)
 	if err != nil {
 		return err
 	}
@@ -167,7 +169,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	forwardWG := &sync.WaitGroup{}
 	forwardWG.Add(1)
 
-	forwardToStream(cancel, out, stream, api.bufConf, forwardWG)
+	forwardToStream(cancel, out, stream, api.bufConf, forwardWG, api.id)
 
 	// Wait for capture stop
 	stopCmd(cancel, stream)
@@ -287,11 +289,10 @@ type streamPrep struct {
 
 // prepareStreamToTarget creates a client connection to the given target, contacts the client API for the Agent service
 // to start the Capture.
-func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials) (captureReceiver, error) {
+func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, origin string) (captureReceiver, error) {
 	cc, err := grpc.Dial(target.String(), grpc.WithTransportCredentials(creds))
 	if err != nil {
 		err = fmt.Errorf("start capture from '%s': %w", target, err)
-		// out <- newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error())
 		return nil, err
 	}
 
@@ -308,7 +309,7 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 	captureStream, err := agent.Capture(context.Background())
 
 	if err != nil {
-		convertStatusCodeToMsg(err, target)
+		convertStatusCodeToMsg(err, target, origin)
 		return nil, err
 	}
 
@@ -318,7 +319,7 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 			status: status.New(codes.FailedPrecondition, "Expanding the pcap filter to exclude traffic to pcap-api failed"),
 			inner:  err,
 		}
-		convertStatusCodeToMsg(err, target)
+		convertStatusCodeToMsg(err, target, origin)
 		return nil, err
 	}
 	req.Filter = patchedFilter
@@ -346,7 +347,7 @@ type captureReceiver interface {
 // readMsgFromStream reads Capture messages from stream and outputs them to the out channel.If the given context errors
 // an AgentRequest_Stop is sent and the messages continue to be read.if context will be cancelled from other routine
 // (mostly  because client requests to stop capture), the stop request will be forwarded to agent. The data from the agent will be read till stream ends with EOF.
-func readMsgFromStream(ctx context.Context, captureStream captureReceiver, target AgentEndpoint) <-chan *CaptureResponse {
+func readMsgFromStream(ctx context.Context, captureStream captureReceiver, target AgentEndpoint, origin string) <-chan *CaptureResponse {
 	out := make(chan *CaptureResponse, 100)
 	stopped := false
 	go func() {
@@ -355,7 +356,7 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 		defer func(captureStream captureReceiver) {
 			closeSendErr := captureStream.CloseSend()
 			if closeSendErr != nil {
-				out <- convertStatusCodeToMsg(closeSendErr, target)
+				out <- convertStatusCodeToMsg(closeSendErr, target, origin)
 				return
 			}
 		}(captureStream)
@@ -366,19 +367,19 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 					Payload: &AgentRequest_Stop{},
 				})
 				if err != nil {
-					out <- convertStatusCodeToMsg(err, target)
+					out <- convertStatusCodeToMsg(err, target, origin)
 					return
 				}
 			}
 			msg, err := captureStream.Recv()
 			if err != nil && errors.Is(err, io.EOF) {
 				msg := fmt.Sprintf("Capturing stopped on agent pcap-agent %s", target)
-				out <- newMessageResponse(MessageType_CAPTURE_STOPPED, msg)
+				out <- newMessageResponse(MessageType_CAPTURE_STOPPED, msg, origin)
 				return
 			}
 			code := status.Code(err)
 			if code != codes.OK {
-				out <- convertStatusCodeToMsg(err, target)
+				out <- convertStatusCodeToMsg(err, target, origin)
 				return
 			}
 			out <- msg
@@ -387,7 +388,7 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 	return out
 }
 
-func convertStatusCodeToMsg(err error, target AgentEndpoint) *CaptureResponse {
+func convertStatusCodeToMsg(err error, target AgentEndpoint, origin string) *CaptureResponse {
 	code := status.Code(err)
 	if code == codes.Unknown {
 		unwrappedError := errors.Unwrap(err)
@@ -400,19 +401,19 @@ func convertStatusCodeToMsg(err error, target AgentEndpoint) *CaptureResponse {
 	// FIXME: internal+unknown and default are the same. Is default really a connection error?
 	switch code {
 	case codes.InvalidArgument:
-		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error())
+		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error(), origin)
 	case codes.Aborted:
-		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error())
+		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), origin)
 	case codes.Internal, codes.Unknown:
-		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error())
+		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error(), origin)
 	case codes.FailedPrecondition:
-		return newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error())
+		return newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error(), origin)
 	case codes.ResourceExhausted:
-		return newMessageResponse(MessageType_LIMIT_REACHED, err.Error())
+		return newMessageResponse(MessageType_LIMIT_REACHED, err.Error(), origin)
 	case codes.Unavailable:
-		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error())
+		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), origin)
 	default:
-		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error())
+		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error(), origin)
 	}
 }
 
@@ -451,10 +452,10 @@ func stopCmd(cancel CancelCauseFunc, stream requestReceiver) {
 }
 
 type streamPreparer interface {
-	prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials) (captureReceiver, error)
+	prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials, string) (captureReceiver, error)
 }
 
-func capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (<-chan *CaptureResponse, error) {
+func capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger, origin string) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
 
 	runningCaptures := 0
@@ -462,10 +463,10 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 		log = log.With(zap.String("target", target.String()))
 		log.Info("starting capture")
 
-		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target, creds)
+		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target, creds, origin)
 		if err != nil {
 
-			errMsg := convertStatusCodeToMsg(err, target)
+			errMsg := convertStatusCodeToMsg(err, target, origin)
 			sendErr := stream.Send(errMsg)
 			if sendErr != nil {
 				return nil, sendErr
@@ -480,12 +481,12 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 
 		log.Info("Add capture waiting group")
 
-		c := readMsgFromStream(ctx, captureStream, target)
+		c := readMsgFromStream(ctx, captureStream, target, origin)
 		captureCs = append(captureCs, c)
 	}
 
 	if runningCaptures == 0 {
-		stream.Send(newMessageResponse(MessageType_START_CAPTURE_FAILED, "Starting of all captures failed"))
+		stream.Send(newMessageResponse(MessageType_START_CAPTURE_FAILED, "Starting of all captures failed", origin))
 		log.Error("Starting of all captures failed during stream preparation")
 		return nil, errorf(codes.FailedPrecondition, "Starting of all captures failed")
 	}

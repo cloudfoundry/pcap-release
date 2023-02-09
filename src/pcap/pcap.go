@@ -70,12 +70,13 @@ func purge[T any](c <-chan T) {
 }
 
 // newMessageResponse wraps the message msg of type t into a CaptureResponse, which can be sent to the recipient.
-func newMessageResponse(t MessageType, msg string) *CaptureResponse {
+func newMessageResponse(t MessageType, msg string, origin string) *CaptureResponse {
 	return &CaptureResponse{
 		Payload: &CaptureResponse_Message{
 			Message: &Message{
 				Type:    t,
 				Message: msg,
+				Origin:  origin,
 			},
 		},
 	}

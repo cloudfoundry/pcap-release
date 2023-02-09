@@ -17,6 +17,9 @@ properties:
     default: ":9494"
   pcap-agent.log_level:
     default: "info"
+  pcap-agent.id:
+    description: "ID of the instance or app where the agent is co-located"
+    example: "router/d55baeba-f645-4219-8b49-2b4654a17165"
   pcap-agent.container_store:
     default: "/var/vcap/data/container-metadata/store.json"
   pcap-agent.runc:

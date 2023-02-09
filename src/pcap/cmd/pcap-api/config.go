@@ -35,6 +35,7 @@ type APIConfig struct {
 	AgentCommonName    string          `yaml:"agent_common_name,omitempty" validate:"required_if=AgentTLSSkipVerify false"`
 	AgentCA            string          `yaml:"agent_ca,omitempty" validate:"required_if=AgentTLSSkipVerify false"`
 	ManualEndpoints    pcap.ManualEndpoints
+	ID                 string `yaml:"id" validate:"required"`
 }
 
 type TLS struct {

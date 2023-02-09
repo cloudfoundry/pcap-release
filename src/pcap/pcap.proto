@@ -33,7 +33,7 @@ message Packet {
 message Message {
   MessageType type = 1;
   string message = 2;
-  //TODO Add origin
+  string origin = 3;
 }
 
 // MessageType represents the underlying issue for easy assertion of the

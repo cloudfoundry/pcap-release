@@ -22,15 +22,18 @@ type Agent struct {
 	streamsWG sync.WaitGroup
 	// log carries the logger all session loggers are derived from.
 	bufConf BufferConf
+	// ID of the instance or app where the agent is co-located.
+	id string
 
 	UnimplementedAgentServer
 }
 
 // NewAgent creates a new ready-to-use agent.
-func NewAgent(bufConf BufferConf) *Agent {
+func NewAgent(bufConf BufferConf, id string) *Agent {
 	return &Agent{
 		done:    make(chan struct{}),
 		bufConf: bufConf,
+		id:      id,
 	}
 }
 
@@ -127,7 +130,7 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	// when we are closing the stream.
 	forwardWG := &sync.WaitGroup{}
 	forwardWG.Add(1)
-	forwardToStream(cancel, responses, stream, a.bufConf, forwardWG)
+	forwardToStream(cancel, responses, stream, a.bufConf, forwardWG, a.id)
 
 	agentStopCmd(cancel, stream)
 
@@ -253,7 +256,7 @@ type responseSender interface {
 // forwardToStream reads Packets from src until it's closed and writes them to stream.
 // If it encounters an error while doing so the error is set to cause and the cancel function
 // is called. Any data left in src is discarded after a write-error occurred.
-func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, bufConf BufferConf, wg *sync.WaitGroup) {
+func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, bufConf BufferConf, wg *sync.WaitGroup, id string) {
 	go func() {
 		// After this function returns we want to make sure that this channel is
 		// drained properly if there is anything left in it. This avoids responses
@@ -295,7 +298,7 @@ func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream
 			case len(src) >= bufConf.UpperLimit && !isMsg:
 				discarding = true
 				// this only is sent when we start discarding (and discards the current data packet)
-				res = newMessageResponse(MessageType_CONGESTED, "too much back pressure, discarding packets")
+				res = newMessageResponse(MessageType_CONGESTED, "too much back pressure, discarding packets", id)
 			}
 
 			err := stream.Send(res)

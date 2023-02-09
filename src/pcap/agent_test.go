@@ -25,6 +25,7 @@ var (
 	bufSize             = 5
 	bufUpperLimit       = 4
 	bufLowerLimit       = 3
+	agentOrigin         = "pcap-agent-router/1234ab"
 )
 
 type mockStreamReceiver struct {
@@ -219,7 +220,7 @@ func TestForwardToStream(t *testing.T) {
 			name:        "buffer is filled with MessageResponse, no packets discarded",
 			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
 			resToBeSent: bufUpperLimit + 1,
-			response:    newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, "invalid id"),
+			response:    newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, "invalid id", agentOrigin),
 			expectedErr: errTestEnded,
 		},
 		{
@@ -252,7 +253,7 @@ func TestForwardToStream(t *testing.T) {
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 
-			forwardToStream(cancel, src, test.stream, BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, wg)
+			forwardToStream(cancel, src, test.stream, BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, wg, agentOrigin)
 
 			<-ctx.Done()
 
@@ -355,7 +356,7 @@ func TestAgentDraining(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
+			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit}, agentOrigin)
 			if tt.expectedDone {
 				a.Stop()
 			}
@@ -388,7 +389,7 @@ func TestAgentStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
+			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit}, agentOrigin)
 			if tt.agentDraining {
 				a.Stop()
 			}
@@ -462,7 +463,7 @@ func TestAgentCapture(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
+			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit}, agentOrigin)
 
 			if !test.agentRunning {
 				a.Stop()

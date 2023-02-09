@@ -33,6 +33,7 @@ type Config struct {
 	} `yaml:"tls,omitempty"`
 	Buffer   pcap.BufferConf `yaml:"buffer"`
 	LogLevel string          `yaml:"logLevel"`
+	ID       string          `yaml:"id" validate:"required"`
 }
 
 func (c Config) validate() error {

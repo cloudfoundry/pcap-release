@@ -73,7 +73,9 @@ var _ = Describe("IntegrationTests", func() {
 	var agentServer1 *grpc.Server
 	var agentServer2 *grpc.Server
 	var apiServer *grpc.Server
-
+	var apiID = "123asd"
+	var agentID1 = "router/123asd"
+	var agentID2 = "router/123asd"
 	var stop *pcap.CaptureRequest
 	var defaultOptions *pcap.CaptureOptions
 
@@ -82,14 +84,14 @@ var _ = Describe("IntegrationTests", func() {
 			var targets []pcap.AgentEndpoint
 			var target pcap.AgentEndpoint
 
-			_, agentServer1, target = createAgent(8082, nil)
+			_, agentServer1, target = createAgent(8082, agentID1, nil)
 			targets = append(targets, target)
 
-			_, agentServer2, target = createAgent(8083, nil)
+			_, agentServer2, target = createAgent(8083, agentID2, nil)
 			targets = append(targets, target)
 
 			agentTLSConf := pcap.AgentTLSConf{AgentTLSSkipVerify: true}
-			apiClient, apiServer = createAPI(8080, targets, nil, agentTLSConf)
+			apiClient, apiServer = createAPI(8080, targets, nil, agentTLSConf, apiID)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -308,7 +310,7 @@ var _ = Describe("IntegrationTests", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 			var target pcap.AgentEndpoint
-
+			agentID1 := "router/123asd"
 			agentServerCertCN := "pcap-agent.service.cf.internal"
 			certPath, keyPath, caPath, err := generateCerts(agentServerCertCN, "agent")
 			Expect(err).ToNot(HaveOccurred())
@@ -320,13 +322,13 @@ var _ = Describe("IntegrationTests", func() {
 			mTLSConfig, err := configureServer(certPath, keyPath, clientCAFile)
 			Expect(err).ToNot(HaveOccurred())
 
-			_, agentServer1, target = createAgent(8082, mTLSConfig)
+			_, agentServer1, target = createAgent(8082, agentID1, mTLSConfig)
 			targets = append(targets, target)
 
 			agentTLSConf := pcap.AgentTLSConf{AgentTLSSkipVerify: false, AgentCommonName: agentServerCertCN, AgentCA: caPath}
 			clientCert := &pcap.ClientCert{ClientCertFile: clientCertFile, ClientPrivateKeyFile: clientKeyFile}
 
-			apiClient, apiServer = createAPI(8080, targets, clientCert, agentTLSConf)
+			apiClient, apiServer = createAPI(8080, targets, clientCert, agentTLSConf, agentID1)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -506,9 +508,9 @@ func configureServer(certFile string, keyFile string, clientCAFile string) (cred
 	return credentials.NewTLS(config), nil
 }
 
-func createAgent(port int, tlsCreds credentials.TransportCredentials) (pcap.AgentClient, *grpc.Server, pcap.AgentEndpoint) {
+func createAgent(port int, id string, tlsCreds credentials.TransportCredentials) (pcap.AgentClient, *grpc.Server, pcap.AgentEndpoint) {
 	var server *grpc.Server
-	agent := pcap.NewAgent(pcap.BufferConf{100, 98, 80})
+	agent := pcap.NewAgent(pcap.BufferConf{100, 98, 80}, id)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	Expect(err).NotTo(HaveOccurred())
@@ -537,9 +539,9 @@ func createAgent(port int, tlsCreds credentials.TransportCredentials) (pcap.Agen
 	return agentClient, server, target
 }
 
-func createAPI(port int, targets []pcap.AgentEndpoint, mTLSConfig *pcap.ClientCert, agentTLSConf pcap.AgentTLSConf) (pcap.APIClient, *grpc.Server) {
+func createAPI(port int, targets []pcap.AgentEndpoint, mTLSConfig *pcap.ClientCert, agentTLSConf pcap.AgentTLSConf, id string) (pcap.APIClient, *grpc.Server) {
 	var server *grpc.Server
-	api := pcap.NewAPI(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, mTLSConfig, agentTLSConf)
+	api := pcap.NewAPI(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, mTLSConfig, agentTLSConf, id)
 	api.RegisterHandler(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
 	var err error

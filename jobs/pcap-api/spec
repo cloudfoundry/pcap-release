@@ -20,6 +20,9 @@ properties:
     default: ":8080"
   pcap-api.log_level:
     default: "info"
+  pcap-api.id:
+    description: "bosh instance id"
+    example: "f9281cda-1234-bbcd-ef12-1337cafe0048"
   pcap-api.enable_server_tls:
     default: true
   pcap-api.tls.certificate:

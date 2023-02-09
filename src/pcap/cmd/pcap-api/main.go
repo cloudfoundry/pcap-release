@@ -81,7 +81,7 @@ func main() {
 	}
 
 	agentConf := pcap.AgentTLSConf{AgentTLSSkipVerify: config.AgentTLSSkipVerify, AgentCommonName: config.AgentCommonName, AgentCA: config.AgentCA}
-	api := pcap.NewAPI(config.Buffer, nil, agentConf)
+	api := pcap.NewAPI(config.Buffer, nil, agentConf, config.ID)
 
 	api.RegisterHandler(&pcap.BoshHandler{Config: config.ManualEndpoints})
 
