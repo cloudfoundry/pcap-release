@@ -193,7 +193,7 @@ func Test_generateApiFilter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			interfaceAddrs = tt.interfaceAddrs
-			got, err := generateApiFilter()
+			got, err := generateAPIFilter()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("generateApiFilter() error = %v, wantErr %v", err, tt.wantErr)
 				return

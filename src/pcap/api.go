@@ -312,6 +312,17 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 		return nil, err
 	}
 
+	patchedFilter, err := patchFilter(req.Filter)
+	if err != nil {
+		err = pcapError{
+			status: status.New(codes.FailedPrecondition, "Expanding the pcap filter to exclude traffic to pcap-api failed"),
+			inner:  err,
+		}
+		convertStatusCodeToMsg(err, target)
+		return nil, err
+	}
+	req.Filter = patchedFilter
+
 	err = captureStream.Send(&AgentRequest{
 		Payload: &AgentRequest_Start{
 			Start: &StartAgentCapture{

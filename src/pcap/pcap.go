@@ -194,6 +194,7 @@ func vcapIDFromCtx(ctx context.Context) (*string, error) {
 	return nil, errNoVcapId
 }
 
+// interfaceAddrs provides a list of all known network addresses
 var interfaceAddrs = net.InterfaceAddrs
 
 // containsForbiddenRunes checks whether a given string contains
@@ -212,7 +213,7 @@ func containsForbiddenRunes(in string) bool {
 // patchFilter extends the given filter by excluding the filter generated
 // by generateApiFilter.
 func patchFilter(filter string) (string, error) {
-	apiFilter, err := generateApiFilter()
+	apiFilter, err := generateAPIFilter()
 	if err != nil {
 		return "", err
 	}
@@ -229,7 +230,7 @@ func patchFilter(filter string) (string, error) {
 // generateApiFilter takes all IP addresses as returned by interfaceAddrs and
 // generates a filter for those IP addresses (loopback is excluded from the filter).
 // Note: the filter *matches* all of those IP addresses.
-func generateApiFilter() (string, error) {
+func generateAPIFilter() (string, error) {
 	addrs, err := interfaceAddrs()
 	if err != nil {
 		return "", fmt.Errorf("unable to get IPs: %w", err)
