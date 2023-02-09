@@ -196,6 +196,19 @@ func vcapIDFromCtx(ctx context.Context) (*string, error) {
 
 var interfaceAddrs = net.InterfaceAddrs
 
+// containsForbiddenRunes checks whether a given string contains
+// any character that is less than 32 or more than 126.
+//
+// See: https://www.lookuptables.com/text/ascii-table
+func containsForbiddenRunes(in string) bool {
+	for _, r := range []rune(in) {
+		if r < 32 || r > 126 {
+			return true
+		}
+	}
+	return false
+}
+
 // patchFilter extends the given filter by excluding the filter generated
 // by generateApiFilter.
 func patchFilter(filter string) (string, error) {

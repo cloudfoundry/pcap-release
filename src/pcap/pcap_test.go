@@ -264,3 +264,39 @@ func Test_patchFilter(t *testing.T) {
 		})
 	}
 }
+
+func Test_containsForbiddenRunes(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{
+			"valid string",
+			"port 443",
+			false,
+		},
+		{
+			"valid string with complex expression",
+			"(port 443) and ip host 10.0.0.1 or (ether proto \\ip and tcp)",
+			false,
+		},
+		{
+			"illegal character",
+			"port 443\v",
+			true,
+		},
+		{
+			"empty string",
+			"",
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := containsForbiddenRunes(tt.in); got != tt.want {
+				t.Errorf("containsForbiddenRunes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
