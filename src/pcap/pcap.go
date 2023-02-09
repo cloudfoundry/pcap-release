@@ -102,8 +102,8 @@ func (opts *CaptureOptions) validate() error {
 		return err
 	}
 
-	if len(opts.Filter) > 1000 {
-		return fmt.Errorf("expected filter to be less than 1000 characters")
+	if len(opts.Filter) > 2000 {
+		return fmt.Errorf("expected filter to be less than 2000 characters")
 	}
 
 	if opts.SnapLen == 0 {
@@ -239,22 +239,27 @@ func generateAPIFilter() (string, error) {
 		return "", fmt.Errorf("unable to determine ip addresses")
 	}
 
-	var ips []string
+	var ipFilters []string
 	for _, addr := range addrs {
 		ipNet, ok := addr.(*net.IPNet)
 		// check that:
 		// * ipNet is actually an IP address
 		// * it is not a loopback address
 		// * can be represented in either 4- or 16-bytes representation
-		if ok && !ipNet.IP.IsLoopback() && (ipNet.IP.To4() != nil || ipNet.IP.To16() != nil) {
-			ips = append(ips, ipNet.IP.String())
+		if ok && !ipNet.IP.IsLoopback() {
+			v4 := ipNet.IP.To4() != nil
+			v6 := !v4 && ipNet.IP.To16() != nil
+
+			expression := "ip"
+			if !v4 && !v6 {
+				return "", fmt.Errorf("address %s is not IPv4 or v6", ipNet.IP.String())
+			}
+			if v6 {
+				expression = "ip6"
+			}
+
+			ipFilters = append(ipFilters, fmt.Sprintf("%s host %s", expression, ipNet.IP.String()))
 		}
 	}
-
-	var ipFilters []string
-	for _, ip := range ips {
-		ipFilters = append(ipFilters, fmt.Sprintf("ip host %s", ip))
-	}
-
 	return strings.Join(ipFilters, " or "), nil
 }
