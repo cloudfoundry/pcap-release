@@ -2,6 +2,7 @@ package pcap
 
 import (
 	"math/rand"
+	"net"
 	"testing"
 
 	"github.com/go-playground/validator/v10"
@@ -135,6 +136,130 @@ func TestBufferConfValidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := validate.Struct(tt.bc); (err != nil) != tt.wantErr {
 				t.Errorf("validate.Struct(BufferConfig) error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_generateApiFilter(t *testing.T) {
+	tests := []struct {
+		name           string
+		interfaceAddrs func() ([]net.Addr, error)
+		want           string
+		wantErr        bool
+	}{
+		{
+			"one ip address",
+			func() ([]net.Addr, error) {
+				return []net.Addr{&net.IPNet{
+					IP:   net.IPv4(100, 100, 100, 100),
+					Mask: nil,
+				},
+				}, nil
+			},
+			"ip host 100.100.100.100",
+			false,
+		},
+		{
+			"multiple ip addresses",
+			func() ([]net.Addr, error) {
+				return []net.Addr{
+					&net.IPNet{
+						IP:   net.IPv4(100, 100, 100, 100),
+						Mask: nil,
+					},
+					&net.IPNet{
+						IP:   net.IPv4(100, 100, 100, 101),
+						Mask: nil,
+					},
+					&net.IPNet{
+						IP:   net.IPv4(1, 100, 100, 100),
+						Mask: nil,
+					},
+				}, nil
+			},
+			"ip host 100.100.100.100 or ip host 100.100.100.101 or ip host 1.100.100.100",
+			false,
+		},
+		{
+			"no ip address",
+			func() ([]net.Addr, error) {
+				return []net.Addr{}, nil
+			},
+			"",
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			interfaceAddrs = tt.interfaceAddrs
+			got, err := generateApiFilter()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("generateApiFilter() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("generateApiFilter() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_patchFilter(t *testing.T) {
+	tests := []struct {
+		name           string
+		filter         string
+		interfaceAddrs func() ([]net.Addr, error)
+		want           string
+		wantErr        bool
+	}{
+		{
+			"simple filter",
+			"port 443",
+			func() ([]net.Addr, error) {
+				return []net.Addr{
+					&net.IPNet{
+						IP:   net.IPv4(100, 100, 100, 100),
+						Mask: nil,
+					},
+					&net.IPNet{
+						IP:   net.IPv4(100, 100, 100, 101),
+						Mask: nil,
+					},
+					&net.IPNet{
+						IP:   net.IPv4(1, 100, 100, 100),
+						Mask: nil,
+					},
+				}, nil
+			},
+			"not (ip host 100.100.100.100 or ip host 100.100.100.101 or ip host 1.100.100.100) and (port 443)",
+			false,
+		},
+		{
+			"no filter",
+			"",
+			func() ([]net.Addr, error) {
+				return []net.Addr{
+					&net.IPNet{
+						IP:   net.IPv4(100, 100, 100, 100),
+						Mask: nil,
+					},
+				}, nil
+			},
+			"not (ip host 100.100.100.100)",
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			interfaceAddrs = tt.interfaceAddrs
+			got, err := patchFilter(tt.filter)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("patchFilter() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("patchFilter() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

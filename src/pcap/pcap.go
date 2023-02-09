@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"unicode"
 
 	"github.com/google/uuid"
@@ -190,4 +192,55 @@ func vcapIDFromCtx(ctx context.Context) (*string, error) {
 	}
 
 	return nil, errNoVcapId
+}
+
+var interfaceAddrs = net.InterfaceAddrs
+
+// patchFilter extends the given filter by excluding the filter generated
+// by generateApiFilter.
+func patchFilter(filter string) (string, error) {
+	apiFilter, err := generateApiFilter()
+	if err != nil {
+		return "", err
+	}
+
+	filter = strings.TrimSpace(filter)
+
+	if filter == "" {
+		return fmt.Sprintf("not (%s)", apiFilter), nil
+	} else {
+		return fmt.Sprintf("not (%s) and (%s)", apiFilter, filter), nil
+	}
+}
+
+// generateApiFilter takes all IP addresses as returned by interfaceAddrs and
+// generates a filter for those IP addresses (loopback is excluded from the filter).
+// Note: the filter *matches* all of those IP addresses.
+func generateApiFilter() (string, error) {
+	addrs, err := interfaceAddrs()
+	if err != nil {
+		return "", fmt.Errorf("unable to get IPs: %w", err)
+	}
+	if len(addrs) == 0 {
+		return "", fmt.Errorf("unable to determine ip addresses")
+	}
+
+	var ips []string
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		// check that:
+		// * ipNet is actually an IP address
+		// * it is not a loopback address
+		// * can be represented in either 4- or 16-bytes representation
+		if ok && !ipNet.IP.IsLoopback() && (ipNet.IP.To4() != nil || ipNet.IP.To16() != nil) {
+			ips = append(ips, ipNet.IP.String())
+		}
+	}
+
+	var ipFilters []string
+	for _, ip := range ips {
+		ipFilters = append(ipFilters, fmt.Sprintf("ip host %s", ip))
+	}
+
+	return strings.Join(ipFilters, " or "), nil
 }
