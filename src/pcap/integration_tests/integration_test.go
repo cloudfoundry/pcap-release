@@ -123,7 +123,7 @@ var _ = Describe("IntegrationTests", func() {
 				capture, messages, err := recvCapture(10, stream)
 				Expect(err).NotTo(HaveOccurred(), "Receiving the first 10 messages")
 				Expect(capture).NotTo(BeNil())
-				Expect(messages).To(HaveLen(10))
+				Expect(messages).To(HaveLen(10), func() string { return fmt.Sprintf("Messages: %+v", messages) })
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
