@@ -103,23 +103,6 @@ func main() {
 	log.Info("serve returned successfully")
 }
 
-func setLogLevel(verbosity int) {
-	var level zapcore.Level
-
-	switch verbosity {
-	case 0:
-		level = zap.ErrorLevel
-	case 1:
-		level = zap.WarnLevel
-	case 2:
-		level = zap.InfoLevel
-	case 3:
-		level = zap.DebugLevel
-	}
-
-	zapConfig.Level.SetLevel(level)
-}
-
 // listen creates a new listener based off of the given Config. If Config.TLS is
 // nil a TCP listener is returned, otherwise a TLS listener is returned.
 //

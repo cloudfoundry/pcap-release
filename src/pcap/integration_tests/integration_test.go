@@ -57,6 +57,8 @@ func findLoopback() (*gopcap.Interface, error) {
 	}
 
 	for _, dev := range devs {
+		// find device with the loopback flag. Loopback devices are called differently on the various OSes.
+
 		// libpcap/pcap/pcap.h
 		// #define PCAP_IF_LOOPBACK				0x00000001	/* interface is loopback */
 		if dev.Flags&0x00000001 > 0 {
