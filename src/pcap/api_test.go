@@ -83,7 +83,7 @@ func TestReadMsg(t *testing.T) {
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 
-			out := readMsgFromStream(ctx, tt.captureStream, tt.target, origin)
+			out := readMsgFromStream(ctx, tt.captureStream, tt.target)
 
 			var got MessageType
 
@@ -297,7 +297,7 @@ func TestConvertStatusCodeToMsg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := convertStatusCodeToMsg(tt.err, AgentEndpoint{"localhost", 8083}, origin)
+			got := convertStatusCodeToMsg(tt.err, AgentEndpoint{"localhost", 8083, "router/1abc"})
 			if got.GetMessage().GetType() != tt.wantMsgType {
 				t.Errorf("convertStatusCodeToMsg() = %v, want %v", got.GetMessage().GetType(), tt.wantMsgType)
 
@@ -319,7 +319,7 @@ type mockStreamPreparer struct {
 	err    error
 }
 
-func (m *mockStreamPreparer) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, origin string) (captureReceiver, error) {
+func (m *mockStreamPreparer) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials) (captureReceiver, error) {
 	return m.stream, m.err
 }
 
@@ -333,14 +333,14 @@ func TestCapture(t *testing.T) {
 	}{
 		{
 			name:           "Capture cannot be started for all targets due to error",
-			targets:        []AgentEndpoint{{"localhost", 8083}, {"localhost", 8084}},
+			targets:        []AgentEndpoint{{"localhost", 8083, "router/1abc"}, {"localhost", 8084, "router/2abc"}},
 			streamPreparer: &mockStreamPreparer{err: errNilField},
 			opts:           &CaptureOptions{},
 			wantErr:        true,
 		},
 		{
 			name:           "Test capture finished successfully with EOF",
-			targets:        []AgentEndpoint{{"localhost", 8083}, {"localhost", 8084}},
+			targets:        []AgentEndpoint{{"localhost", 8083, "router/1abc"}, {"localhost", 8084, "router/2abc"}},
 			streamPreparer: &mockStreamPreparer{stream: &mockCaptureStream{nil, io.EOF}, err: nil},
 			opts:           &CaptureOptions{},
 			wantErr:        false,

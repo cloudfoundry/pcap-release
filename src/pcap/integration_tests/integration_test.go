@@ -74,21 +74,23 @@ var _ = Describe("IntegrationTests", func() {
 	var agentServer2 *grpc.Server
 	var apiServer *grpc.Server
 	var apiID = "123asd"
-	var agentID1 = "router/123asd"
-	var agentID2 = "router/123asd"
+	var agentID1 = "router/1abc"
+	var agentID2 = "router/2abc"
+	var agentTarget1 pcap.AgentEndpoint
+	var agentTarget2 pcap.AgentEndpoint
 	var stop *pcap.CaptureRequest
 	var defaultOptions *pcap.CaptureOptions
 
 	Describe("Starting a capture", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
-			var target pcap.AgentEndpoint
+			//var target pcap.AgentEndpoint
 
-			_, agentServer1, target = createAgent(8082, agentID1, nil)
-			targets = append(targets, target)
+			_, agentServer1, agentTarget1 = createAgent(8082, agentID1, nil)
+			targets = append(targets, agentTarget1)
 
-			_, agentServer2, target = createAgent(8083, agentID2, nil)
-			targets = append(targets, target)
+			_, agentServer2, agentTarget2 = createAgent(8083, agentID2, nil)
+			targets = append(targets, agentTarget2)
 
 			agentTLSConf := pcap.AgentTLSConf{AgentTLSSkipVerify: true}
 			apiClient, apiServer = createAPI(8080, targets, nil, agentTLSConf, apiID)
@@ -133,7 +135,6 @@ var _ = Describe("IntegrationTests", func() {
 
 				code, _, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-
 				// FIXME: Should not be Unknown/EOF
 				Expect(code).To(Equal(codes.Unknown))
 
@@ -171,7 +172,8 @@ var _ = Describe("IntegrationTests", func() {
 				errCode, messages, err := recvCapture(10, stream)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errCode).To(Equal(codes.OK))
-				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_UNAVAILABLE)).To(BeTrue())
+
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 				code, _, err := recvCapture(10_000, stream)
@@ -196,8 +198,9 @@ var _ = Describe("IntegrationTests", func() {
 				errCode, messages, err := recvCapture(10, stream)
 				fmt.Print(errCode)
 				Expect(errCode).To(Equal(codes.FailedPrecondition))
-				//FixMe expected message type
-				Expect(containsMsgType(messages, pcap.MessageType_START_CAPTURE_FAILED)).To(BeTrue())
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_START_CAPTURE_FAILED, apiID)).To(BeTrue())
 			})
 			It("One pcap-agent crashes", func() {
 				ctx := context.Background()
@@ -216,8 +219,7 @@ var _ = Describe("IntegrationTests", func() {
 				time.Sleep(2 * time.Second)
 				errCode, messages, err := recvCapture(500, stream)
 				fmt.Printf("receive non-OK code: %s\n", errCode.String())
-				//TODO change message type > instance disconnected
-				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_UNAVAILABLE)).To(BeTrue())
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 				code, _, err := recvCapture(10_000, stream)
@@ -242,8 +244,7 @@ var _ = Describe("IntegrationTests", func() {
 					agentServer2.GracefulStop()
 				}()
 				time.Sleep(2 * time.Second)
-				errCode, _, err := recvCapture(200, stream)
-				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				_, _, err = recvCapture(200, stream)
 				Expect(err).NotTo(HaveOccurred())
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
@@ -267,7 +268,7 @@ var _ = Describe("IntegrationTests", func() {
 				errCode, messages, err := recvCapture(10000, stream)
 				fmt.Printf("receive non-OK code: %s\n", errCode.String())
 				Expect(err).NotTo(HaveOccurred())
-				Expect(containsMsgType(messages, pcap.MessageType_CONGESTED)).To(BeTrue())
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CONGESTED, agentTarget1.Identifier)).To(BeTrue())
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 				code, _, err := recvCapture(10_000, stream)
@@ -298,11 +299,8 @@ var _ = Describe("IntegrationTests", func() {
 				}()
 				time.Sleep(3 * time.Second)
 				errCode, messages, err := recvCapture(500, stream)
-				//TODO check why it returns unknown
-				//Expect(errCode).To(Equal(codes.Unavailable))
 				fmt.Printf("receive non-OK code: %s\n", errCode.String())
-				//TODO change message type > instance disconnected
-				Expect(containsMsgType(messages, pcap.MessageType_INSTANCE_UNAVAILABLE)).To(BeTrue())
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
 			})
 		})
 	})
@@ -310,7 +308,6 @@ var _ = Describe("IntegrationTests", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 			var target pcap.AgentEndpoint
-			agentID1 := "router/123asd"
 			agentServerCertCN := "pcap-agent.service.cf.internal"
 			certPath, keyPath, caPath, err := generateCerts(agentServerCertCN, "agent")
 			Expect(err).ToNot(HaveOccurred())
@@ -518,7 +515,7 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	Expect(ok).To(BeTrue())
 	fmt.Printf("create agent with listener  %s\n", lis.Addr().String())
 
-	target := pcap.AgentEndpoint{IP: tcpAddr.IP.String(), Port: tcpAddr.Port}
+	target := pcap.AgentEndpoint{IP: tcpAddr.IP.String(), Port: tcpAddr.Port, Identifier: id}
 	server = grpc.NewServer()
 	if tlsCreds != nil {
 		server = grpc.NewServer(grpc.Creds(tlsCreds))
@@ -576,14 +573,15 @@ func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.Capt
 			return code, messages, fmt.Errorf("receive code: %s: %s\n", code.String(), err.Error())
 		}
 		messages = append(messages, message)
+		fmt.Printf("message: %s\n", message.String())
 	}
 	return codes.OK, messages, nil
 }
 
 // contains checks if a string is present in a slice
-func containsMsgType(messages []*pcap.CaptureResponse, msgType pcap.MessageType) bool {
+func containsMsgTypeWithOrigin(messages []*pcap.CaptureResponse, msgType pcap.MessageType, origin string) bool {
 	for _, msg := range messages {
-		if msg.GetPacket() == nil && msg.GetMessage().GetType() == msgType {
+		if msg.GetPacket() == nil && msg.GetMessage().GetType() == msgType && msg.GetMessage().GetOrigin() == origin {
 			return true
 		}
 	}
