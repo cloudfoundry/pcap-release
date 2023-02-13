@@ -82,8 +82,8 @@ func (opts *CaptureOptions) validate() error {
 		return err
 	}
 
-	if len(opts.Filter) > 2000 {
-		return fmt.Errorf("expected filter to be less than 2000 characters")
+	if len(opts.Filter) > 5000 {
+		return fmt.Errorf("expected filter to be less than 5000 characters, received %d", len(opts.Filter))
 	}
 
 	if opts.SnapLen == 0 {

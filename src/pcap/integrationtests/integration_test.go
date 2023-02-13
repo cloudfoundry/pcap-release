@@ -196,7 +196,7 @@ var _ = Describe("IntegrationTests", func() {
 				err = stream.Send(request)
 				Expect(err).NotTo(HaveOccurred())
 				errCode, messages, err := recvCapture(10, stream)
-				fmt.Print(errCode)
+				GinkgoWriter.Printf("Error code: %v\n", errCode)
 				Expect(errCode).To(Equal(codes.FailedPrecondition))
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
@@ -218,7 +218,7 @@ var _ = Describe("IntegrationTests", func() {
 				}()
 				time.Sleep(2 * time.Second)
 				errCode, messages, err := recvCapture(500, stream)
-				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				GinkgoWriter.Printf("receive non-OK code: %s\n", errCode.String())
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
@@ -266,7 +266,7 @@ var _ = Describe("IntegrationTests", func() {
 				err := stream.Send(request)
 				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 				errCode, messages, err := recvCapture(10000, stream)
-				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				GinkgoWriter.Printf("receive non-OK code: %s\n", errCode.String())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CONGESTED, agentTarget1.Identifier)).To(BeTrue())
 				err = stream.Send(stop)
@@ -299,7 +299,7 @@ var _ = Describe("IntegrationTests", func() {
 				}()
 				time.Sleep(3 * time.Second)
 				errCode, messages, err := recvCapture(500, stream)
-				fmt.Printf("receive non-OK code: %s\n", errCode.String())
+				GinkgoWriter.Printf("receive non-OK code: %s\n", errCode.String())
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
 			})
 		})
@@ -513,7 +513,7 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	Expect(err).NotTo(HaveOccurred())
 	tcpAddr, ok := lis.Addr().(*net.TCPAddr)
 	Expect(ok).To(BeTrue())
-	fmt.Printf("create agent with listener  %s\n", lis.Addr().String())
+	GinkgoWriter.Printf("create agent with listener  %s\n", lis.Addr())
 
 	target := pcap.AgentEndpoint{IP: tcpAddr.IP.String(), Port: tcpAddr.Port, Identifier: id}
 	server = grpc.NewServer()
@@ -565,7 +565,7 @@ func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.Capt
 	for i := 0; i < n; i++ {
 		message, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
-			fmt.Println("EOF")
+			GinkgoWriter.Println("EOF")
 			return codes.Unknown, messages, nil
 		}
 		code := status.Code(err)
@@ -573,9 +573,19 @@ func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.Capt
 			return code, messages, fmt.Errorf("receive code: %s: %s\n", code.String(), err.Error())
 		}
 		messages = append(messages, message)
-		fmt.Printf("message: %s\n", message.String())
+		logCaptureResponse(GinkgoWriter, message)
 	}
 	return codes.OK, messages, nil
+}
+
+func logCaptureResponse(writer GinkgoWriterInterface, response *pcap.CaptureResponse) {
+	if message := response.GetMessage(); message != nil {
+		writer.Printf("\n{message: %s}\n", message)
+	}
+
+	if packet := response.GetPacket(); packet != nil {
+		writer.Printf("{data: %d bytes} ", len(packet.GetData()))
+	}
 }
 
 // contains checks if a string is present in a slice
