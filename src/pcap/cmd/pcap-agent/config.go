@@ -10,7 +10,7 @@ import (
 )
 
 var DefaultConfig = Config{
-	Port: 8083,
+	Listen: pcap.Listen{Port: 8083},
 	Buffer: pcap.BufferConf{
 		Size:       100,
 		UpperLimit: 95,
@@ -21,16 +21,7 @@ var DefaultConfig = Config{
 
 type Config struct {
 	// Port is the port the agent will listen on.
-	Port int `yaml:"port" validate:"gt=0,lte=65535"`
-	Tls  *struct {
-		// Certificate holds the path to the PEM encoded certificate (chain).
-		Certificate string `yaml:"certificate" validate:"file"`
-		// PrivateKey holds the path to the PEM encoded private key.
-		PrivateKey string `yaml:"privateKey" validate:"file"`
-		// CertificateAuthority holds the path to the PEM encoded CA bundle which is used
-		// to request and verify client certificates.
-		CertificateAuthority string `yaml:"certificateAuthority" validate:"file"`
-	} `yaml:"tls,omitempty"`
+	Listen   pcap.Listen     `yaml:"listen"`
 	Buffer   pcap.BufferConf `yaml:"buffer"`
 	LogLevel string          `yaml:"logLevel"`
 	ID       string          `yaml:"id" validate:"required"`

@@ -40,27 +40,6 @@ var (
 	errNoVcapId         = fmt.Errorf("no vcap-id")
 )
 
-// BufferConf allows to specify the behaviour of buffers.
-//
-// The recommendation is to set the upper limit slightly below the size
-// to account for data put into the buffer while checking the fill condition
-// or performing work. The lower limit should be low enough to make some room
-// for new data but not too low (which would cause a lot of data to be
-// discarded). After all the buffer should mainly soften short spikes in data
-// transfer and these limits only protect against uncontrolled back pressure.
-type BufferConf struct {
-	// Size is the number of responses that can be buffered per stream.
-	Size int `yaml:"size" validate:"gte=0"`
-	// UpperLimit tells the manager of the buffer to start discarding messages
-	// once the limit is exceeded. The condition looks like this:
-	//   len(buf) >= UpperLimit
-	UpperLimit int `yaml:"upperLimit" validate:"gte=0,ltefield=Size"`
-	// LowerLimit tells the manager of the buffer to stop discarding messages
-	// once the limit is reached/undercut. The condition looks like this:
-	//   len(buf) <= LowerLimit
-	LowerLimit int `yaml:"lowerLimit" validate:"gte=0,ltefield=UpperLimit"`
-}
-
 // purge reads all messages from the given channel and discards them. The
 // discarded messages are logged on the trace level.
 func purge[T any](c <-chan T) {

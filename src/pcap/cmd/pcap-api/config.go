@@ -10,42 +10,29 @@ import (
 )
 
 var DefaultAPIConfig = APIConfig{
-	Port:      8080,
-	AgentPort: 9494,
+	Listen: &pcap.Listen{Port: 8080},
 	Buffer: pcap.BufferConf{
 		Size:       100,
 		UpperLimit: 95,
 		LowerLimit: 60,
 	},
-	LogLevel:           "debug",
-	AgentTLSSkipVerify: false,
-	ManualEndpoints:    pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}},
+	LogLevel: "debug",
+	Agents: &pcap.AgentMTLS{
+		DefaultPort: 9494,
+		MTLS:        nil,
+	},
+	ManualEndpoints: pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}},
 }
 
 type APIConfig struct {
-	AgentPort int `yaml:"agent_port" validate:"gt=0,lte=65535"`
-	// TODO compare listen / api port with api/spec
-	Port               int             `yaml:"listen"`
-	ClientCert         string          `yaml:"client_certificate,omitempty" validate:"file"`
-	ClientKey          string          `yaml:"client_key,omitempty" validate:"file"`
-	TLS                *TLS            `yaml:"tls,omitempty"`
-	Buffer             pcap.BufferConf `yaml:"buffer"`
-	LogLevel           string          `yaml:"log_level"`
-	AgentTLSSkipVerify bool            `yaml:"agent_tls_skip_verify" validate:"boolean"`
-	AgentCommonName    string          `yaml:"agent_common_name,omitempty" validate:"required_if=AgentTLSSkipVerify false"`
-	AgentCA            string          `yaml:"agent_ca,omitempty" validate:"required_if=AgentTLSSkipVerify false"`
-	ID                 string          `yaml:"id" validate:"required"`
-	ManualEndpoints    pcap.ManualEndpoints
-}
+	Listen   *pcap.Listen    `yaml:"listen"`
+	ID       string          `yaml:"id"`
+	Agents   *pcap.AgentMTLS `yaml:"agents"`
+	Buffer   pcap.BufferConf `yaml:"buffer"`
+	LogLevel string          `yaml:"log_level"`
 
-type TLS struct {
-	// Certificate holds the path to the PEM encoded certificate (chain).
-	Certificate string `yaml:"certificate" validate:"file"`
-	// PrivateKey holds the path to the PEM encoded private key.
-	PrivateKey string `yaml:"private_key" validate:"file"`
-	// CertificateAuthority holds the path to the PEM encoded CA bundle which is used
-	// to request and verify client certificates.
-	CertificateAuthority string `yaml:"ca" validate:"file"`
+	// TODO: Add BOSH and CF specific config fragments
+	ManualEndpoints pcap.ManualEndpoints
 }
 
 func (c APIConfig) validate() error {

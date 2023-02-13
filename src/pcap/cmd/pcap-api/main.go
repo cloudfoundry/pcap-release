@@ -80,7 +80,7 @@ func main() {
 		log.Sugar().Warnf("Configured log level '%s' could not be parsed: %v. Remaining at default level: '%s'", config.LogLevel, levelErr, zapConfig.Level.String())
 	}
 
-	agentConf := pcap.AgentTLSConf{AgentTLSSkipVerify: config.AgentTLSSkipVerify, AgentCommonName: config.AgentCommonName, AgentCA: config.AgentCA}
+	agentConf := pcap.AgentTLSConf{AgentTLSSkipVerify: config.Agents.MTLS.SkipVerify, AgentCommonName: config.Agents.MTLS.CommonName, AgentCA: config.Agents.MTLS.CertificateAuthority}
 	api := pcap.NewAPI(config.Buffer, nil, agentConf, config.ID)
 
 	api.RegisterHandler(&pcap.BoshHandler{Config: config.ManualEndpoints})
@@ -108,16 +108,16 @@ func main() {
 //
 // Note: the TLS version is currently hard-coded to TLSv1.3.
 func listen(c APIConfig) (net.Listener, error) {
-	if c.TLS == nil {
-		return net.Listen("tcp", fmt.Sprintf(":%d", c.Port))
+	if c.Listen.TLS == nil {
+		return net.Listen("tcp", fmt.Sprintf(":%d", c.Listen.Port))
 	}
 
-	cert, err := tls.LoadX509KeyPair(c.TLS.Certificate, c.TLS.PrivateKey)
+	cert, err := tls.LoadX509KeyPair(c.Listen.TLS.Certificate, c.Listen.TLS.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	caFile, err := os.ReadFile(c.TLS.CertificateAuthority)
+	caFile, err := os.ReadFile(c.Listen.TLS.CertificateAuthority)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func listen(c APIConfig) (net.Listener, error) {
 		ClientCAs:    caPool,
 	}
 
-	return tls.Listen("tcp", fmt.Sprintf(":%d", c.Port), &tlsConf)
+	return tls.Listen("tcp", fmt.Sprintf(":%d", c.Listen.Port), &tlsConf)
 }
 
 func waitForSignal(log *zap.Logger, api *pcap.API, server *grpc.Server) {

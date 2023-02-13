@@ -74,7 +74,7 @@ func main() {
 
 	agent := pcap.NewAgent(config.Buffer, config.ID)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Listen.Port))
 	if err != nil {
 		log.Fatal("unable to create listener", zap.Error(err))
 	}
@@ -103,16 +103,16 @@ func main() {
 //
 // Note: the TLS version is currently hard-coded to TLSv1.3.
 func loadTLSCredentials(c Config) (credentials.TransportCredentials, error) {
-	if c.Tls == nil {
+	if c.Listen.TLS == nil {
 		return insecure.NewCredentials(), nil
 	}
 
-	cert, err := tls.LoadX509KeyPair(c.Tls.Certificate, c.Tls.PrivateKey)
+	cert, err := tls.LoadX509KeyPair(c.Listen.TLS.Certificate, c.Listen.TLS.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	caFile, err := os.ReadFile(c.Tls.CertificateAuthority)
+	caFile, err := os.ReadFile(c.Listen.TLS.CertificateAuthority)
 	if err != nil {
 		return nil, err
 	}
