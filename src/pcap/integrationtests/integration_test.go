@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/status"
 	"io"
 	"math/big"
 	"net"
@@ -18,10 +19,8 @@ import (
 	"path"
 	"time"
 
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
-
 	gopcap "github.com/google/gopacket/pcap"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	. "github.com/onsi/ginkgo/v2"
@@ -92,8 +91,8 @@ var _ = Describe("IntegrationTests", func() {
 			_, agentServer2, agentTarget2 = createAgent(8083, agentID2, nil)
 			targets = append(targets, agentTarget2)
 
-			agentTLSConf := pcap.AgentTLSConf{AgentTLSSkipVerify: true}
-			apiClient, apiServer = createAPI(8080, targets, nil, agentTLSConf, apiID)
+			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
+			apiClient, apiServer = createAPI(8080, targets, agentTLSConf, apiID)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -322,10 +321,19 @@ var _ = Describe("IntegrationTests", func() {
 			_, agentServer1, target = createAgent(8082, agentID1, mTLSConfig)
 			targets = append(targets, target)
 
-			agentTLSConf := pcap.AgentTLSConf{AgentTLSSkipVerify: false, AgentCommonName: agentServerCertCN, AgentCA: caPath}
-			clientCert := &pcap.ClientCert{ClientCertFile: clientCertFile, ClientPrivateKeyFile: clientKeyFile}
+			agentTLSConf := pcap.AgentMTLS{
+				DefaultPort: 9494,
+				MTLS: &pcap.MutualTLS{
+					SkipVerify: false,
+					CommonName: agentServerCertCN,
+					TLS: pcap.TLS{
+						Certificate: clientCertFile,
+						PrivateKey:  clientKeyFile, CertificateAuthority: caPath,
+					},
+				},
+			}
 
-			apiClient, apiServer = createAPI(8080, targets, clientCert, agentTLSConf, agentID1)
+			apiClient, apiServer = createAPI(8080, targets, agentTLSConf, agentID1)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -536,9 +544,9 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	return agentClient, server, target
 }
 
-func createAPI(port int, targets []pcap.AgentEndpoint, mTLSConfig *pcap.ClientCert, agentTLSConf pcap.AgentTLSConf, id string) (pcap.APIClient, *grpc.Server) {
+func createAPI(port int, targets []pcap.AgentEndpoint, mTLSConfig pcap.AgentMTLS, id string) (pcap.APIClient, *grpc.Server) {
 	var server *grpc.Server
-	api := pcap.NewAPI(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, mTLSConfig, agentTLSConf, id)
+	api := pcap.NewAPI(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, mTLSConfig, id)
 	api.RegisterHandler(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
 	var err error

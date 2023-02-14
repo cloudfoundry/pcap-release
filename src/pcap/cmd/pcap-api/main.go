@@ -80,8 +80,7 @@ func main() {
 		log.Sugar().Warnf("Configured log level '%s' could not be parsed: %v. Remaining at default level: '%s'", config.LogLevel, levelErr, zapConfig.Level.String())
 	}
 
-	agentConf := pcap.AgentTLSConf{AgentTLSSkipVerify: config.Agents.MTLS.SkipVerify, AgentCommonName: config.Agents.MTLS.CommonName, AgentCA: config.Agents.MTLS.CertificateAuthority}
-	api := pcap.NewAPI(config.Buffer, nil, agentConf, config.ID)
+	api := pcap.NewAPI(config.Buffer, *config.Agents, config.ID)
 
 	api.RegisterHandler(&pcap.BoshHandler{Config: config.ManualEndpoints})
 

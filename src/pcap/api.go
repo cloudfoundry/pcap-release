@@ -19,23 +19,11 @@ import (
 )
 
 type API struct {
-	bufConf    BufferConf
-	handlers   map[string]CaptureHandler
-	agentConf  AgentTLSConf
-	mTLSConfig *ClientCert
+	bufConf  BufferConf
+	handlers map[string]CaptureHandler
+	agents   AgentMTLS
 	UnimplementedAPIServer
 	id string
-}
-
-type ClientCert struct {
-	ClientCertFile       string
-	ClientPrivateKeyFile string
-}
-
-type AgentTLSConf struct {
-	AgentTLSSkipVerify bool
-	AgentCommonName    string
-	AgentCA            string
 }
 
 // TODO: This type should be removed once we have resolvers for BOSH or CF.
@@ -43,13 +31,12 @@ type ManualEndpoints struct {
 	Targets []AgentEndpoint
 }
 
-func NewAPI(bufConf BufferConf, mTLSConfig *ClientCert, agentConf AgentTLSConf, id string) *API {
+func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string) *API {
 	return &API{
-		bufConf:    bufConf,
-		handlers:   make(map[string]CaptureHandler),
-		agentConf:  agentConf,
-		mTLSConfig: mTLSConfig,
-		id:         id,
+		bufConf:  bufConf,
+		handlers: make(map[string]CaptureHandler),
+		agents:   agentmTLS,
+		id:       id,
 	}
 }
 
@@ -188,12 +175,12 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 }
 
 func (api *API) prepareTLSToAgent(log *zap.Logger) (credentials.TransportCredentials, error) {
-	if api.agentConf.AgentTLSSkipVerify {
+	if api.agents.MTLS.SkipVerify {
 		return insecure.NewCredentials(), nil
 	}
 
 	// Load certificate of the CA who signed agent's certificate
-	pemAgentCA, err := os.ReadFile(api.agentConf.AgentCA)
+	pemAgentCA, err := os.ReadFile(api.agents.MTLS.CertificateAuthority)
 	if err != nil {
 		log.Error("Load Agent CA certificate failed")
 		return nil, err
@@ -207,12 +194,12 @@ func (api *API) prepareTLSToAgent(log *zap.Logger) (credentials.TransportCredent
 	// Create the credentials and return it
 	config := &tls.Config{
 		RootCAs:    certPool,
-		ServerName: api.agentConf.AgentCommonName,
+		ServerName: api.agents.MTLS.CommonName,
 	}
 
 	// Load client's certificate and private key
-	if api.mTLSConfig.ClientCertFile != "" && api.mTLSConfig.ClientPrivateKeyFile != "" {
-		clientCert, err := tls.LoadX509KeyPair(api.mTLSConfig.ClientCertFile, api.mTLSConfig.ClientPrivateKeyFile)
+	if api.agents.MTLS.Certificate != "" && api.agents.MTLS.PrivateKey != "" {
+		clientCert, err := tls.LoadX509KeyPair(api.agents.MTLS.Certificate, api.agents.MTLS.PrivateKey)
 		if err != nil {
 			log.Error("Load API client certificate or private key failed")
 			return nil, err
