@@ -196,7 +196,6 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(errCode).To(Equal(codes.FailedPrecondition))
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
-				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_START_CAPTURE_FAILED, apiID)).To(BeTrue())
 			})
 			It("One pcap-agent crashes", func() {
 				ctx := context.Background()

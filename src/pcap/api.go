@@ -487,7 +487,6 @@ func (api *API) capture(ctx context.Context, stream responseSender, streamPrep s
 	}
 
 	if runningCaptures == 0 {
-		stream.Send(newMessageResponse(MessageType_START_CAPTURE_FAILED, "Starting of all captures failed", api.id))
 		log.Error("Starting of all captures failed during stream preparation")
 		return nil, errorf(codes.FailedPrecondition, "Starting of all captures failed")
 	}
