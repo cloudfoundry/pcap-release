@@ -38,6 +38,7 @@ var (
 	errIllegalCharacter = fmt.Errorf("illegal character: %w", errValidationFailed)
 	errNoMetadata       = fmt.Errorf("no metadata")
 	errNoVcapId         = fmt.Errorf("no vcap-id")
+	errTooManyCaptures  = fmt.Errorf("too many concurrent captures")
 )
 
 // purge reads all messages from the given channel and discards them. The
@@ -242,4 +243,9 @@ func generateAPIFilter() (string, error) {
 		}
 	}
 	return strings.Join(ipFilters, " or "), nil
+}
+
+// makeStopRequest creates the generic stop CaptureRequest that can be sent to api and agent.
+func makeStopRequest() *CaptureRequest {
+	return &CaptureRequest{Operation: &CaptureRequest_Stop{Stop: &StopCapture{}}}
 }

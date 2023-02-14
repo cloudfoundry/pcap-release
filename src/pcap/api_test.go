@@ -183,7 +183,7 @@ func TestStopCmd(t *testing.T) {
 		},
 		{
 			name:        "Happy path",
-			recv:        &mockBoshRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Stop{Stop: &StopCapture{}}}, err: nil},
+			recv:        &mockBoshRequestReceiver{req: makeStopRequest(), err: nil},
 			expectedErr: context.Canceled,
 			wantErr:     true,
 		},

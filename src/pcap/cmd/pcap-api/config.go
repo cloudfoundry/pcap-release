@@ -25,11 +25,12 @@ var DefaultAPIConfig = APIConfig{
 }
 
 type APIConfig struct {
-	Listen   *pcap.Listen    `yaml:"listen"`
-	ID       string          `yaml:"id"`
-	Agents   *pcap.AgentMTLS `yaml:"agents"`
-	Buffer   pcap.BufferConf `yaml:"buffer"`
-	LogLevel string          `yaml:"log_level"`
+	Listen             *pcap.Listen    `yaml:"listen"`
+	ID                 string          `yaml:"id"`
+	Agents             *pcap.AgentMTLS `yaml:"agents"`
+	Buffer             pcap.BufferConf `yaml:"buffer"`
+	LogLevel           string          `yaml:"log_level"`
+	ConcurrentCaptures int             `yaml:"concurrent_captures"`
 
 	// TODO: Add BOSH and CF specific config fragments
 	ManualEndpoints pcap.ManualEndpoints

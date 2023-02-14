@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"os"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
@@ -24,6 +24,10 @@ type API struct {
 	agents   AgentMTLS
 	UnimplementedAPIServer
 	id string
+
+	captures              map[string]map[string]*API_CaptureServer
+	captureLock           sync.RWMutex
+	maxConcurrentCaptures int
 }
 
 // TODO: This type should be removed once we have resolvers for BOSH or CF.
@@ -31,12 +35,14 @@ type ManualEndpoints struct {
 	Targets []AgentEndpoint
 }
 
-func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string) *API {
+func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int) *API {
 	return &API{
-		bufConf:  bufConf,
-		handlers: make(map[string]CaptureHandler),
-		agents:   agentmTLS,
-		id:       id,
+		bufConf:               bufConf,
+		handlers:              make(map[string]CaptureHandler),
+		agents:                agentmTLS,
+		id:                    id,
+		maxConcurrentCaptures: maxConcurrentCaptures,
+		captures:              make(map[string]map[string]*API_CaptureServer, 10),
 	}
 }
 
@@ -74,7 +80,7 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	bosh := api.handlerRegistered("bosh")
 	cf := api.handlerRegistered("cf")
 
-	status := &StatusResponse{
+	apiStatus := &StatusResponse{
 		Healthy:            true,
 		CompatibilityLevel: 0,
 		Message:            "Ready.",
@@ -83,11 +89,11 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	}
 
 	if api.draining() {
-		status.Healthy = false
-		status.Message = "api has been stopped and is draining remaining capture requests"
+		apiStatus.Healthy = false
+		apiStatus.Message = "api has been stopped and is draining remaining capture requests"
 	}
 
-	return status, nil
+	return apiStatus, nil
 }
 
 // handlerRegistered checks if handler is registered.
@@ -95,12 +101,6 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 func (api *API) handlerRegistered(handler string) bool {
 	_, ok := api.handlers[handler]
 	return ok
-}
-
-// draining indicates whether this API instance is currently draining.
-func (api *API) draining() bool {
-	// FIXME: Implement
-	return false
 }
 
 // Capture receives messages (start or stop capture) from the client and streams payload (messages or pcap data) back.
@@ -123,6 +123,12 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	}()
 
 	ctx, log = setVcapID(ctx, log)
+
+	err = api.registerStream(&stream)
+	if err != nil {
+		// too many requests in parallel.
+		cancel(err)
+	}
 
 	log.Info("Started capture stream")
 
@@ -170,6 +176,8 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	}
 
 	forwardWG.Wait()
+
+	api.deregisterStream(&stream)
 
 	return nil
 }
@@ -247,6 +255,9 @@ func checkAgentStatus(statusRes *StatusResponse, err error, target AgentEndpoint
 	return nil
 }
 
+// Takes the data received for each of the pcap-agents and merges it into the resulting channel
+// The resulting channel is unbuffered.
+// inspired by: https://go.dev/blog/pipelines
 func mergeResponseChannels(cs []<-chan *CaptureResponse) <-chan *CaptureResponse {
 	var wg sync.WaitGroup
 	out := make(chan *CaptureResponse)
@@ -482,4 +493,67 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 	// merge channels to one channel and send to forward to stream
 	out := mergeResponseChannels(captureCs)
 	return out, nil
+}
+
+// draining indicates whether this API instance is currently draining.
+func (api *API) draining() bool {
+	// FIXME: Implement
+	return false
+}
+
+func (api *API) drain() {
+	defer api.captureLock.Unlock()
+	api.captureLock.Lock()
+
+	for client, clientStreams := range api.captures {
+		for vcap_id, stream := range clientStreams {
+			zap.L().Debug("Terminating capture for client", zap.String("client", client), zap.String(LogKeyVcapID, vcap_id))
+			err := (*stream).SendMsg(makeStopRequest())
+			if err != nil {
+				zap.S().Warn("Could not send stop request to client", zap.String("client", client), zap.String(LogKeyVcapID, vcap_id), zap.Error(err))
+				continue
+			}
+		}
+	}
+}
+
+func (api *API) registerStream(stream *API_CaptureServer) error {
+	defer api.captureLock.Unlock()
+	api.captureLock.Lock()
+
+	client, vcap_id := identifyStream(stream)
+
+	if _, exists := api.captures[client]; !exists {
+		api.captures[client] = make(map[string]*API_CaptureServer, 10)
+	}
+
+	if len(api.captures[client]) >= api.maxConcurrentCaptures {
+		return fmt.Errorf("could not start capture for client %s with vcap-id %s: %w", client, vcap_id, errTooManyCaptures)
+	}
+	api.captures[client][vcap_id] = stream
+	return nil
+}
+
+func (api *API) deregisterStream(stream *API_CaptureServer) {
+	defer api.captureLock.Unlock()
+	api.captureLock.Lock()
+
+	client, vcap_id := identifyStream(stream)
+
+	if clientStreams, hasClient := api.captures[client]; hasClient {
+		delete(clientStreams, vcap_id)
+	}
+}
+
+func identifyStream(stream *API_CaptureServer) (string, string) {
+	// FIXME: Use a better client identifier
+	client := "client-sessions"
+
+	vcap_id, err := vcapIDFromCtx((*stream).Context())
+
+	if err != nil {
+		return client, "unknown"
+	}
+
+	return client, *vcap_id
 }

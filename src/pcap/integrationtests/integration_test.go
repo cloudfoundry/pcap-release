@@ -92,7 +92,7 @@ var _ = Describe("IntegrationTests", func() {
 			targets = append(targets, agentTarget2)
 
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
-			apiClient, apiServer = createAPI(8080, targets, agentTLSConf, apiID)
+			apiClient, apiServer = createAPI(8080, targets, agentTLSConf, apiID, 2)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -333,7 +333,7 @@ var _ = Describe("IntegrationTests", func() {
 				},
 			}
 
-			apiClient, apiServer = createAPI(8080, targets, agentTLSConf, agentID1)
+			apiClient, apiServer = createAPI(8080, targets, agentTLSConf, agentID1, 2)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -544,9 +544,9 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	return agentClient, server, target
 }
 
-func createAPI(port int, targets []pcap.AgentEndpoint, mTLSConfig pcap.AgentMTLS, id string) (pcap.APIClient, *grpc.Server) {
+func createAPI(port int, targets []pcap.AgentEndpoint, mTLSConfig pcap.AgentMTLS, id string, maxConcurrentCaptures int) (pcap.APIClient, *grpc.Server) {
 	var server *grpc.Server
-	api := pcap.NewAPI(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, mTLSConfig, id)
+	api := pcap.NewAPI(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, mTLSConfig, id, maxConcurrentCaptures)
 	api.RegisterHandler(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
 	var err error

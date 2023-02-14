@@ -80,7 +80,7 @@ func main() {
 		log.Sugar().Warnf("Configured log level '%s' could not be parsed: %v. Remaining at default level: '%s'", config.LogLevel, levelErr, zapConfig.Level.String())
 	}
 
-	api := pcap.NewAPI(config.Buffer, *config.Agents, config.ID)
+	api := pcap.NewAPI(config.Buffer, *config.Agents, config.ID, config.ConcurrentCaptures)
 
 	api.RegisterHandler(&pcap.BoshHandler{Config: config.ManualEndpoints})
 
