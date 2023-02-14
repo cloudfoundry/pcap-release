@@ -134,8 +134,7 @@ var _ = Describe("IntegrationTests", func() {
 
 				code, _, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-				// FIXME: Should not be Unknown/EOF
-				Expect(code).To(Equal(codes.Unknown))
+				Expect(code).To(Equal(codes.OK))
 
 			})
 			It("finished with errors due to invalid start capture request", func() {
@@ -177,9 +176,7 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 				code, _, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-
-				// FIXME: Should not be Unknown/EOF
-				Expect(code).To(Equal(codes.Unknown))
+				Expect(code).To(Equal(codes.OK))
 
 			})
 			It("No pcap-agents available", func() {
@@ -223,9 +220,7 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 				code, _, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-
-				// FIXME: Should not be Unknown/EOF
-				Expect(code).To(Equal(codes.Unknown))
+				Expect(code).To(Equal(codes.OK))
 
 			})
 			It("One pcap-agent drains", func() {
@@ -249,9 +244,7 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 				code, _, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-
-				// FIXME: Should not be Unknown/EOF
-				Expect(code).To(Equal(codes.Unknown))
+				Expect(code).To(Equal(codes.OK))
 
 			})
 			It("One pcap-agent is congested", func() {
@@ -272,9 +265,7 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 				code, _, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-
-				// FIXME: Should not be Unknown/EOF
-				Expect(code).To(Equal(codes.Unknown))
+				Expect(code).To(Equal(codes.OK))
 
 			})
 		})
@@ -373,12 +364,9 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(messages).To(HaveLen(10))
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
-
 				code, messages, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-
-				// FIXME: Should not be Unknown/EOF
-				Expect(code).To(Equal(codes.Unknown))
+				Expect(code).To(Equal(codes.OK))
 
 			})
 		})
@@ -573,8 +561,8 @@ func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.Capt
 	for i := 0; i < n; i++ {
 		message, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
-			GinkgoWriter.Println("EOF")
-			return codes.Unknown, messages, nil
+			GinkgoWriter.Println("clean stop, done")
+			return codes.OK, messages, nil
 		}
 		code := status.Code(err)
 		if code != codes.OK {
