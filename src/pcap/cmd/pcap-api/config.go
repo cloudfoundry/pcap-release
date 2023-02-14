@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/go-playground/validator/v10"
@@ -21,6 +22,7 @@ var DefaultAPIConfig = APIConfig{
 		DefaultPort: 9494,
 		MTLS:        nil,
 	},
+	DrainTimeout:    10 * time.Second,
 	ManualEndpoints: pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}},
 }
 
@@ -31,6 +33,7 @@ type APIConfig struct {
 	Buffer             pcap.BufferConf `yaml:"buffer"`
 	LogLevel           string          `yaml:"log_level"`
 	ConcurrentCaptures int             `yaml:"concurrent_captures"`
+	DrainTimeout       time.Duration   `yaml:"drain_timeout"`
 
 	// TODO: Add BOSH and CF specific config fragments
 	ManualEndpoints pcap.ManualEndpoints

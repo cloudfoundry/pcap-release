@@ -39,6 +39,7 @@ var (
 	errNoMetadata       = fmt.Errorf("no metadata")
 	errNoVcapId         = fmt.Errorf("no vcap-id")
 	errTooManyCaptures  = fmt.Errorf("too many concurrent captures")
+	errDraining         = fmt.Errorf("draining")
 )
 
 // purge reads all messages from the given channel and discards them. The

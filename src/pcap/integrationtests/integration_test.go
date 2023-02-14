@@ -534,7 +534,7 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 
 func createAPI(port int, targets []pcap.AgentEndpoint, mTLSConfig pcap.AgentMTLS, id string, maxConcurrentCaptures int) (pcap.APIClient, *grpc.Server) {
 	var server *grpc.Server
-	api := pcap.NewAPI(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, mTLSConfig, id, maxConcurrentCaptures)
+	api := pcap.NewAPI(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, mTLSConfig, id, maxConcurrentCaptures, time.Second*10)
 	api.RegisterHandler(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
 	var err error

@@ -80,7 +80,7 @@ func main() {
 		log.Sugar().Warnf("Configured log level '%s' could not be parsed: %v. Remaining at default level: '%s'", config.LogLevel, levelErr, zapConfig.Level.String())
 	}
 
-	api := pcap.NewAPI(config.Buffer, *config.Agents, config.ID, config.ConcurrentCaptures)
+	api := pcap.NewAPI(config.Buffer, *config.Agents, config.ID, config.ConcurrentCaptures, config.DrainTimeout)
 
 	api.RegisterHandler(&pcap.BoshHandler{Config: config.ManualEndpoints})
 
@@ -155,17 +155,16 @@ func listen(c APIConfig) (net.Listener, error) {
 
 func waitForSignal(log *zap.Logger, api *pcap.API, server *grpc.Server) {
 	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGUSR1, syscall.SIGINT)
+	signal.Notify(signals, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	for {
 		sig := <-signals
 		switch sig {
-		case syscall.SIGUSR1, syscall.SIGINT:
-			// FIXME: Allow graceful shutdown.
-			/*log.Info("received signal, stopping agent", zap.String("signal", sig.String()))
-			api.Stop()
-
-			log.Info("waiting for agent to stop")
-			api.Wait()*/
+		case syscall.SIGUSR1, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM:
+			zap.L().Info("received signal, stopping api", zap.String("signal", sig.String()))
+			err := api.Drain()
+			if err != nil {
+				zap.L().Warn("Could not stop all clients gracefully", zap.Error(err))
+			}
 
 			log.Info("shutting down server")
 			server.GracefulStop()

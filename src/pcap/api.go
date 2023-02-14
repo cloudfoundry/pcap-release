@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -28,6 +29,8 @@ type API struct {
 	captures              map[string]map[string]*API_CaptureServer
 	captureLock           sync.RWMutex
 	maxConcurrentCaptures int
+	draining              bool
+	drainTimeout          time.Duration
 }
 
 // TODO: This type should be removed once we have resolvers for BOSH or CF.
@@ -35,7 +38,7 @@ type ManualEndpoints struct {
 	Targets []AgentEndpoint
 }
 
-func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int) *API {
+func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int, drainTimeout time.Duration) *API {
 	return &API{
 		bufConf:               bufConf,
 		handlers:              make(map[string]CaptureHandler),
@@ -43,6 +46,7 @@ func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCap
 		id:                    id,
 		maxConcurrentCaptures: maxConcurrentCaptures,
 		captures:              make(map[string]map[string]*API_CaptureServer, 10),
+		drainTimeout:          drainTimeout,
 	}
 }
 
@@ -72,7 +76,7 @@ type CaptureHandler interface {
 }
 
 func (api *API) RegisterHandler(handler CaptureHandler) {
-	(api.handlers)[handler.name()] = handler
+	api.handlers[handler.name()] = handler
 }
 
 // Status provides the current status information for the pcap-api service
@@ -81,15 +85,14 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	cf := api.handlerRegistered("cf")
 
 	apiStatus := &StatusResponse{
-		Healthy:            true,
+		Healthy:            !api.draining,
 		CompatibilityLevel: 0,
 		Message:            "Ready.",
 		Bosh:               &bosh,
 		Cf:                 &cf,
 	}
 
-	if api.draining() {
-		apiStatus.Healthy = false
+	if api.draining {
 		apiStatus.Message = "api has been stopped and is draining remaining capture requests"
 	}
 
@@ -113,8 +116,8 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		}
 	}()
 
-	if api.draining() {
-		return fmt.Errorf("")
+	if api.draining {
+		return errorf(codes.Unavailable, "api is draining")
 	}
 
 	ctx, cancel := WithCancelCause(stream.Context())
@@ -127,7 +130,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	err = api.registerStream(&stream)
 	if err != nil {
 		// too many requests in parallel.
-		cancel(err)
+		return errorf(codes.ResourceExhausted, "failed starting capture: %w", err)
 	}
 
 	log.Info("Started capture stream")
@@ -494,16 +497,34 @@ func (api *API) capture(ctx context.Context, stream responseSender, streamPrep s
 	return out, nil
 }
 
-// draining indicates whether this API instance is currently draining.
-func (api *API) draining() bool {
-	// FIXME: Implement
-	return false
+// starts the API drain process, where all ongoing captures are sent a Stop signal so they can terminate gracefully.
+// Runs with a drain timeout and will return an error if the context times out.
+func (api *API) Drain() error {
+	zap.L().Debug("Starting drain with timeout", zap.Duration("timeout", api.drainTimeout))
+	drainTimeout, cancel := context.WithTimeout(context.Background(), api.drainTimeout)
+	defer cancel()
+
+	drained := api.drainStreams()
+
+	for {
+		select {
+		case <-drained:
+			zap.L().Info("Drain completed successfully.")
+			return nil
+		case <-drainTimeout.Done():
+			zap.L().Warn("Drain timeout reached, but not all clients completed.")
+			return drainTimeout.Err()
+		}
+	}
 }
 
-func (api *API) drain() {
+func (api *API) drainStreams() chan struct{} {
 	defer api.captureLock.Unlock()
 	api.captureLock.Lock()
 
+	api.draining = true
+
+	wg := &sync.WaitGroup{}
 	for client, clientStreams := range api.captures {
 		for vcap_id, stream := range clientStreams {
 			zap.L().Debug("Terminating capture for client", zap.String("client", client), zap.String(LogKeyVcapID, vcap_id))
@@ -512,8 +533,24 @@ func (api *API) drain() {
 				zap.S().Warn("Could not send stop request to client", zap.String("client", client), zap.String(LogKeyVcapID, vcap_id), zap.Error(err))
 				continue
 			}
+			// The message could be sent, so we expect the context to finish gracefully.
+			wg.Add(1)
+			go func(wg *sync.WaitGroup, ctx context.Context) {
+				// wait for capture stream context do be done
+				<-ctx.Done()
+				wg.Done()
+			}(wg, (*stream).Context())
 		}
 	}
+
+	drained := make(chan struct{})
+
+	go func(wg *sync.WaitGroup) {
+		wg.Wait()
+		close(drained)
+	}(wg)
+
+	return drained
 }
 
 func (api *API) registerStream(stream *API_CaptureServer) error {
@@ -541,7 +578,12 @@ func (api *API) deregisterStream(stream *API_CaptureServer) {
 
 	if clientStreams, hasClient := api.captures[client]; hasClient {
 		delete(clientStreams, vcapId)
+		if len(clientStreams) == 0 {
+			delete(api.captures, client)
+		}
 	}
+
+	(*stream).Context().Done()
 }
 
 func identifyStream(stream *API_CaptureServer) (string, string) {
