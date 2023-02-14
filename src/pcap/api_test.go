@@ -83,7 +83,7 @@ func TestReadMsg(t *testing.T) {
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 
-			out := readMsgFromStream(ctx, tt.captureStream, tt.target)
+			out := readMsgFromStream(ctx, tt.captureStream, tt.target, bufSize)
 
 			var got MessageType
 
@@ -252,7 +252,7 @@ func TestMergeResponseChannels(t *testing.T) {
 			chanAgent2 := writeToChannel(tt.crAgent2)
 
 			cs := []<-chan *CaptureResponse{chanAgent1, chanAgent2}
-			got := mergeResponseChannels(cs)
+			got := mergeResponseChannels(cs, bufSize)
 			resCount := 0
 			for range got {
 				resCount++
@@ -349,7 +349,8 @@ func TestCapture(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
-			got, err := capture(context.Background(), &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, insecure.NewCredentials(), log, origin)
+			api := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
+			got, err := api.capture(context.Background(), &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, insecure.NewCredentials(), log)
 			if (err != nil) != tt.wantErr && status.Code(err) != codes.FailedPrecondition {
 				t.Errorf("capture() error = %v, wantErr %v", err, tt.wantErr)
 				return

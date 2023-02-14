@@ -155,7 +155,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	streamPreparer := &streamPrep{}
 
 	// Start capture
-	out, err := capture(ctx, stream, streamPreparer, opts.Start.Options, targets, creds, log, api.id)
+	out, err := api.capture(ctx, stream, streamPreparer, opts.Start.Options, targets, creds, log)
 	if err != nil {
 		return err
 	}
@@ -258,9 +258,9 @@ func checkAgentStatus(statusRes *StatusResponse, err error, target AgentEndpoint
 // Takes the data received for each of the pcap-agents and merges it into the resulting channel
 // The resulting channel is unbuffered.
 // inspired by: https://go.dev/blog/pipelines
-func mergeResponseChannels(cs []<-chan *CaptureResponse) <-chan *CaptureResponse {
+func mergeResponseChannels(cs []<-chan *CaptureResponse, bufSize int) <-chan *CaptureResponse {
 	var wg sync.WaitGroup
-	out := make(chan *CaptureResponse)
+	out := make(chan *CaptureResponse, bufSize)
 
 	// Start an output goroutine for each input channel in cs.  output
 	// copies values from c to out until c is closed, then calls wg.Done.
@@ -346,8 +346,8 @@ type captureReceiver interface {
 // readMsgFromStream reads Capture messages from stream and outputs them to the out channel.If the given context errors
 // an AgentRequest_Stop is sent and the messages continue to be read.if context will be cancelled from other routine
 // (mostly  because client requests to stop capture), the stop request will be forwarded to agent. The data from the agent will be read till stream ends with EOF.
-func readMsgFromStream(ctx context.Context, captureStream captureReceiver, target AgentEndpoint) <-chan *CaptureResponse {
-	out := make(chan *CaptureResponse, 100)
+func readMsgFromStream(ctx context.Context, captureStream captureReceiver, target AgentEndpoint, bufSize int) <-chan *CaptureResponse {
+	out := make(chan *CaptureResponse, bufSize)
 	stopped := false
 	go func() {
 		defer close(out)
@@ -454,7 +454,7 @@ type streamPreparer interface {
 	prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials) (captureReceiver, error)
 }
 
-func capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger, origin string) (<-chan *CaptureResponse, error) {
+func (api *API) capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
 
 	runningCaptures := 0
@@ -479,18 +479,18 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 
 		log.Info("Add capture waiting group")
 
-		c := readMsgFromStream(ctx, captureStream, target)
+		c := readMsgFromStream(ctx, captureStream, target, api.bufConf.Size)
 		captureCs = append(captureCs, c)
 	}
 
 	if runningCaptures == 0 {
-		stream.Send(newMessageResponse(MessageType_START_CAPTURE_FAILED, "Starting of all captures failed", origin))
+		stream.Send(newMessageResponse(MessageType_START_CAPTURE_FAILED, "Starting of all captures failed", api.id))
 		log.Error("Starting of all captures failed during stream preparation")
 		return nil, errorf(codes.FailedPrecondition, "Starting of all captures failed")
 	}
 
 	// merge channels to one channel and send to forward to stream
-	out := mergeResponseChannels(captureCs)
+	out := mergeResponseChannels(captureCs, api.bufConf.Size)
 	return out, nil
 }
 
