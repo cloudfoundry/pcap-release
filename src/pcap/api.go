@@ -464,7 +464,6 @@ func capture(ctx context.Context, stream responseSender, streamPrep streamPrepar
 
 		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target, creds)
 		if err != nil {
-
 			errMsg := convertStatusCodeToMsg(err, target)
 			sendErr := stream.Send(errMsg)
 			if sendErr != nil {
@@ -521,16 +520,16 @@ func (api *API) registerStream(stream *API_CaptureServer) error {
 	defer api.captureLock.Unlock()
 	api.captureLock.Lock()
 
-	client, vcap_id := identifyStream(stream)
+	client, vcapId := identifyStream(stream)
 
 	if _, exists := api.captures[client]; !exists {
 		api.captures[client] = make(map[string]*API_CaptureServer, 10)
 	}
 
 	if len(api.captures[client]) >= api.maxConcurrentCaptures {
-		return fmt.Errorf("could not start capture for client %s with vcap-id %s: %w", client, vcap_id, errTooManyCaptures)
+		return fmt.Errorf("could not start capture for client %s with vcap-id %s: %w", client, vcapId, errTooManyCaptures)
 	}
-	api.captures[client][vcap_id] = stream
+	api.captures[client][vcapId] = stream
 	return nil
 }
 
@@ -538,10 +537,10 @@ func (api *API) deregisterStream(stream *API_CaptureServer) {
 	defer api.captureLock.Unlock()
 	api.captureLock.Lock()
 
-	client, vcap_id := identifyStream(stream)
+	client, vcapId := identifyStream(stream)
 
 	if clientStreams, hasClient := api.captures[client]; hasClient {
-		delete(clientStreams, vcap_id)
+		delete(clientStreams, vcapId)
 	}
 }
 
@@ -549,11 +548,11 @@ func identifyStream(stream *API_CaptureServer) (string, string) {
 	// FIXME: Use a better client identifier
 	client := "client-sessions"
 
-	vcap_id, err := vcapIDFromCtx((*stream).Context())
+	vcapId, err := vcapIDFromCtx((*stream).Context())
 
 	if err != nil {
 		return client, "unknown"
 	}
 
-	return client, *vcap_id
+	return client, *vcapId
 }
