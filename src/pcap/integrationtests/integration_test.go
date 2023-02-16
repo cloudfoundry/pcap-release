@@ -11,6 +11,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"io"
 	"math/big"
@@ -118,6 +120,7 @@ var _ = Describe("IntegrationTests", func() {
 		Context("with two agents and one API", func() {
 			It("finished without errors", func() {
 				ctx := context.Background()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
 				stream, _ := apiClient.Capture(ctx)
 				request := boshRequest(&pcap.BoshCapture{
 					Token:      "123",
@@ -137,6 +140,51 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
 				Expect(code).To(Equal(codes.OK))
 
+			})
+			It("many concurrent captures from the same client", func() {
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"},
+				}, defaultOptions)
+
+				ctx := context.Background()
+				streams := make([]pcap.API_CaptureClient, 2)
+				for i := 0; i < 2; i++ {
+					requestVcapID := uuid.Must(uuid.NewRandom()).String()
+					ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{requestVcapID}})
+
+					stream, _ := apiClient.Capture(ctx)
+					streams[i] = stream
+
+					err := stream.Send(request)
+					Expect(err).NotTo(HaveOccurred(), "Sending the request")
+
+					capture, messages, err := recvCapture(10, stream)
+					Expect(err).NotTo(HaveOccurred(), "Receiving the first 10 messages")
+					Expect(capture).NotTo(BeNil())
+					Expect(messages).To(HaveLen(10))
+				}
+
+				requestVcapID := uuid.Must(uuid.NewRandom()).String()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{requestVcapID}})
+
+				streamLimitReached, _ := apiClient.Capture(ctx)
+				err := streamLimitReached.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				errCode, _, err := recvCapture(1, streamLimitReached)
+
+				GinkgoWriter.Printf("\nError code: %v\n", errCode)
+				Expect(errCode).To(Equal(codes.ResourceExhausted))
+
+				for _, stream := range streams {
+					err = stream.Send(stop)
+					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+
+					code, _, err := recvCapture(10_000, stream)
+					Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+					Expect(code).To(Equal(codes.OK))
+				}
 			})
 			It("finished with errors due to invalid start capture request", func() {
 				ctx := context.Background()

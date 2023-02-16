@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/metadata"
 	"io"
 	"time"
 
@@ -31,6 +32,8 @@ func main() {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
+
+	ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123"}})
 
 	api := pcap.NewAPIClient(cc)
 	stream, err := api.Capture(ctx)

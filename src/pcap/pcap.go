@@ -140,6 +140,7 @@ func setVcapID(ctx context.Context, log *zap.Logger) (context.Context, *zap.Logg
 		// No existing vcap-id found, creating a new one and adding it to the context.
 		newVcapID := uuid.Must(uuid.NewRandom()).String()
 		vcapID = &newVcapID
+		// outgoing context is current context
 		ctx = metadata.AppendToOutgoingContext(ctx, HeaderVcapID, *vcapID)
 
 		if errors.Is(err, errNoMetadata) {
@@ -158,6 +159,7 @@ func setVcapID(ctx context.Context, log *zap.Logger) (context.Context, *zap.Logg
 // returns errNoMetadata if no metadata was found
 // returns errNoVcapId if no vcap-id was found in the metadata
 func vcapIDFromCtx(ctx context.Context) (*string, error) {
+	// incoming context is requester context
 	md, ok := metadata.FromIncomingContext(ctx)
 
 	if !ok {
