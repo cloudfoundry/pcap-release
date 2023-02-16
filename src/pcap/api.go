@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"os"
 	"sync"
@@ -16,8 +15,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
+
+const concurrentCapturesPerClient = 10
 
 type API struct {
 	bufConf  BufferConf
@@ -45,7 +47,7 @@ func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCap
 		agents:                agentmTLS,
 		id:                    id,
 		maxConcurrentCaptures: maxConcurrentCaptures,
-		captures:              make(map[string]map[string]*API_CaptureServer, 10),
+		captures:              make(map[string]map[string]*API_CaptureServer, concurrentCapturesPerClient),
 		drainTimeout:          drainTimeout,
 	}
 }
@@ -79,7 +81,7 @@ func (api *API) RegisterHandler(handler CaptureHandler) {
 	api.handlers[handler.name()] = handler
 }
 
-// Status provides the current status information for the pcap-api service
+// Status provides the current status information for the pcap-api service.
 func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
 	bosh := api.handlerRegistered("bosh")
 	cf := api.handlerRegistered("cf")
@@ -191,10 +193,10 @@ func (api *API) prepareTLSToAgent(log *zap.Logger) (credentials.TransportCredent
 	}
 
 	// Load certificate of the CA who signed agent's certificate
-	pemAgentCA, err := os.ReadFile(api.agents.MTLS.CertificateAuthority)
-	if err != nil {
+	pemAgentCA, readErr := os.ReadFile(api.agents.MTLS.CertificateAuthority)
+	if readErr != nil {
 		log.Error("Load Agent CA certificate failed")
-		return nil, err
+		return nil, readErr
 	}
 
 	certPool := x509.NewCertPool()
@@ -206,6 +208,8 @@ func (api *API) prepareTLSToAgent(log *zap.Logger) (credentials.TransportCredent
 	config := &tls.Config{
 		RootCAs:    certPool,
 		ServerName: api.agents.MTLS.CommonName,
+		MinVersion: tls.VersionTLS12,
+		MaxVersion: tls.VersionTLS13,
 	}
 
 	// Load client's certificate and private key
@@ -400,8 +404,8 @@ func convertStatusCodeToMsg(err error, target AgentEndpoint) *CaptureResponse {
 	}
 	err = fmt.Errorf("capturing from agent %s: %w", target, err)
 
-	// FIXME: internal+unknown and default are the same. Is default really a connection error?
-	switch code {
+	//FIXME: internal+unknown and default are the same. Is default really a connection error?
+	switch code { //nolint:exhaustive // we do not need to cover all the codes here
 	case codes.InvalidArgument:
 		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error(), target.Identifier)
 	case codes.Aborted:
@@ -525,11 +529,11 @@ func (api *API) drainStreams() chan struct{} {
 
 	wg := &sync.WaitGroup{}
 	for client, clientStreams := range api.captures {
-		for vcap_id, stream := range clientStreams {
-			zap.L().Debug("Terminating capture for client", zap.String("client", client), zap.String(LogKeyVcapID, vcap_id))
+		for vcapID, stream := range clientStreams {
+			zap.L().Debug("Terminating capture for client", zap.String("client", client), zap.String(LogKeyVcapID, vcapID))
 			err := (*stream).SendMsg(makeStopRequest())
 			if err != nil {
-				zap.S().Warn("Could not send stop request to client", zap.String("client", client), zap.String(LogKeyVcapID, vcap_id), zap.Error(err))
+				zap.S().Warn("Could not send stop request to client", zap.String("client", client), zap.String(LogKeyVcapID, vcapID), zap.Error(err))
 				continue
 			}
 			// The message could be sent, so we expect the context to finish gracefully.
@@ -556,16 +560,16 @@ func (api *API) registerStream(stream *API_CaptureServer) error {
 	defer api.captureLock.Unlock()
 	api.captureLock.Lock()
 
-	client, vcapId := identifyStream(stream)
+	client, vcapID := identifyStream(stream)
 
 	if _, exists := api.captures[client]; !exists {
-		api.captures[client] = make(map[string]*API_CaptureServer, 10)
+		api.captures[client] = make(map[string]*API_CaptureServer, concurrentCapturesPerClient)
 	}
 
 	if len(api.captures[client]) >= api.maxConcurrentCaptures {
-		return fmt.Errorf("could not start capture for client %s with vcap-id %s: %w", client, vcapId, errTooManyCaptures)
+		return fmt.Errorf("could not start capture for client %s with vcap-id %s: %w", client, vcapID, errTooManyCaptures)
 	}
-	api.captures[client][vcapId] = stream
+	api.captures[client][vcapID] = stream
 	return nil
 }
 
@@ -573,10 +577,10 @@ func (api *API) deregisterStream(stream *API_CaptureServer) {
 	defer api.captureLock.Unlock()
 	api.captureLock.Lock()
 
-	client, vcapId := identifyStream(stream)
+	client, vcapID := identifyStream(stream)
 
 	if clientStreams, hasClient := api.captures[client]; hasClient {
-		delete(clientStreams, vcapId)
+		delete(clientStreams, vcapID)
 		if len(clientStreams) == 0 {
 			delete(api.captures, client)
 		}
@@ -589,11 +593,11 @@ func identifyStream(stream *API_CaptureServer) (string, string) {
 	// FIXME: Use a better client identifier
 	client := "client-sessions"
 
-	vcapId, err := vcapIDFromCtx((*stream).Context())
+	vcapID, err := vcapIDFromCtx((*stream).Context())
 
 	if err != nil {
 		return client, "unknown"
 	}
 
-	return client, *vcapId
+	return client, *vcapID
 }

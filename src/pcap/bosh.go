@@ -2,6 +2,7 @@ package pcap
 
 import (
 	"fmt"
+
 	"go.uber.org/zap"
 )
 
@@ -31,7 +32,6 @@ func (bosh *BoshHandler) handle(request *Capture) ([]AgentEndpoint, error) {
 }
 
 func (bosh *BoshHandler) validate(capture *Capture) error {
-
 	request := capture.GetBosh()
 
 	if request == nil {

@@ -11,9 +11,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 	"io"
 	"math/big"
 	"net"
@@ -21,15 +18,17 @@ import (
 	"path"
 	"time"
 
-	gopcap "github.com/google/gopacket/pcap"
-	"google.golang.org/grpc/credentials/insecure"
-
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+	gopcap "github.com/google/gopacket/pcap"
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 var lis net.Listener

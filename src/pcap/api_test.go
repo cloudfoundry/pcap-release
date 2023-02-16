@@ -4,26 +4,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 	"io"
 	"sync"
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 // Add test for capture options
 
-//{
-//name:        "Request Capture Options not complete",
-//req:         &BoshRequest{Payload: &BoshRequest_Start{Start: &StartBoshCapture{Token: "123d24", Deployment: "cf", Groups: []string{"router"}}}},
-//wantErr:     true,
-//expectedErr: errNilField,
-//},
+// {
+// name:        "Request Capture Options not complete",
+// req:         &BoshRequest{Payload: &BoshRequest_Start{Start: &StartBoshCapture{Token: "123d24", Deployment: "cf", Groups: []string{"router"}}}},
+// wantErr:     true,
+// expectedErr: errNilField,
+// },
 
 var origin = "pcap-api-1234ab"
 

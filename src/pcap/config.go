@@ -44,7 +44,7 @@ type BufferConf struct {
 	LowerLimit int `yaml:"lowerLimit" validate:"gte=0,ltefield=UpperLimit"`
 }
 
-// Listen defines the port and optional TLS configuration for the listening socket
+// Listen defines the port and optional TLS configuration for the listening socket.
 type Listen struct {
 	Port int  `yaml:"port" validate:"gt=0,lte=65535"`
 	TLS  *TLS `yaml:"tls,omitempty"`

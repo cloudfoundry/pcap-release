@@ -26,8 +26,10 @@ const (
 	CompatibilityLevel int64 = 1
 
 	// LogKeyVcapID sets on which field the vcap request id will be logged.
-	LogKeyVcapID = "vcap-id"
-	HeaderVcapID = "x-vcap-request-id"
+	LogKeyVcapID        = "vcap-id"
+	HeaderVcapID        = "x-vcap-request-id"
+	maxDeviceNameLength = 16
+	maxFilterLength     = 5000
 )
 
 var (
@@ -37,7 +39,7 @@ var (
 	errInvalidPayload   = fmt.Errorf("invalid payload: %w", errValidationFailed)
 	errIllegalCharacter = fmt.Errorf("illegal character: %w", errValidationFailed)
 	errNoMetadata       = fmt.Errorf("no metadata")
-	errNoVcapId         = fmt.Errorf("no vcap-id")
+	errNoVcapID         = fmt.Errorf("no vcap-id")
 	errTooManyCaptures  = fmt.Errorf("too many concurrent captures")
 	errDraining         = fmt.Errorf("draining")
 )
@@ -84,7 +86,7 @@ func (opts *CaptureOptions) validate() error {
 		return err
 	}
 
-	if len(opts.Filter) > 5000 {
+	if len(opts.Filter) > maxFilterLength {
 		return fmt.Errorf("expected filter to be less than 5000 characters, received %d", len(opts.Filter))
 	}
 
@@ -104,7 +106,7 @@ func validateDevice(name string) (err error) {
 		}
 	}()
 
-	if len(name) > 16 {
+	if len(name) > maxDeviceNameLength {
 		return fmt.Errorf("name too long: %d > 16", len(name))
 	}
 
@@ -146,7 +148,7 @@ func setVcapID(ctx context.Context, log *zap.Logger) (context.Context, *zap.Logg
 		if errors.Is(err, errNoMetadata) {
 			defer log.Warn("request does not contain metadata, generated new vcap request id")
 		}
-		if errors.Is(err, errNoVcapId) {
+		if errors.Is(err, errNoVcapID) {
 			defer log.Warn("request does not contain request id, generating one")
 		}
 	}
@@ -157,7 +159,7 @@ func setVcapID(ctx context.Context, log *zap.Logger) (context.Context, *zap.Logg
 // vcapIdFromCtx finds the vcap-id from the context metadata, if available.
 //
 // returns errNoMetadata if no metadata was found
-// returns errNoVcapId if no vcap-id was found in the metadata
+// returns errNoVcapID if no vcap-id was found in the metadata.
 func vcapIDFromCtx(ctx context.Context) (*string, error) {
 	// incoming context is requester context
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -175,10 +177,10 @@ func vcapIDFromCtx(ctx context.Context) (*string, error) {
 		}
 	}
 
-	return nil, errNoVcapId
+	return nil, errNoVcapID
 }
 
-// interfaceAddrs provides a list of all known network addresses
+// interfaceAddrs provides a list of all known network addresses.
 var interfaceAddrs = net.InterfaceAddrs
 
 // containsForbiddenRunes checks whether a given string contains
@@ -186,7 +188,7 @@ var interfaceAddrs = net.InterfaceAddrs
 //
 // See: https://www.lookuptables.com/text/ascii-table
 func containsForbiddenRunes(in string) bool {
-	for _, r := range []rune(in) {
+	for _, r := range in {
 		if r < 32 || r > 126 {
 			return true
 		}
@@ -206,9 +208,9 @@ func patchFilter(filter string) (string, error) {
 
 	if filter == "" {
 		return fmt.Sprintf("not (%s)", apiFilter), nil
-	} else {
-		return fmt.Sprintf("not (%s) and (%s)", apiFilter, filter), nil
 	}
+
+	return fmt.Sprintf("not (%s) and (%s)", apiFilter, filter), nil
 }
 
 // generateApiFilter takes all IP addresses as returned by interfaceAddrs and
