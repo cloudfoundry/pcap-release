@@ -76,7 +76,7 @@ type CaptureHandler interface {
 	// canHandle determines if this handler is responsible for handling the Capture
 	canHandle(*Capture) bool
 	// handle either resolves and returns the agents targeted by Capture or provides an error
-	handle(*Capture) ([]AgentEndpoint, error)
+	handle(*Capture, *zap.Logger) ([]AgentEndpoint, error)
 }
 
 func (api *API) RegisterHandler(handler CaptureHandler) {
@@ -129,7 +129,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		cancel(nil)
 	}()
 
-	ctx, log = setVcapID(ctx, log)
+	ctx, log = setVcapID(ctx, log, nil)
 
 	err = api.registerStream(&stream)
 	if err != nil {
@@ -190,7 +190,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 }
 
 func (api *API) prepareTLSToAgent(log *zap.Logger) (credentials.TransportCredentials, error) {
-	if api.agents.MTLS.SkipVerify {
+	if api.agents.MTLS == nil || api.agents.MTLS.SkipVerify {
 		return insecure.NewCredentials(), nil
 	}
 
@@ -234,7 +234,7 @@ func (api *API) resolveAgentEndpoints(capture *Capture, log *zap.Logger) ([]Agen
 		if handler.canHandle(capture) {
 			log.Sugar().Debugf("Resolving agent endpoints via handler %s for capture %s", name, capture)
 
-			agents, err := handler.handle(capture)
+			agents, err := handler.handle(capture, log)
 			if err != nil {
 				return nil, fmt.Errorf("error while handling %v via %s: %w", capture, name, err)
 			}
@@ -297,11 +297,11 @@ type streamPrep struct {
 
 // prepareStreamToTarget creates a client connection to the given target, contacts the client API for the Agent service
 // to start the Capture.
-func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials) (captureReceiver, error) {
+func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, CancelCauseFunc, error) {
 	cc, err := grpc.Dial(target.String(), grpc.WithTransportCredentials(creds))
 	if err != nil {
 		err = fmt.Errorf("start capture from '%s': %w", target, err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	agent := NewAgentClient(cc)
@@ -309,16 +309,18 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 	statusRes, err := agent.Status(ctx, &StatusRequest{})
 	err = checkAgentStatus(statusRes, err, target)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// Do not use the same context as for readMsgFromStream. Otherwise, the call of cancel function will cancel the agent
-	// before the stop capture request will be sent
-	captureStream, err := agent.Capture(context.Background())
+	// create a new context for the connection to the agent, forwarding an existing vcap-id
+	agentContext, cancel := WithCancelCause(ctx)
+
+	captureStream, err := agent.Capture(agentContext)
 
 	if err != nil {
 		convertStatusCodeToMsg(err, target)
-		return nil, err
+		cancel(err)
+		return nil, nil, err
 	}
 
 	patchedFilter, err := patchFilter(req.Filter)
@@ -328,7 +330,8 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 			inner:  err,
 		}
 		convertStatusCodeToMsg(err, target)
-		return nil, err
+		cancel(err)
+		return nil, nil, err
 	}
 	req.Filter = patchedFilter
 
@@ -341,9 +344,10 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 	})
 	if err != nil {
 		// out <- convertStatusCodeToMsg(err, target)
-		return nil, err
+		cancel(err)
+		return nil, nil, err
 	}
-	return captureStream, nil
+	return captureStream, cancel, nil
 }
 
 type captureReceiver interface {
@@ -461,7 +465,7 @@ func stopCmd(cancel CancelCauseFunc, stream requestReceiver) {
 }
 
 type streamPreparer interface {
-	prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials) (captureReceiver, error)
+	prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials, *zap.Logger) (captureReceiver, CancelCauseFunc, error)
 }
 
 func (api *API) capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (<-chan *CaptureResponse, error) {
@@ -472,12 +476,13 @@ func (api *API) capture(ctx context.Context, stream responseSender, streamPrep s
 		log = log.With(zap.String("target", target.String()))
 		log.Info("starting capture")
 
-		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target, creds)
+		captureStream, cancel, err := streamPrep.prepareStreamToTarget(ctx, opts, target, creds, log)
 		if err != nil {
 			errMsg := convertStatusCodeToMsg(err, target)
 			sendErr := stream.Send(errMsg)
 			if sendErr != nil {
 				// FIXME the return interrupts the for-loop over targets and returns in case of send error
+				cancel(sendErr)
 				return nil, sendErr
 			}
 
@@ -490,7 +495,7 @@ func (api *API) capture(ctx context.Context, stream responseSender, streamPrep s
 
 		log.Info("Add capture waiting group")
 
-		err = api.registerAgentCaptureStream(ctx, &captureStream)
+		err = api.registerAgentCaptureStream(ctx, &captureStream, log)
 		if err != nil {
 			//TODO: implement error handling
 		}
@@ -578,14 +583,14 @@ func (api *API) drainStreamForVcapID(vcapID string, wg *sync.WaitGroup) error {
 	return nil
 }
 
-func (api *API) registerAgentCaptureStream(ctx context.Context, captureStream *captureReceiver) error {
+func (api *API) registerAgentCaptureStream(ctx context.Context, captureStream *captureReceiver, log *zap.Logger) error {
 	defer api.captureLock.Unlock()
 	api.captureLock.Lock()
 
 	// register the agent capture stream if it has been started successfully
 	vcapID, err := vcapIDFromCtx(ctx)
 	if err != nil {
-		//TODO vcapID is not found???!
+		log.Warn("no vcap ID found")
 	}
 
 	if _, exists := api.agentCapturesPerVcapID[*vcapID]; !exists {

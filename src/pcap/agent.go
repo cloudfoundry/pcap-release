@@ -97,7 +97,7 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	ctx, cancel := WithCancelCause(stream.Context())
 	defer cancel(nil)
 
-	ctx, log = setVcapID(ctx, log)
+	ctx, log = setVcapID(ctx, log, nil)
 
 	if a.draining() {
 		return errorf(codes.Unavailable, "agent is draining")

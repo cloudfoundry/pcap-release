@@ -22,8 +22,9 @@ var DefaultAPIConfig = APIConfig{
 		DefaultPort: 9494,
 		MTLS:        nil,
 	},
-	DrainTimeout:    10 * time.Second,
-	ManualEndpoints: pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}},
+	DrainTimeout:       10 * time.Second,
+	ConcurrentCaptures: 5,
+	ManualEndpoints:    pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}},
 }
 
 type APIConfig struct {

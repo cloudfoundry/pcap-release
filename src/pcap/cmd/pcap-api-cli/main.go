@@ -21,7 +21,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -33,7 +32,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123"}})
+	// ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123"}})
 
 	api := pcap.NewAPIClient(cc)
 	stream, err := api.Capture(ctx)
@@ -61,7 +60,11 @@ func main() {
 	err = stream.Send(request)
 	p(err)
 
-	readN(10, stream)
+	// keep receiving some data long enough to start a manual drain
+	for i := 0; i < 10000; i++ {
+		readN(1000, stream)
+		time.Sleep(200 * time.Millisecond)
+	}
 
 	stop := &pcap.CaptureRequest{
 		Operation: &pcap.CaptureRequest_Stop{},

@@ -17,6 +17,7 @@ var DefaultConfig = Config{
 		LowerLimit: 60,
 	},
 	LogLevel: "debug",
+	ID:       "test-agent",
 }
 
 type Config struct {

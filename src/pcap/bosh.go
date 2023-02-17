@@ -2,7 +2,6 @@ package pcap
 
 import (
 	"fmt"
-
 	"go.uber.org/zap"
 )
 
@@ -19,8 +18,9 @@ func (bosh *BoshHandler) canHandle(request *Capture) bool {
 	return request.GetBosh() != nil
 }
 
-func (bosh *BoshHandler) handle(request *Capture) ([]AgentEndpoint, error) {
-	zap.L().Info("Handling request for bosh")
+func (bosh *BoshHandler) handle(request *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
+	log = log.With(zap.String("handler", bosh.name()))
+	log.Info("Handling request")
 
 	err := bosh.validate(request)
 	if err != nil {
