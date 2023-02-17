@@ -80,6 +80,7 @@ var _ = Describe("IntegrationTests", func() {
 	var agentTarget2 pcap.AgentEndpoint
 	var stop *pcap.CaptureRequest
 	var defaultOptions *pcap.CaptureOptions
+	var api *pcap.API
 
 	Describe("Starting a capture", func() {
 		BeforeEach(func() {
@@ -93,8 +94,8 @@ var _ = Describe("IntegrationTests", func() {
 			targets = append(targets, agentTarget2)
 
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
-			apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}
-			apiClient, apiServer = createAPI(8080, targets, apiBuffConf, agentTLSConf, apiID, 2)
+			apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180}
+			apiClient, apiServer, api = createAPI(8080, targets, apiBuffConf, agentTLSConf, apiID, 2)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -292,6 +293,32 @@ var _ = Describe("IntegrationTests", func() {
 				code, _, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
 				Expect(code).To(Equal(codes.OK))
+			})
+			It("api drains", func() {
+				ctx := context.Background()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
+				stream, _ := apiClient.Capture(ctx)
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"},
+				}, defaultOptions)
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				_, messages, err := recvCapture(10, stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(messages).To(HaveLen(10), func() string { return fmt.Sprintf("Messages: %+v", messages) })
+
+				go func() {
+					recvCapture(50_000, stream)
+				}()
+
+				// sleep in order to give time to register the agent capture streams before api drains
+				time.Sleep(700 * time.Millisecond)
+				GinkgoWriter.Printf("\ndraining\n")
+				api.Drain()
+				statusResponse, err := apiClient.Status(ctx, &pcap.StatusRequest{})
+				Expect(statusResponse.Healthy).To(BeFalse())
 
 			})
 		})
@@ -333,7 +360,7 @@ var _ = Describe("IntegrationTests", func() {
 			targets = append(targets, agentTarget2)
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 7, UpperLimit: 6, LowerLimit: 4}
-			apiClient, apiServer = createAPI(8080, targets, apiBuffConf, agentTLSConf, apiID, 2)
+			apiClient, apiServer, _ = createAPI(8080, targets, apiBuffConf, agentTLSConf, apiID, 2)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -409,7 +436,7 @@ var _ = Describe("IntegrationTests", func() {
 				},
 			}
 			apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}
-			apiClient, apiServer = createAPI(8080, targets, apiBuffConf, agentTLSConf, agentID1, 2)
+			apiClient, apiServer, _ = createAPI(8080, targets, apiBuffConf, agentTLSConf, agentID1, 2)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -617,9 +644,9 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	return agentClient, server, target
 }
 
-func createAPI(port int, targets []pcap.AgentEndpoint, bufconf pcap.BufferConf, mTLSConfig pcap.AgentMTLS, id string, maxConcurrentCaptures int) (pcap.APIClient, *grpc.Server) {
+func createAPI(port int, targets []pcap.AgentEndpoint, bufconf pcap.BufferConf, mTLSConfig pcap.AgentMTLS, id string, maxConcurrentCaptures int) (pcap.APIClient, *grpc.Server, *pcap.API) {
 	var server *grpc.Server
-	api := pcap.NewAPI(bufconf, mTLSConfig, id, maxConcurrentCaptures, time.Second*10)
+	api := pcap.NewAPI(bufconf, mTLSConfig, id, maxConcurrentCaptures, time.Second*15)
 	api.RegisterHandler(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
 	var err error
@@ -637,7 +664,7 @@ func createAPI(port int, targets []pcap.AgentEndpoint, bufconf pcap.BufferConf, 
 	Expect(err).NotTo(HaveOccurred())
 
 	client := pcap.NewAPIClient(cc)
-	return client, server
+	return client, server, api
 }
 
 func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.CaptureResponse, error) {
@@ -655,7 +682,9 @@ func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.Capt
 		}
 		messages = append(messages, message)
 		logCaptureResponse(GinkgoWriter, message)
+
 	}
+	GinkgoWriter.Printf("done")
 	return codes.OK, messages, nil
 }
 

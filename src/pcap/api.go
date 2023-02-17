@@ -28,11 +28,12 @@ type API struct {
 	UnimplementedAPIServer
 	id string
 
-	captures              map[string]map[string]*API_CaptureServer
-	captureLock           sync.RWMutex
-	maxConcurrentCaptures int
-	draining              bool
-	drainTimeout          time.Duration
+	captures               map[string]map[string]*API_CaptureServer
+	captureLock            sync.RWMutex
+	maxConcurrentCaptures  int
+	draining               bool
+	drainTimeout           time.Duration
+	agentCapturesPerVcapID map[string][]*captureReceiver
 }
 
 // TODO: This type should be removed once we have resolvers for BOSH or CF.
@@ -42,13 +43,14 @@ type ManualEndpoints struct {
 
 func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int, drainTimeout time.Duration) *API {
 	return &API{
-		bufConf:               bufConf,
-		handlers:              make(map[string]CaptureHandler),
-		agents:                agentmTLS,
-		id:                    id,
-		maxConcurrentCaptures: maxConcurrentCaptures,
-		captures:              make(map[string]map[string]*API_CaptureServer, concurrentCapturesPerClient),
-		drainTimeout:          drainTimeout,
+		bufConf:                bufConf,
+		handlers:               make(map[string]CaptureHandler),
+		agents:                 agentmTLS,
+		id:                     id,
+		maxConcurrentCaptures:  maxConcurrentCaptures,
+		captures:               make(map[string]map[string]*API_CaptureServer, concurrentCapturesPerClient),
+		drainTimeout:           drainTimeout,
+		agentCapturesPerVcapID: make(map[string][]*captureReceiver),
 	}
 }
 
@@ -348,6 +350,7 @@ type captureReceiver interface {
 	Recv() (*CaptureResponse, error)
 	Send(*AgentRequest) error
 	CloseSend() error
+	Context() context.Context
 }
 
 // readMsgFromStream reads Capture messages from stream and outputs them to the out channel.If the given context errors
@@ -474,6 +477,7 @@ func (api *API) capture(ctx context.Context, stream responseSender, streamPrep s
 			errMsg := convertStatusCodeToMsg(err, target)
 			sendErr := stream.Send(errMsg)
 			if sendErr != nil {
+				// FIXME the return interrupts the for-loop over targets and returns in case of send error
 				return nil, sendErr
 			}
 
@@ -485,6 +489,11 @@ func (api *API) capture(ctx context.Context, stream responseSender, streamPrep s
 		runningCaptures++
 
 		log.Info("Add capture waiting group")
+
+		err = api.registerAgentCaptureStream(ctx, &captureStream)
+		if err != nil {
+			//TODO: implement error handling
+		}
 
 		c := readMsgFromStream(ctx, captureStream, target, api.bufConf.Size)
 		captureCs = append(captureCs, c)
@@ -508,7 +517,6 @@ func (api *API) Drain() error {
 	defer cancel()
 
 	drained := api.drainStreams()
-
 	for {
 		select {
 		case <-drained:
@@ -529,20 +537,14 @@ func (api *API) drainStreams() chan struct{} {
 
 	wg := &sync.WaitGroup{}
 	for client, clientStreams := range api.captures {
-		for vcapID, stream := range clientStreams {
+		for vcapID, _ := range clientStreams {
 			zap.L().Debug("Terminating capture for client", zap.String("client", client), zap.String(LogKeyVcapID, vcapID))
-			err := (*stream).SendMsg(makeStopRequest())
+
+			err := api.drainStreamForVcapID(vcapID, wg)
 			if err != nil {
-				zap.S().Warn("Could not send stop request to client", zap.String("client", client), zap.String(LogKeyVcapID, vcapID), zap.Error(err))
+				zap.S().Warn("Could not send stop request to agent capturing ", zap.String(LogKeyVcapID, vcapID), zap.Error(err))
 				continue
 			}
-			// The message could be sent, so we expect the context to finish gracefully.
-			wg.Add(1)
-			go func(wg *sync.WaitGroup, ctx context.Context) {
-				// wait for capture stream context do be done
-				<-ctx.Done()
-				wg.Done()
-			}(wg, (*stream).Context())
 		}
 	}
 
@@ -554,6 +556,45 @@ func (api *API) drainStreams() chan struct{} {
 	}(wg)
 
 	return drained
+}
+
+func (api *API) drainStreamForVcapID(vcapID string, wg *sync.WaitGroup) error {
+	for _, agentStream := range api.agentCapturesPerVcapID[vcapID] {
+		err := (*agentStream).Send(&AgentRequest{
+			Payload: &AgentRequest_Stop{},
+		})
+		if err != nil {
+			zap.S().Warn("Could not send stop request to agent capturing request with vcapId", zap.String(LogKeyVcapID, vcapID), zap.Error(err))
+			continue
+		}
+		// The message could be sent, so we expect the context to finish gracefully.
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, ctx context.Context) {
+			// wait for capture stream context do be done
+			<-ctx.Done()
+			wg.Done()
+		}(wg, (*agentStream).Context())
+	}
+	return nil
+}
+
+func (api *API) registerAgentCaptureStream(ctx context.Context, captureStream *captureReceiver) error {
+	defer api.captureLock.Unlock()
+	api.captureLock.Lock()
+
+	// register the agent capture stream if it has been started successfully
+	vcapID, err := vcapIDFromCtx(ctx)
+	if err != nil {
+		//TODO vcapID is not found???!
+	}
+
+	if _, exists := api.agentCapturesPerVcapID[*vcapID]; !exists {
+		api.agentCapturesPerVcapID[*vcapID] = []*captureReceiver{}
+	}
+
+	//FIXME what should be done if vcapID is not set and err occurs?
+	api.agentCapturesPerVcapID[*vcapID] = append(api.agentCapturesPerVcapID[*vcapID], captureStream)
+	return nil
 }
 
 func (api *API) registerStream(stream *API_CaptureServer) error {
@@ -579,14 +620,16 @@ func (api *API) deregisterStream(stream *API_CaptureServer) {
 
 	client, vcapID := identifyStream(stream)
 
+	if _, exists := api.agentCapturesPerVcapID[vcapID]; exists {
+		delete(api.agentCapturesPerVcapID, vcapID)
+	}
+
 	if clientStreams, hasClient := api.captures[client]; hasClient {
 		delete(clientStreams, vcapID)
 		if len(clientStreams) == 0 {
 			delete(api.captures, client)
 		}
 	}
-
-	(*stream).Context().Done()
 }
 
 func identifyStream(stream *API_CaptureServer) (string, string) {

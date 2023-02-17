@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/metadata"
 	"io"
 	"sync"
 	"testing"
@@ -41,6 +42,10 @@ func (m *mockCaptureStream) Send(*AgentRequest) error {
 }
 
 func (m *mockCaptureStream) CloseSend() error {
+	return nil
+}
+
+func (m *mockCaptureStream) Context() context.Context {
 	return nil
 }
 func TestReadMsg(t *testing.T) {
@@ -351,7 +356,8 @@ func TestCapture(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
 			api := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1, time.Second*10)
-			got, err := api.capture(context.Background(), &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, insecure.NewCredentials(), log)
+			ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{HeaderVcapID: []string{"captureTest123"}})
+			got, err := api.capture(ctx, &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, insecure.NewCredentials(), log)
 			if (err != nil) != tt.wantErr && status.Code(err) != codes.FailedPrecondition {
 				t.Errorf("capture() error = %v, wantErr %v", err, tt.wantErr)
 				return
