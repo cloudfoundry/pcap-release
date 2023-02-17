@@ -188,6 +188,7 @@ var _ = Describe("IntegrationTests", func() {
 			})
 			It("finished with errors due to invalid start capture request", func() {
 				ctx := context.Background()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
 
 				stream, err := apiClient.Capture(ctx)
 
@@ -206,6 +207,7 @@ var _ = Describe("IntegrationTests", func() {
 			It("one agent unavailable", func() {
 				agentServer2.GracefulStop()
 				ctx := context.Background()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
 
 				stream, err := apiClient.Capture(ctx)
 
@@ -232,6 +234,8 @@ var _ = Describe("IntegrationTests", func() {
 				agentServer1.GracefulStop()
 				agentServer2.GracefulStop()
 				ctx := context.Background()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
+
 				stream, err := apiClient.Capture(ctx)
 				request := boshRequest(&pcap.BoshCapture{
 					Token:      "123",
@@ -248,6 +252,8 @@ var _ = Describe("IntegrationTests", func() {
 			})
 			It("One pcap-agent crashes", func() {
 				ctx := context.Background()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
+
 				stream, _ := apiClient.Capture(ctx)
 				request := boshRequest(&pcap.BoshCapture{
 					Token:      "123",
@@ -273,6 +279,8 @@ var _ = Describe("IntegrationTests", func() {
 			})
 			It("One pcap-agent drains", func() {
 				ctx := context.Background()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
+
 				stream, _ := apiClient.Capture(ctx)
 				request := boshRequest(&pcap.BoshCapture{
 					Token:      "123",
@@ -328,6 +336,8 @@ var _ = Describe("IntegrationTests", func() {
 			})
 			It("pcap-agent crashes", func() {
 				ctx := context.Background()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
+
 				stream, _ := apiClient.Capture(ctx)
 				request := boshRequest(&pcap.BoshCapture{
 					Token:      "123",
@@ -384,6 +394,8 @@ var _ = Describe("IntegrationTests", func() {
 		Context("with two agents and one API", func() {
 			It("pcap-api is congested", func() {
 				ctx := context.Background()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
+
 				stream, _ := apiClient.Capture(ctx)
 				request := boshRequest(&pcap.BoshCapture{
 					Token:      "123",
@@ -460,6 +472,7 @@ var _ = Describe("IntegrationTests", func() {
 		Context("with one agents and one API", func() {
 			It("finished without errors", func() {
 				ctx := context.Background()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
 
 				stream, _ := apiClient.Capture(ctx)
 
