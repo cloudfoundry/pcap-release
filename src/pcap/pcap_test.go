@@ -1,8 +1,15 @@
 package pcap
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/grpc/metadata"
 	"math/rand"
 	"net"
+	"strconv"
 	"testing"
 
 	"github.com/go-playground/validator/v10"
@@ -60,6 +67,11 @@ func TestCaptureOptionsValidate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:    "Very long filter",
+			opts:    &CaptureOptions{Device: "eth0", Filter: generateFilterOptions(200), SnapLen: 65000},
+			wantErr: true,
+		},
+		{
 			name:    "Valid values",
 			opts:    &CaptureOptions{Device: randomDeviceNameFixedLength(16), Filter: "host 10.0.0.1", SnapLen: 65000},
 			wantErr: false,
@@ -84,6 +96,15 @@ func randomDeviceNameFixedLength(n int) string {
 	return string(deviceName)
 }
 
+func generateFilterOptions(n int) string {
+	var filter string
+	filter = "host 10.0.0.1"
+	for i := 2; i <= n; i++ {
+		newFilterOptions := "host 10.0.0." + strconv.Itoa(i)
+		filter = fmt.Sprintf("%s and %s and port 443", filter, newFilterOptions)
+	}
+	return filter
+}
 func TestBufferConfValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -296,6 +317,113 @@ func Test_containsForbiddenRunes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := containsForbiddenRunes(tt.in); got != tt.want {
 				t.Errorf("containsForbiddenRunes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetVcapId(t *testing.T) {
+	tests := []struct {
+		name           string
+		md             metadata.MD
+		externalVcapId string
+		vcapID         string
+	}{
+		{
+			name: "Request without metadata",
+			md:   nil,
+		},
+
+		{
+			name: "Metadata without vcap request id",
+			md:   metadata.MD{},
+		},
+		{
+			name:   "Metadata with vcap request id",
+			md:     metadata.MD{HeaderVcapID: []string{"123"}},
+			vcapID: "123",
+		},
+		{
+			name:           "Metadata with vcap request id",
+			externalVcapId: "external123",
+			vcapID:         "external123",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := metadata.NewIncomingContext(context.Background(), tt.md)
+
+			observedZapCore, observedLogs := observer.New(zap.InfoLevel)
+			log := zap.New(observedZapCore)
+
+			ctx, log = setVcapID(ctx, log, &tt.externalVcapId)
+
+			got, ok := metadata.FromOutgoingContext(ctx)
+			if !ok {
+				t.Fatal("missing outgoing context")
+			}
+
+			vcapID, _ := getVcapFromMD(got)
+			if vcapID != nil && tt.vcapID != "" && *vcapID != tt.vcapID {
+				t.Errorf("expected %s but got %s", tt.vcapID, *vcapID)
+			}
+
+			// ensure that at least one log has been observed
+			log.Info("test")
+
+			if observedLogs == nil || observedLogs.Len() == 0 {
+				t.Fatal("No logs are written")
+			}
+
+			entry := observedLogs.All()[observedLogs.Len()-1]
+
+			for _, logField := range entry.Context {
+				if logField.Key == LogKeyVcapID && (tt.vcapID == "" || logField.String == tt.vcapID) {
+					return
+				}
+			}
+
+			t.Errorf("missing field %s or field has wrong value", LogKeyVcapID)
+		})
+	}
+}
+
+func Test_vcapIDFromOutgoingCtx(t *testing.T) {
+	tests := []struct {
+		name    string
+		md      metadata.MD
+		want    string
+		wantErr error
+	}{
+		{
+			name:    "no metadata",
+			md:      nil,
+			wantErr: errNoMetadata,
+		},
+		{
+			name:    "metadata without vcap-id",
+			md:      metadata.MD{},
+			wantErr: errNoVcapID,
+		},
+		{
+			name: "metadata with vcap-id",
+			md:   metadata.MD{HeaderVcapID: []string{"123"}},
+			want: "123",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tt.md != nil {
+				ctx = metadata.NewOutgoingContext(ctx, tt.md)
+			}
+			got, err := vcapIDFromOutgoingCtx(ctx)
+			if err != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("vcapIDFromOutgoingCtx() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != nil && tt.want != "" && *got != tt.want {
+				t.Errorf("vcapIDFromOutgoingCtx() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

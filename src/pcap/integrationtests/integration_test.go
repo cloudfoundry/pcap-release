@@ -317,14 +317,12 @@ var _ = Describe("IntegrationTests", func() {
 				_, messages, err := recvCapture(10, stream)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(messages).To(HaveLen(10), func() string { return fmt.Sprintf("Messages: %+v", messages) })
-
 				go func() {
-					GinkgoWriter.Printf("\ndraining\n")
-					api.Drain()
-				}()
+					api.Stop()
 
-				_, messages, err = recvCapture(50_000, stream)
-				Expect(err).NotTo(HaveOccurred())
+				}()
+				time.Sleep(1 * time.Second)
+				_, messages, _ = recvCapture(100_000, stream)
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CAPTURE_STOPPED, agentTarget1.Identifier)).To(BeTrue())
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CAPTURE_STOPPED, agentTarget2.Identifier)).To(BeTrue())
 				statusResponse, err := apiClient.Status(ctx, &pcap.StatusRequest{})
@@ -418,70 +416,6 @@ var _ = Describe("IntegrationTests", func() {
 
 			})
 		})
-
-	})
-
-	Describe("Staring a capture with an API with very small draining timeout", func() {
-		BeforeEach(func() {
-			var targets []pcap.AgentEndpoint
-			//var target pcap.AgentEndpoint
-
-			_, agentServer1, agentTarget1 = createAgent(8082, agentID1, nil)
-			targets = append(targets, agentTarget1)
-
-			_, agentServer2, agentTarget2 = createAgent(8083, agentID2, nil)
-			targets = append(targets, agentTarget2)
-			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
-			apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 90}
-			drainTimeout = 0 * time.Millisecond
-			apiClient, apiServer, api = createAPI(8080, targets, apiBuffConf, agentTLSConf, apiID, 2, drainTimeout)
-
-			stop = &pcap.CaptureRequest{
-				Operation: &pcap.CaptureRequest_Stop{},
-			}
-
-			loopback, err := findLoopback()
-			Expect(err).ToNot(HaveOccurred())
-
-			defaultOptions = &pcap.CaptureOptions{
-				Device:  loopback.Name,
-				Filter:  "",
-				SnapLen: 65000,
-			}
-		})
-
-		AfterEach(func() {
-			agentServer1.GracefulStop()
-			agentServer2.GracefulStop()
-			apiServer.GracefulStop()
-		})
-		Context("with two agents and one API", func() {
-			It("api drainTimeout exceeded", func() {
-				ctx := context.Background()
-				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
-				stream, _ := apiClient.Capture(ctx)
-				request := boshRequest(&pcap.BoshCapture{
-					Token:      "123",
-					Deployment: "cf",
-					Groups:     []string{"router"},
-				}, defaultOptions)
-				err := stream.Send(request)
-				Expect(err).NotTo(HaveOccurred(), "Sending the request")
-				_, messages, err := recvCapture(10, stream)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(messages).To(HaveLen(10), func() string { return fmt.Sprintf("Messages: %+v", messages) })
-
-				err = api.Drain()
-				Expect(err).To(BeEquivalentTo(context.DeadlineExceeded))
-
-				_, _, err = recvCapture(50_000, stream)
-				Expect(err).NotTo(HaveOccurred())
-				statusResponse, err := apiClient.Status(ctx, &pcap.StatusRequest{})
-				Expect(statusResponse.Healthy).To(BeFalse())
-
-			})
-		})
-
 	})
 
 	Describe("Starting a capture use mTLS", func() {

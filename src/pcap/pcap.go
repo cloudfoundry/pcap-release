@@ -145,7 +145,6 @@ func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (co
 		if externalVcapID != nil {
 			vcapID = externalVcapID
 		} else {
-
 			// No existing vcap-id found, creating a new one and adding it to the context.
 			newVcapID := uuid.Must(uuid.NewRandom()).String()
 			vcapID = &newVcapID
@@ -177,6 +176,8 @@ func vcapIDFromOutgoingCtx(ctx context.Context) (*string, error) {
 		vcap, err = getVcapFromMD(md)
 		if err == nil {
 			return vcap, nil
+		} else {
+			return nil, err
 		}
 	}
 
@@ -194,6 +195,8 @@ func vcapIDFromIncomingCtx(ctx context.Context) (*string, error) {
 		vcap, err = getVcapFromMD(md)
 		if err == nil {
 			return vcap, nil
+		} else {
+			return nil, err
 		}
 	}
 	return nil, errNoMetadata

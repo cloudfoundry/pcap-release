@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -22,18 +23,17 @@ import (
 const concurrentCapturesPerClient = 10
 
 type API struct {
+	// done is used to gracefully shut down the agent, all ongoing streams terminate
+	// whenever this channel is closed.
+	done chan struct{}
+
 	bufConf  BufferConf
 	handlers map[string]CaptureHandler
 	agents   AgentMTLS
 	UnimplementedAPIServer
-	id string
-
-	captures               map[string]map[string]*API_CaptureServer
-	captureLock            sync.RWMutex
-	maxConcurrentCaptures  int
-	draining               bool
-	drainTimeout           time.Duration
-	agentCapturesPerVcapID map[string][]*captureReceiver
+	id                    string
+	maxConcurrentCaptures int
+	concurrentStreams     atomic.Int32
 }
 
 // TODO: This type should be removed once we have resolvers for BOSH or CF.
@@ -43,14 +43,12 @@ type ManualEndpoints struct {
 
 func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int, drainTimeout time.Duration) *API {
 	return &API{
-		bufConf:                bufConf,
-		handlers:               make(map[string]CaptureHandler),
-		agents:                 agentmTLS,
-		id:                     id,
-		maxConcurrentCaptures:  maxConcurrentCaptures,
-		captures:               make(map[string]map[string]*API_CaptureServer, concurrentCapturesPerClient),
-		drainTimeout:           drainTimeout,
-		agentCapturesPerVcapID: make(map[string][]*captureReceiver),
+		done:                  make(chan struct{}),
+		bufConf:               bufConf,
+		handlers:              make(map[string]CaptureHandler),
+		agents:                agentmTLS,
+		id:                    id,
+		maxConcurrentCaptures: maxConcurrentCaptures,
 	}
 }
 
@@ -89,14 +87,14 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	cf := api.handlerRegistered("cf")
 
 	apiStatus := &StatusResponse{
-		Healthy:            !api.draining,
+		Healthy:            !api.draining(),
 		CompatibilityLevel: 0,
 		Message:            "Ready.",
 		Bosh:               &bosh,
 		Cf:                 &cf,
 	}
 
-	if api.draining {
+	if api.draining() {
 		apiStatus.Message = "api has been stopped and is draining remaining capture requests"
 	}
 
@@ -110,8 +108,39 @@ func (api *API) handlerRegistered(handler string) bool {
 	return ok
 }
 
+// Stop the server. This will gracefully stop any captures that are currently running
+// by closing API.done. Further calls to Stop have no effect.
+func (api *API) Stop() {
+	fmt.Printf("stop api called")
+	select {
+	case <-api.done:
+		// if the channel is already closed, we do nothing
+	default:
+		// otherwise the channel is still open and we close it
+		close(api.done)
+	}
+}
+
+// draining returns true after API.Stop has been called.
+func (api *API) draining() bool {
+	select {
+	case <-api.done:
+		// we only get here if the channel is closed since it is never written to
+		return true
+	default:
+		// channel is still open
+		return false
+	}
+}
+
 // Capture receives messages (start or stop capture) from the client and streams payload (messages or pcap data) back.
 func (api *API) Capture(stream API_CaptureServer) (err error) {
+	currentStreams := api.concurrentStreams.Add(1)
+	defer api.concurrentStreams.Add(-1)
+	if currentStreams > int32(api.maxConcurrentCaptures) {
+		return errorf(codes.ResourceExhausted, "failed starting capture: %w", err)
+	}
+
 	log := zap.L().With(zap.String("handler", "capture"))
 
 	defer func() {
@@ -120,7 +149,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		}
 	}()
 
-	if api.draining {
+	if api.draining() {
 		return errorf(codes.Unavailable, "api is draining")
 	}
 
@@ -130,12 +159,6 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	}()
 
 	ctx, log = setVcapID(ctx, log, nil)
-
-	err = api.registerStream(ctx, &stream)
-	if err != nil {
-		// too many requests in parallel.
-		return errorf(codes.ResourceExhausted, "failed starting capture: %w", err)
-	}
 
 	log.Info("Started capture stream")
 
@@ -175,16 +198,24 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	// Wait for capture stop
 	stopCmd(cancel, stream)
 
+	select {
+	case <-ctx.Done():
+		// nothing to do, stream was terminated
+	case <-api.done:
+		// api shutting down
+		cancel(errDraining)
+		// just to be sure that the error was already propagated
+		<-ctx.Done()
+	}
+
 	err = Cause(ctx)
 	// Cancelling the context with nil causes context.Cancelled to be set
 	// which is a non-error in our case.
-	if err != nil {
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, errDraining) {
 		return err
 	}
 
 	forwardWG.Wait()
-
-	api.deregisterStream(ctx, &stream)
 
 	return nil
 }
@@ -365,7 +396,6 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 	stopped := false
 	go func() {
 		defer close(out)
-		// defer wg.Done()
 		defer func(captureStream captureReceiver) {
 			closeSendErr := captureStream.CloseSend()
 			if closeSendErr != nil {
@@ -494,11 +524,6 @@ func (api *API) capture(ctx context.Context, stream responseSender, streamPrep s
 
 		log.Info("Add capture waiting group")
 
-		err = api.registerAgentCaptureStream(ctx, &captureStream, log)
-		if err != nil {
-			//TODO: implement error handling
-		}
-
 		c := readMsgFromStream(ctx, captureStream, target, api.bufConf.Size)
 		captureCs = append(captureCs, c)
 	}
@@ -511,140 +536,4 @@ func (api *API) capture(ctx context.Context, stream responseSender, streamPrep s
 	// merge channels to one channel and send to forward to stream
 	out := mergeResponseChannels(captureCs, api.bufConf.Size)
 	return out, nil
-}
-
-// starts the API drain process, where all ongoing captures are sent a Stop signal so they can terminate gracefully.
-// Runs with a drain timeout and will return an error if the context times out.
-func (api *API) Drain() error {
-	zap.L().Debug("Starting drain with timeout", zap.Duration("timeout", api.drainTimeout))
-	drainTimeout, cancel := context.WithTimeout(context.Background(), api.drainTimeout)
-	defer cancel()
-
-	drained := api.drainStreams()
-	for {
-		select {
-		case <-drained:
-			zap.L().Info("Drain completed successfully.")
-			return nil
-		case <-drainTimeout.Done():
-			zap.L().Warn("Drain timeout reached, but not all clients completed.")
-			return drainTimeout.Err()
-		}
-	}
-}
-
-func (api *API) drainStreams() chan struct{} {
-	defer api.captureLock.Unlock()
-	api.captureLock.Lock()
-
-	api.draining = true
-
-	wg := &sync.WaitGroup{}
-	for client, clientStreams := range api.captures {
-		for vcapID, _ := range clientStreams {
-			zap.L().Debug("Terminating capture for client", zap.String("client", client), zap.String(LogKeyVcapID, vcapID))
-
-			err := api.drainStreamForVcapID(vcapID, wg)
-			if err != nil {
-				zap.S().Warn("Could not send stop request to agent capturing ", zap.String(LogKeyVcapID, vcapID), zap.Error(err))
-				continue
-			}
-		}
-	}
-
-	drained := make(chan struct{})
-
-	go func(wg *sync.WaitGroup) {
-		wg.Wait()
-		close(drained)
-	}(wg)
-
-	return drained
-}
-
-func (api *API) drainStreamForVcapID(vcapID string, wg *sync.WaitGroup) error {
-	for _, agentStream := range api.agentCapturesPerVcapID[vcapID] {
-		err := (*agentStream).Send(&AgentRequest{
-			Payload: &AgentRequest_Stop{},
-		})
-		if err != nil {
-			zap.S().Warn("Could not send stop request to agent capturing request with vcapId", zap.String(LogKeyVcapID, vcapID), zap.Error(err))
-			continue
-		}
-		// The message could be sent, so we expect the context to finish gracefully.
-		wg.Add(1)
-		go func(wg *sync.WaitGroup, ctx context.Context) {
-			// wait for capture stream context do be done
-			<-ctx.Done()
-			wg.Done()
-		}(wg, (*agentStream).Context())
-	}
-	return nil
-}
-
-func (api *API) registerAgentCaptureStream(ctx context.Context, captureStream *captureReceiver, log *zap.Logger) error {
-	defer api.captureLock.Unlock()
-	api.captureLock.Lock()
-
-	// register the agent capture stream if it has been started successfully
-	vcapID, err := vcapIDFromOutgoingCtx(ctx)
-	if err != nil {
-		log.Warn("no vcap ID found")
-	}
-
-	if _, exists := api.agentCapturesPerVcapID[*vcapID]; !exists {
-		api.agentCapturesPerVcapID[*vcapID] = []*captureReceiver{}
-	}
-
-	//FIXME what should be done if vcapID is not set and err occurs?
-	api.agentCapturesPerVcapID[*vcapID] = append(api.agentCapturesPerVcapID[*vcapID], captureStream)
-	return nil
-}
-
-func (api *API) registerStream(ctx context.Context, stream *API_CaptureServer) error {
-	defer api.captureLock.Unlock()
-	api.captureLock.Lock()
-
-	client, vcapID := identifyStream(ctx, stream)
-
-	if _, exists := api.captures[client]; !exists {
-		api.captures[client] = make(map[string]*API_CaptureServer, concurrentCapturesPerClient)
-	}
-
-	if len(api.captures[client]) >= api.maxConcurrentCaptures {
-		return fmt.Errorf("could not start capture for client %s with vcap-id %s: %w", client, vcapID, errTooManyCaptures)
-	}
-	api.captures[client][vcapID] = stream
-	return nil
-}
-
-func (api *API) deregisterStream(ctx context.Context, stream *API_CaptureServer) {
-	defer api.captureLock.Unlock()
-	api.captureLock.Lock()
-
-	client, vcapID := identifyStream(ctx, stream)
-
-	if _, exists := api.agentCapturesPerVcapID[vcapID]; exists {
-		delete(api.agentCapturesPerVcapID, vcapID)
-	}
-
-	if clientStreams, hasClient := api.captures[client]; hasClient {
-		delete(clientStreams, vcapID)
-		if len(clientStreams) == 0 {
-			delete(api.captures, client)
-		}
-	}
-}
-
-func identifyStream(ctx context.Context, stream *API_CaptureServer) (string, string) {
-	// FIXME: Use a better client identifier
-	client := "client-sessions"
-
-	vcapID, err := vcapIDFromOutgoingCtx(ctx)
-
-	if err != nil {
-		return client, "unknown"
-	}
-
-	return client, *vcapID
 }

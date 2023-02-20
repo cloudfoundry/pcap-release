@@ -10,11 +10,8 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -479,56 +476,6 @@ func TestAgentCapture(t *testing.T) {
 			if test.wantErr && code != test.wantStatusCode {
 				t.Errorf("Capture() statusCode = %v, wantStatusCode = %v", code, test.wantStatusCode)
 			}
-		})
-	}
-}
-
-func TestSetVcapId(t *testing.T) {
-	tests := []struct {
-		name   string
-		md     metadata.MD
-		vcapID string
-	}{
-		{
-			name: "Request without metadata",
-			md:   nil,
-		},
-
-		{
-			name: "Metadata without vcap request id",
-			md:   metadata.MD{},
-		},
-		{
-			name:   "Metadata with vcap request id",
-			md:     metadata.MD{HeaderVcapID: []string{"123"}},
-			vcapID: "123",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := metadata.NewIncomingContext(context.Background(), tt.md)
-
-			observedZapCore, observedLogs := observer.New(zap.InfoLevel)
-			log := zap.New(observedZapCore)
-
-			_, log = setVcapID(ctx, log, nil)
-
-			// ensure that at least one log has been observed
-			log.Info("test")
-
-			if observedLogs == nil || observedLogs.Len() == 0 {
-				t.Fatal("No logs are written")
-			}
-
-			entry := observedLogs.All()[observedLogs.Len()-1]
-
-			for _, logField := range entry.Context {
-				if logField.Key == LogKeyVcapID && (tt.vcapID == "" || logField.String == tt.vcapID) {
-					return
-				}
-			}
-
-			t.Errorf("missing field %s or field has wrong value", LogKeyVcapID)
 		})
 	}
 }

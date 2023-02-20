@@ -291,6 +291,21 @@ func TestConvertStatusCodeToMsg(t *testing.T) {
 			wantMsgType: MessageType_CONNECTION_ERROR,
 		},
 		{
+			name:        "Agent failed precondition error",
+			err:         errorf(codes.FailedPrecondition, "read message: %w", fmt.Errorf("failed precondition")),
+			wantMsgType: MessageType_START_CAPTURE_FAILED,
+		},
+		{
+			name:        "Agent aborted error",
+			err:         errorf(codes.Aborted, "read message: %w", fmt.Errorf("aborted")),
+			wantMsgType: MessageType_INSTANCE_UNAVAILABLE,
+		},
+		{
+			name:        "Agent limit reached error",
+			err:         errorf(codes.ResourceExhausted, "read message: %w", fmt.Errorf("limit reached")),
+			wantMsgType: MessageType_LIMIT_REACHED,
+		},
+		{
 			name:        "Agent Unknown or internal error",
 			err:         errorf(codes.Unknown, "read message: %w", fmt.Errorf("unknown")),
 			wantMsgType: MessageType_CONNECTION_ERROR,
