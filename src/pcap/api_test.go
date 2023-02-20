@@ -325,11 +325,8 @@ type mockStreamPreparer struct {
 	err    error
 }
 
-func (m *mockStreamPreparer) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, CancelCauseFunc, error) {
-	cancel := func(cause error) {
-		log.Info("cancelled")
-	}
-	return m.stream, cancel, m.err
+func (m *mockStreamPreparer) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
+	return m.stream, m.err
 }
 
 func TestCapture(t *testing.T) {

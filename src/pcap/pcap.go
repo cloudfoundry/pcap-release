@@ -132,11 +132,11 @@ func validateDevice(name string) (err error) {
 	return nil
 }
 
-// setVcapID expands log to include the vcap-id extracted from ctx, if available.
-//
-// When no vcap-id is defined in ctx, a new random GUID is generated and set in ctx and the logger.
+// setVcapID expands log to include the vcap-id extracted from ctx, if available and copy vcap-id to
+// outgoing context of metadata.
+// When no vcap-id is defined in ctx, a new random GUID is generated and set in outgoing context of metadata and the logger.
 func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (context.Context, *zap.Logger) {
-	vcapID, err := vcapIDFromCtx(ctx)
+	vcapID, err := vcapIDFromIncomingCtx(ctx)
 
 	if err != nil {
 		if errors.Is(err, errNoMetadata) {
@@ -150,9 +150,9 @@ func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (co
 			newVcapID := uuid.Must(uuid.NewRandom()).String()
 			vcapID = &newVcapID
 		}
-		// outgoing context is current context
-		ctx = metadata.AppendToOutgoingContext(ctx, HeaderVcapID, *vcapID)
 	}
+	// outgoing context is current context
+	ctx = metadata.AppendToOutgoingContext(ctx, HeaderVcapID, *vcapID)
 
 	log = log.With(zap.String(LogKeyVcapID, *vcapID))
 
@@ -166,11 +166,28 @@ func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (co
 	return ctx, log
 }
 
-// vcapIdFromCtx finds the vcap-id from the context metadata, if available.
+// vcapIDFromOutgoingCtx finds the vcap-id from the context metadata, always set by pcap
 //
 // returns errNoMetadata if no metadata was found
 // returns errNoVcapID if no vcap-id was found in the metadata.
-func vcapIDFromCtx(ctx context.Context) (*string, error) {
+func vcapIDFromOutgoingCtx(ctx context.Context) (*string, error) {
+	var vcap *string
+	var err error
+	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+		vcap, err = getVcapFromMD(md)
+		if err == nil {
+			return vcap, nil
+		}
+	}
+
+	return nil, errNoMetadata
+}
+
+// vcapIDFromIncomingCtx finds the vcap-id from the context metadata, if available.
+//
+// returns errNoMetadata if no metadata was found
+// returns errNoVcapID if no vcap-id was found in the metadata.
+func vcapIDFromIncomingCtx(ctx context.Context) (*string, error) {
 	var vcap *string
 	var err error
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
@@ -179,13 +196,6 @@ func vcapIDFromCtx(ctx context.Context) (*string, error) {
 			return vcap, nil
 		}
 	}
-	if md, ok := metadata.FromOutgoingContext(ctx); ok {
-		vcap, err = getVcapFromMD(md)
-		if err == nil {
-			return vcap, nil
-		}
-	}
-
 	return nil, errNoMetadata
 }
 

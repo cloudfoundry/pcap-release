@@ -494,6 +494,28 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(code).To(Equal(codes.OK))
 
 			})
+			It("without external vcapID finished without errors", func() {
+				ctx := context.Background()
+				stream, _ := apiClient.Capture(ctx)
+
+				request := boshRequest(&pcap.BoshCapture{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"},
+				}, defaultOptions)
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				capture, messages, err := recvCapture(10, stream)
+				Expect(err).NotTo(HaveOccurred(), "Receiving the first 10 messages")
+				Expect(capture).NotTo(BeNil())
+				Expect(messages).To(HaveLen(10))
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				code, messages, err := recvCapture(10_000, stream)
+				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+				Expect(code).To(Equal(codes.OK))
+
+			})
 		})
 	})
 })
