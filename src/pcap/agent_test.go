@@ -511,7 +511,7 @@ func TestSetVcapId(t *testing.T) {
 			observedZapCore, observedLogs := observer.New(zap.InfoLevel)
 			log := zap.New(observedZapCore)
 
-			_, log = setVcapID(ctx, log)
+			_, log = setVcapID(ctx, log, nil)
 
 			// ensure that at least one log has been observed
 			log.Info("test")

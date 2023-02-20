@@ -356,7 +356,7 @@ func TestCapture(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
 			api := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1, time.Second*10)
-			ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{HeaderVcapID: []string{"captureTest123"}})
+			ctx := metadata.NewOutgoingContext(context.Background(), metadata.MD{HeaderVcapID: []string{"captureTest123"}})
 			got, err := api.capture(ctx, &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, insecure.NewCredentials(), log)
 			if (err != nil) != tt.wantErr && status.Code(err) != codes.FailedPrecondition {
 				t.Errorf("capture() error = %v, wantErr %v", err, tt.wantErr)
