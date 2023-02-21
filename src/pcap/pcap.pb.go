@@ -604,7 +604,7 @@ func (*StopCapture) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{7}
 }
 
-type Capture struct {
+type AgentEndpoints struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -616,8 +616,8 @@ type Capture struct {
 	Capture isCapture_Capture `protobuf_oneof:"capture"`
 }
 
-func (x *Capture) Reset() {
-	*x = Capture{}
+func (x *AgentEndpoints) Reset() {
+	*x = AgentEndpoints{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_pcap_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -625,13 +625,13 @@ func (x *Capture) Reset() {
 	}
 }
 
-func (x *Capture) String() string {
+func (x *AgentEndpoints) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Capture) ProtoMessage() {}
+func (*AgentEndpoints) ProtoMessage() {}
 
-func (x *Capture) ProtoReflect() protoreflect.Message {
+func (x *AgentEndpoints) ProtoReflect() protoreflect.Message {
 	mi := &file_pcap_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -643,26 +643,26 @@ func (x *Capture) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Capture.ProtoReflect.Descriptor instead.
-func (*Capture) Descriptor() ([]byte, []int) {
+// Deprecated: Use AgentEndpoints.ProtoReflect.Descriptor instead.
+func (*AgentEndpoints) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{8}
 }
 
-func (m *Capture) GetCapture() isCapture_Capture {
+func (m *AgentEndpoints) GetCapture() isCapture_Capture {
 	if m != nil {
 		return m.Capture
 	}
 	return nil
 }
 
-func (x *Capture) GetBosh() *BoshCapture {
+func (x *AgentEndpoints) GetBosh() *BoshQuery {
 	if x, ok := x.GetCapture().(*Capture_Bosh); ok {
 		return x.Bosh
 	}
 	return nil
 }
 
-func (x *Capture) GetCf() *CloudfoundryCapture {
+func (x *AgentEndpoints) GetCf() *CloudfoundryQuery {
 	if x, ok := x.GetCapture().(*Capture_Cf); ok {
 		return x.Cf
 	}
@@ -674,11 +674,11 @@ type isCapture_Capture interface {
 }
 
 type Capture_Bosh struct {
-	Bosh *BoshCapture `protobuf:"bytes,1,opt,name=bosh,proto3,oneof"`
+	Bosh *BoshQuery `protobuf:"bytes,1,opt,name=bosh,proto3,oneof"`
 }
 
 type Capture_Cf struct {
-	Cf *CloudfoundryCapture `protobuf:"bytes,2,opt,name=cf,proto3,oneof"`
+	Cf *CloudfoundryQuery `protobuf:"bytes,2,opt,name=cf,proto3,oneof"`
 }
 
 func (*Capture_Bosh) isCapture_Capture() {}
@@ -690,7 +690,7 @@ type StartCapture struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Capture *Capture        `protobuf:"bytes,1,opt,name=capture,proto3" json:"capture,omitempty"`
+	Capture *AgentEndpoints `protobuf:"bytes,1,opt,name=capture,proto3" json:"capture,omitempty"`
 	Options *CaptureOptions `protobuf:"bytes,2,opt,name=options,proto3" json:"options,omitempty"`
 }
 
@@ -726,7 +726,7 @@ func (*StartCapture) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *StartCapture) GetCapture() *Capture {
+func (x *StartCapture) GetCapture() *AgentEndpoints {
 	if x != nil {
 		return x.Capture
 	}
@@ -740,7 +740,7 @@ func (x *StartCapture) GetOptions() *CaptureOptions {
 	return nil
 }
 
-type BoshCapture struct {
+type BoshQuery struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -751,8 +751,8 @@ type BoshCapture struct {
 	Instances  []string `protobuf:"bytes,4,rep,name=instances,proto3" json:"instances,omitempty"`
 }
 
-func (x *BoshCapture) Reset() {
-	*x = BoshCapture{}
+func (x *BoshQuery) Reset() {
+	*x = BoshQuery{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_pcap_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -760,13 +760,13 @@ func (x *BoshCapture) Reset() {
 	}
 }
 
-func (x *BoshCapture) String() string {
+func (x *BoshQuery) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*BoshCapture) ProtoMessage() {}
+func (*BoshQuery) ProtoMessage() {}
 
-func (x *BoshCapture) ProtoReflect() protoreflect.Message {
+func (x *BoshQuery) ProtoReflect() protoreflect.Message {
 	mi := &file_pcap_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -778,40 +778,40 @@ func (x *BoshCapture) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use BoshCapture.ProtoReflect.Descriptor instead.
-func (*BoshCapture) Descriptor() ([]byte, []int) {
+// Deprecated: Use BoshQuery.ProtoReflect.Descriptor instead.
+func (*BoshQuery) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *BoshCapture) GetToken() string {
+func (x *BoshQuery) GetToken() string {
 	if x != nil {
 		return x.Token
 	}
 	return ""
 }
 
-func (x *BoshCapture) GetDeployment() string {
+func (x *BoshQuery) GetDeployment() string {
 	if x != nil {
 		return x.Deployment
 	}
 	return ""
 }
 
-func (x *BoshCapture) GetGroups() []string {
+func (x *BoshQuery) GetGroups() []string {
 	if x != nil {
 		return x.Groups
 	}
 	return nil
 }
 
-func (x *BoshCapture) GetInstances() []string {
+func (x *BoshQuery) GetInstances() []string {
 	if x != nil {
 		return x.Instances
 	}
 	return nil
 }
 
-type CloudfoundryCapture struct {
+type CloudfoundryQuery struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -822,8 +822,8 @@ type CloudfoundryCapture struct {
 	Indices []int32 `protobuf:"varint,4,rep,packed,name=indices,proto3" json:"indices,omitempty"`
 }
 
-func (x *CloudfoundryCapture) Reset() {
-	*x = CloudfoundryCapture{}
+func (x *CloudfoundryQuery) Reset() {
+	*x = CloudfoundryQuery{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_pcap_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -831,13 +831,13 @@ func (x *CloudfoundryCapture) Reset() {
 	}
 }
 
-func (x *CloudfoundryCapture) String() string {
+func (x *CloudfoundryQuery) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CloudfoundryCapture) ProtoMessage() {}
+func (*CloudfoundryQuery) ProtoMessage() {}
 
-func (x *CloudfoundryCapture) ProtoReflect() protoreflect.Message {
+func (x *CloudfoundryQuery) ProtoReflect() protoreflect.Message {
 	mi := &file_pcap_proto_msgTypes[11]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -849,33 +849,33 @@ func (x *CloudfoundryCapture) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CloudfoundryCapture.ProtoReflect.Descriptor instead.
-func (*CloudfoundryCapture) Descriptor() ([]byte, []int) {
+// Deprecated: Use CloudfoundryQuery.ProtoReflect.Descriptor instead.
+func (*CloudfoundryQuery) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *CloudfoundryCapture) GetToken() string {
+func (x *CloudfoundryQuery) GetToken() string {
 	if x != nil {
 		return x.Token
 	}
 	return ""
 }
 
-func (x *CloudfoundryCapture) GetAppId() string {
+func (x *CloudfoundryQuery) GetAppId() string {
 	if x != nil {
 		return x.AppId
 	}
 	return ""
 }
 
-func (x *CloudfoundryCapture) GetAppType() string {
+func (x *CloudfoundryQuery) GetAppType() string {
 	if x != nil && x.AppType != nil {
 		return *x.AppType
 	}
 	return ""
 }
 
-func (x *CloudfoundryCapture) GetIndices() []int32 {
+func (x *CloudfoundryQuery) GetIndices() []int32 {
 	if x != nil {
 		return x.Indices
 	}
@@ -1189,22 +1189,22 @@ func file_pcap_proto_rawDescGZIP() []byte {
 var file_pcap_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_pcap_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_pcap_proto_goTypes = []interface{}{
-	(MessageType)(0),            // 0: pcap.MessageType
-	(*CaptureOptions)(nil),      // 1: pcap.CaptureOptions
-	(*CaptureResponse)(nil),     // 2: pcap.CaptureResponse
-	(*Packet)(nil),              // 3: pcap.Packet
-	(*Message)(nil),             // 4: pcap.Message
-	(*StatusResponse)(nil),      // 5: pcap.StatusResponse
-	(*StatusRequest)(nil),       // 6: pcap.StatusRequest
-	(*CaptureRequest)(nil),      // 7: pcap.CaptureRequest
-	(*StopCapture)(nil),         // 8: pcap.StopCapture
-	(*Capture)(nil),             // 9: pcap.Capture
-	(*StartCapture)(nil),        // 10: pcap.StartCapture
-	(*BoshCapture)(nil),         // 11: pcap.BoshCapture
-	(*CloudfoundryCapture)(nil), // 12: pcap.CloudfoundryCapture
-	(*AgentRequest)(nil),        // 13: pcap.AgentRequest
-	(*StartAgentCapture)(nil),   // 14: pcap.StartAgentCapture
-	(*StopAgentCapture)(nil),    // 15: pcap.StopAgentCapture
+	(MessageType)(0),          // 0: pcap.MessageType
+	(*CaptureOptions)(nil),    // 1: pcap.CaptureOptions
+	(*CaptureResponse)(nil),   // 2: pcap.CaptureResponse
+	(*Packet)(nil),            // 3: pcap.Packet
+	(*Message)(nil),           // 4: pcap.Message
+	(*StatusResponse)(nil),    // 5: pcap.StatusResponse
+	(*StatusRequest)(nil),     // 6: pcap.StatusRequest
+	(*CaptureRequest)(nil),    // 7: pcap.CaptureRequest
+	(*StopCapture)(nil),       // 8: pcap.StopCapture
+	(*AgentEndpoints)(nil),    // 9: pcap.AgentEndpoints
+	(*StartCapture)(nil),      // 10: pcap.StartCapture
+	(*BoshQuery)(nil),         // 11: pcap.BoshQuery
+	(*CloudfoundryQuery)(nil), // 12: pcap.CloudfoundryQuery
+	(*AgentRequest)(nil),      // 13: pcap.AgentRequest
+	(*StartAgentCapture)(nil), // 14: pcap.StartAgentCapture
+	(*StopAgentCapture)(nil),  // 15: pcap.StopAgentCapture
 }
 var file_pcap_proto_depIdxs = []int32{
 	3,  // 0: pcap.CaptureResponse.packet:type_name -> pcap.Packet
@@ -1212,21 +1212,21 @@ var file_pcap_proto_depIdxs = []int32{
 	0,  // 2: pcap.Message.type:type_name -> pcap.MessageType
 	10, // 3: pcap.CaptureRequest.start:type_name -> pcap.StartCapture
 	8,  // 4: pcap.CaptureRequest.stop:type_name -> pcap.StopCapture
-	11, // 5: pcap.Capture.bosh:type_name -> pcap.BoshCapture
-	12, // 6: pcap.Capture.cf:type_name -> pcap.CloudfoundryCapture
-	9,  // 7: pcap.StartCapture.capture:type_name -> pcap.Capture
+	11, // 5: pcap.AgentEndpoints.bosh:type_name -> pcap.BoshQuery
+	12, // 6: pcap.AgentEndpoints.cf:type_name -> pcap.CloudfoundryQuery
+	9,  // 7: pcap.StartCapture.capture:type_name -> pcap.AgentEndpoints
 	1,  // 8: pcap.StartCapture.options:type_name -> pcap.CaptureOptions
 	14, // 9: pcap.AgentRequest.start:type_name -> pcap.StartAgentCapture
 	15, // 10: pcap.AgentRequest.stop:type_name -> pcap.StopAgentCapture
 	1,  // 11: pcap.StartAgentCapture.capture:type_name -> pcap.CaptureOptions
 	6,  // 12: pcap.API.Status:input_type -> pcap.StatusRequest
-	7,  // 13: pcap.API.Capture:input_type -> pcap.CaptureRequest
+	7,  // 13: pcap.API.AgentEndpoints:input_type -> pcap.CaptureRequest
 	6,  // 14: pcap.Agent.Status:input_type -> pcap.StatusRequest
-	13, // 15: pcap.Agent.Capture:input_type -> pcap.AgentRequest
+	13, // 15: pcap.Agent.AgentEndpoints:input_type -> pcap.AgentRequest
 	5,  // 16: pcap.API.Status:output_type -> pcap.StatusResponse
-	2,  // 17: pcap.API.Capture:output_type -> pcap.CaptureResponse
+	2,  // 17: pcap.API.AgentEndpoints:output_type -> pcap.CaptureResponse
 	5,  // 18: pcap.Agent.Status:output_type -> pcap.StatusResponse
-	2,  // 19: pcap.Agent.Capture:output_type -> pcap.CaptureResponse
+	2,  // 19: pcap.Agent.AgentEndpoints:output_type -> pcap.CaptureResponse
 	16, // [16:20] is the sub-list for method output_type
 	12, // [12:16] is the sub-list for method input_type
 	12, // [12:12] is the sub-list for extension type_name
@@ -1337,7 +1337,7 @@ func file_pcap_proto_init() {
 			}
 		}
 		file_pcap_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Capture); i {
+			switch v := v.(*AgentEndpoints); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1361,7 +1361,7 @@ func file_pcap_proto_init() {
 			}
 		}
 		file_pcap_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BoshCapture); i {
+			switch v := v.(*BoshQuery); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1373,7 +1373,7 @@ func file_pcap_proto_init() {
 			}
 		}
 		file_pcap_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CloudfoundryCapture); i {
+			switch v := v.(*CloudfoundryQuery); i {
 			case 0:
 				return &v.state
 			case 1:

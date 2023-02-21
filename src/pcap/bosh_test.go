@@ -8,7 +8,7 @@ import (
 func TestValidateBoshCaptureRequest(t *testing.T) {
 	tests := []struct {
 		name        string
-		req         *BoshCapture
+		req         *BoshQuery
 		wantErr     bool
 		expectedErr error
 	}{
@@ -20,32 +20,32 @@ func TestValidateBoshCaptureRequest(t *testing.T) {
 		},
 		{
 			name:        "Bosh metadata is empty",
-			req:         &BoshCapture{},
+			req:         &BoshQuery{},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 
 		{
 			name:        "Bosh metadata Token is not present",
-			req:         &BoshCapture{Deployment: "cf", Groups: []string{"router"}},
+			req:         &BoshQuery{Deployment: "cf", Groups: []string{"router"}},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 		{
 			name:        "Bosh metadata Deployment field is not present",
-			req:         &BoshCapture{Token: "123d24", Groups: []string{"router"}},
+			req:         &BoshQuery{Token: "123d24", Groups: []string{"router"}},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 		{
 			name:        "Bosh metadata Groups field is not present",
-			req:         &BoshCapture{Token: "123d24", Deployment: "cf"},
+			req:         &BoshQuery{Token: "123d24", Deployment: "cf"},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 		{
 			name:        "Valid request",
-			req:         &BoshCapture{Token: "123d24", Deployment: "cf", Groups: []string{"router"}},
+			req:         &BoshQuery{Token: "123d24", Deployment: "cf", Groups: []string{"router"}},
 			wantErr:     false,
 			expectedErr: nil,
 		},
@@ -54,7 +54,7 @@ func TestValidateBoshCaptureRequest(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			bosh := &BoshHandler{}
 
-			testCapture := &Capture{Capture: &Capture_Bosh{test.req}}
+			testCapture := &AgentEndpoints{Capture: &Capture_Bosh{test.req}}
 
 			err := bosh.validate(testCapture)
 			if (err != nil) != test.wantErr {

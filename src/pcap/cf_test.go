@@ -8,7 +8,7 @@ import (
 func TestValidateCfCaptureRequest(t *testing.T) {
 	tests := []struct {
 		name        string
-		req         *CloudfoundryCapture
+		req         *CloudfoundryQuery
 		wantErr     bool
 		expectedErr error
 	}{
@@ -20,32 +20,32 @@ func TestValidateCfCaptureRequest(t *testing.T) {
 		},
 		{
 			name:        "CF metadata is empty",
-			req:         &CloudfoundryCapture{},
+			req:         &CloudfoundryQuery{},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 
 		{
 			name:        "CF metadata Token is not present",
-			req:         &CloudfoundryCapture{AppId: "123abc"},
+			req:         &CloudfoundryQuery{AppId: "123abc"},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 		{
 			name:        "CF metadata Deployment field is not present",
-			req:         &CloudfoundryCapture{Token: "123d24"},
+			req:         &CloudfoundryQuery{Token: "123d24"},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 		{
 			name:        "Valid request",
-			req:         &CloudfoundryCapture{Token: "123d24", AppId: "123abc"},
+			req:         &CloudfoundryQuery{Token: "123d24", AppId: "123abc"},
 			wantErr:     false,
 			expectedErr: nil,
 		},
 		{
 			name:        "Valid request with instances",
-			req:         &CloudfoundryCapture{Token: "123d24", AppId: "123abc", Indices: []int32{1, 3, 5}},
+			req:         &CloudfoundryQuery{Token: "123d24", AppId: "123abc", Indices: []int32{1, 3, 5}},
 			wantErr:     false,
 			expectedErr: nil,
 		},
@@ -54,7 +54,7 @@ func TestValidateCfCaptureRequest(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			cf := &CloudfoundryHandler{}
 
-			testCapture := &Capture{Capture: &Capture_Cf{test.req}}
+			testCapture := &AgentEndpoints{Capture: &Capture_Cf{test.req}}
 
 			err := cf.validate(testCapture)
 			if (err != nil) != test.wantErr {
