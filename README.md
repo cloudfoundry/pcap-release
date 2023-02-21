@@ -2,9 +2,13 @@
 
 [BOSH](https://bosh.io/) release of the pcap [Cloud Foundry](https://www.cloudfoundry.org/) add-on.
 
+## Disclaimer
+
+As pcap-release is still in active development, information on this page is subject to change and might be outdated.
+
 ## Description
 
-The goal of this bosh release is to provide easy access to network traffic data to both Cloud Foundry application developers and CF landscape operators. To achieve this, pcap-release implements CLI-commands to capture tcpdumps (pcap files) from multiple BOSH VMs or CF app containers in parallel.
+The goal of this BOSH release is to provide easy access to network traffic data to both Cloud Foundry application developers and CF landscape operators. To achieve this, pcap-release implements CLI-commands to capture tcpdumps (pcap files) from multiple BOSH VMs or CF app-containers in parallel.
 
 <!-- TODO: to be added later
 For the BOSH VM capture case, a new CLI can be used that authenticates via the BOSH director.
@@ -13,31 +17,44 @@ For tcpdumps of CF app containers, pcap-release provides a plugin to the CF Clou
 
 ## Architecture
 
-* pcap-api is deployed on its own vm.
-* pcap-agent is co-located on diego cells.
-* pcap-api needs to register its route via route-registrar, part of the cf-routing-release.
-* Requests to pcap-api need an authorization header including the oauth token from UAA.
+### CF App Capture
+
+* `pcap-api` is deployed on its own VM.
+* `pcap-agent` is co-located on app-containers.
+* `pcap-api` needs to register its route via route-registrar, part of the cf-routing-release.
+* `cf-CLI` pcap-plugin (TBD/WIP) is used to send capture requests to the `pcap-api`
+* Requests to `pcap-api` need an authorization header including the OAuth token from UAA.
   This token is used to gather information about the app from the cloud-controller.
-* The pcap-api makes requests to the pcap-agent on corresponding diego cell.
+* The `pcap-api` makes requests to the `pcap-agent` on corresponding app-container.
 * The pcap agent starts a tcpdump using libpcap via [the gopacket module](https://github.com/google/gopacket) and streams the results.
 
-<!-- TODO: diagram needs to be updater, only Dominik has most recent version -->
 ![tcpdump in cf architecture](docs/tcpdump-for-cf.svg "tcpdump in cf architecture")
+
+## BOSH VM Capture
+
+* `pcap-api` is deployed on its own VM.
+* `pcap-agent` is co-located on BOSH VMs.
+* `pcap-api` needs to register its route via route-registrar, part of the cf-routing-release.
+* `pcap-bosh-cli` (TBD/WIP) is used to send capture requests to the `pcap-api`
+* Requests to `pcap-api` need an authorization header including the OAuth token from UAA.
+* This token is used to gather information about the target VMs from the BOSH Director
+* The `pcap-api` makes requests to the `pcap-agent` on corresponding BOSH VMs.
+* The pcap agent starts a tcpdump using libpcap via [the gopacket module](https://github.com/google/gopacket) and streams the results.
+
+![tcpdump in bosh architecture](docs/tcpdump-for-bosh.svg "tcpdump in bosh architecture")
 
 ## Jobs
 
 ### pcap-api
 
-* Check if token is valid by requesting app information from CC
-* Get diego cell address for app instance from CC
-* Connect to pcap agent on diego-cell
+* Check if token is valid by requesting app information from CC/BOSH Director
+* Get container address for app instances from CC/BOSH VMs from BOSH Director
+* Connect to `pcap-agent` in app-containers/BOSH VMs
 * Stream packets back to client
 
 ### pcap-agent
 
-* Find container PID for app id
-* enter container network namespace
-* capture packets and stream back to client
+* Capture packets and stream back to `pcap-api`
 
 ## How to deploy
 
