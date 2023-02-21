@@ -1,4 +1,4 @@
-// Package pcap-agent is the entry point for running the pcap-agent.
+// Package pcap-api is the entry point for running the pcap-api.
 //
 // Supported platforms are darwin and linux, either as arm64 or amd64 due to the os signals being used.
 //go:build unix && (amd64 || arm64)

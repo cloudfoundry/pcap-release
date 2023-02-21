@@ -12,21 +12,17 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"io"
+	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 )
 
 func main() {
 	cc, err := grpc.Dial("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	p(err)
+	cmd.P(err)
 
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -58,11 +54,10 @@ func main() {
 	}
 
 	err = stream.Send(request)
-	p(err)
-
+	cmd.P(err)
 	// keep receiving some data long enough to start a manual drain
 	for i := 0; i < 10000; i++ {
-		readN(1000, stream)
+		cmd.ReadN(1000, stream)
 		time.Sleep(200 * time.Millisecond)
 	}
 
@@ -71,40 +66,7 @@ func main() {
 	}
 
 	err = stream.Send(stop)
-	p(err)
+	cmd.P(err)
 
-	readN(10_000, stream)
-
-}
-
-type genericStreamReceiver interface {
-	Recv() (*pcap.CaptureResponse, error)
-}
-
-func readN(n int, stream genericStreamReceiver) {
-	for i := 0; i < n; i++ {
-		res, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			fmt.Println("clean stop, done")
-			return
-		}
-		code := status.Code(err)
-		if code != codes.OK {
-			fmt.Printf("receive non-OK code: %s: %s\n", code.String(), err.Error())
-			return
-		}
-
-		switch p := res.Payload.(type) {
-		case *pcap.CaptureResponse_Message:
-			fmt.Printf("received message (%d/%d): %s: %s\n", i+1, n, p.Message.Type.String(), p.Message.Message)
-		case *pcap.CaptureResponse_Packet:
-			fmt.Printf("received packet  (%d/%d): %d bytes\n", i+1, n, len(p.Packet.Data))
-		}
-	}
-}
-
-func p(err error) {
-	if err != nil {
-		panic(err.Error())
-	}
+	cmd.ReadN(10_000, stream)
 }

@@ -10,17 +10,16 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"net"
-	"os"
-	"os/signal"
-	"syscall"
-
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func init() {
@@ -81,7 +80,7 @@ func main() {
 
 	tlsCredentials, err := loadTLSCredentials(config)
 	if err != nil {
-		log.Fatal("unable to load provided TLS credntials", zap.Error(err))
+		log.Fatal("unable to load provided TLS credentials", zap.Error(err))
 	}
 
 	server := grpc.NewServer(grpc.Creds(tlsCredentials))
