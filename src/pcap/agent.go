@@ -81,7 +81,7 @@ func (a *Agent) Status(_ context.Context, _ *StatusRequest) (*StatusResponse, er
 	return s, nil
 }
 
-// AgentEndpoints handler for the pcap-agent. See AgentServer.Capture documentation for details.
+// EndpointRequest handler for the pcap-agent. See AgentServer.Capture documentation for details.
 func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	a.streamsWG.Add(1)
 	defer a.streamsWG.Done()

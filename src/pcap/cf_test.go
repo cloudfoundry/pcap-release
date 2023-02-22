@@ -54,7 +54,7 @@ func TestValidateCfCaptureRequest(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			cf := &CloudfoundryHandler{}
 
-			testCapture := &AgentEndpoints{Capture: &Capture_Cf{test.req}}
+			testCapture := &EndpointRequest{Capture: &Capture_Cf{test.req}}
 
 			err := cf.validate(testCapture)
 			if (err != nil) != test.wantErr {

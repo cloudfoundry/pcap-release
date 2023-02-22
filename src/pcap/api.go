@@ -69,14 +69,14 @@ var (
 	errUnexpectedMessage = fmt.Errorf("unexpected message")
 )
 
-// EndpointQueryHandler defines handlers for different request types that ultimately lead to a selection of AgentEndpoints.
+// EndpointQueryHandler defines handlers for different request types that ultimately lead to a selection of EndpointRequest.
 type EndpointQueryHandler interface {
 	// name provides the name of the handler for outputs and internal mapping.
 	name() string
-	// canHandle determines if this handler is responsible for handling the AgentEndpoints
-	canHandle(*AgentEndpoints) bool
-	// handle either resolves and returns the agents targeted by AgentEndpoints or provides an error
-	handle(*AgentEndpoints, *zap.Logger) ([]AgentEndpoint, error)
+	// canHandle determines if this handler is responsible for handling the EndpointRequest
+	canHandle(*EndpointRequest) bool
+	// handle either resolves and returns the agents targeted by EndpointRequest or provides an error
+	handle(*EndpointRequest, *zap.Logger) ([]AgentEndpoint, error)
 }
 
 func (api *API) RegisterHandler(handler EndpointQueryHandler) {
@@ -110,7 +110,7 @@ func (api *API) handlerRegistered(handler string) bool {
 	return ok
 }
 
-// AgentEndpoints receives messages (start or stop capture) from the client and streams payload (messages or pcap data) back.
+// EndpointRequest receives messages (start or stop capture) from the client and streams payload (messages or pcap data) back.
 func (api *API) Capture(stream API_CaptureServer) (err error) {
 	log := zap.L().With(zap.String("handler", "capture"))
 
@@ -229,7 +229,7 @@ func (api *API) prepareTLSToAgent(log *zap.Logger) (credentials.TransportCredent
 
 // resolveAgentEndpoints tries all registered api.handlers until one responds or none can be found that
 // support this capture request. The responsible handler is then queried for the applicable pcap-agent endpoints corresponding to this capture request.
-func (api *API) resolveAgentEndpoints(capture *AgentEndpoints, log *zap.Logger) ([]AgentEndpoint, error) {
+func (api *API) resolveAgentEndpoints(capture *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
 	for name, handler := range api.handlers {
 		if handler.canHandle(capture) {
 			log.Sugar().Debugf("Resolving agent endpoints via handler %s for capture %s", name, capture)
@@ -296,7 +296,7 @@ type streamPrep struct {
 }
 
 // prepareStreamToTarget creates a client connection to the given target, contacts the client API for the Agent service
-// to start the AgentEndpoints.
+// to start the capture.
 func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
 	cc, err := grpc.Dial(target.String(), grpc.WithTransportCredentials(creds))
 	if err != nil {
@@ -357,7 +357,7 @@ type captureReceiver interface {
 	Context() context.Context
 }
 
-// readMsgFromStream reads AgentEndpoints messages from stream and outputs them to the out channel.If the given context errors
+// readMsgFromStream reads capture messages from stream and outputs them to the out channel.If the given context errors
 // an AgentRequest_Stop is sent and the messages continue to be read.if context will be cancelled from other routine
 // (mostly  because client requests to stop capture), the stop request will be forwarded to agent. The data from the agent will be read till stream ends with EOF.
 func readMsgFromStream(ctx context.Context, captureStream captureReceiver, target AgentEndpoint, bufSize int) <-chan *CaptureResponse {

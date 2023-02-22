@@ -23,7 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type APIClient interface {
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
-	// AgentEndpoints starts capturing packets on either BOSH or CF VMs. The capture can be
+	// EndpointRequest starts capturing packets on either BOSH or CF VMs. The capture can be
 	// stopped by closing the client-side send channel, or explicitly sending a Stop command.
 	// The Api MUST listen for that close and the stop command and MUST stop sending packets
 	// as soon as possible but SHOULD send packets that it still receives from the agents.
@@ -48,7 +48,7 @@ func (c *aPIClient) Status(ctx context.Context, in *StatusRequest, opts ...grpc.
 }
 
 func (c *aPIClient) Capture(ctx context.Context, opts ...grpc.CallOption) (API_CaptureClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[0], "/pcap.API/AgentEndpoints", opts...)
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[0], "/pcap.API/EndpointRequest", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (x *aPICaptureClient) Recv() (*CaptureResponse, error) {
 // for forward compatibility
 type APIServer interface {
 	Status(context.Context, *StatusRequest) (*StatusResponse, error)
-	// AgentEndpoints starts capturing packets on either BOSH or CF VMs. The capture can be
+	// EndpointRequest starts capturing packets on either BOSH or CF VMs. The capture can be
 	// stopped by closing the client-side send channel, or explicitly sending a Stop command.
 	// The Api MUST listen for that close and the stop command and MUST stop sending packets
 	// as soon as possible but SHOULD send packets that it still receives from the agents.
@@ -99,7 +99,7 @@ func (UnimplementedAPIServer) Status(context.Context, *StatusRequest) (*StatusRe
 	return nil, status.Errorf(codes.Unimplemented, "method Status not implemented")
 }
 func (UnimplementedAPIServer) Capture(API_CaptureServer) error {
-	return status.Errorf(codes.Unimplemented, "method AgentEndpoints not implemented")
+	return status.Errorf(codes.Unimplemented, "method EndpointRequest not implemented")
 }
 func (UnimplementedAPIServer) mustEmbedUnimplementedAPIServer() {}
 
@@ -172,7 +172,7 @@ var API_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "AgentEndpoints",
+			StreamName:    "EndpointRequest",
 			Handler:       _API_Capture_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
@@ -188,7 +188,7 @@ type AgentClient interface {
 	// Status returns the current status of the agent. It indicates whether the agent is ready to
 	// accept new capture requests or is currently unavailable.
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
-	// AgentEndpoints is the main handler for the pcap agent. It contains the logic to open an interface
+	// EndpointRequest is the main handler for the pcap agent. It contains the logic to open an interface
 	// and start a packet capture. The resulting packets will be streamed back to the caller together
 	// with messages informing the caller of any abnormal conditions that occur. The first message
 	// sent must contain a payload of type StartAgentCapture, this will trigger the start of the capture.
@@ -215,7 +215,7 @@ func (c *agentClient) Status(ctx context.Context, in *StatusRequest, opts ...grp
 }
 
 func (c *agentClient) Capture(ctx context.Context, opts ...grpc.CallOption) (Agent_CaptureClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Agent_ServiceDesc.Streams[0], "/pcap.Agent/AgentEndpoints", opts...)
+	stream, err := c.cc.NewStream(ctx, &Agent_ServiceDesc.Streams[0], "/pcap.Agent/EndpointRequest", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +252,7 @@ type AgentServer interface {
 	// Status returns the current status of the agent. It indicates whether the agent is ready to
 	// accept new capture requests or is currently unavailable.
 	Status(context.Context, *StatusRequest) (*StatusResponse, error)
-	// AgentEndpoints is the main handler for the pcap agent. It contains the logic to open an interface
+	// EndpointRequest is the main handler for the pcap agent. It contains the logic to open an interface
 	// and start a packet capture. The resulting packets will be streamed back to the caller together
 	// with messages informing the caller of any abnormal conditions that occur. The first message
 	// sent must contain a payload of type StartAgentCapture, this will trigger the start of the capture.
@@ -270,7 +270,7 @@ func (UnimplementedAgentServer) Status(context.Context, *StatusRequest) (*Status
 	return nil, status.Errorf(codes.Unimplemented, "method Status not implemented")
 }
 func (UnimplementedAgentServer) Capture(Agent_CaptureServer) error {
-	return status.Errorf(codes.Unimplemented, "method AgentEndpoints not implemented")
+	return status.Errorf(codes.Unimplemented, "method EndpointRequest not implemented")
 }
 func (UnimplementedAgentServer) mustEmbedUnimplementedAgentServer() {}
 
@@ -343,7 +343,7 @@ var Agent_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "AgentEndpoints",
+			StreamName:    "EndpointRequest",
 			Handler:       _Agent_Capture_Handler,
 			ServerStreams: true,
 			ClientStreams: true,

@@ -604,7 +604,7 @@ func (*StopCapture) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{7}
 }
 
-type AgentEndpoints struct {
+type EndpointRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -616,8 +616,8 @@ type AgentEndpoints struct {
 	Capture isCapture_Capture `protobuf_oneof:"capture"`
 }
 
-func (x *AgentEndpoints) Reset() {
-	*x = AgentEndpoints{}
+func (x *EndpointRequest) Reset() {
+	*x = EndpointRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_pcap_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -625,13 +625,13 @@ func (x *AgentEndpoints) Reset() {
 	}
 }
 
-func (x *AgentEndpoints) String() string {
+func (x *EndpointRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*AgentEndpoints) ProtoMessage() {}
+func (*EndpointRequest) ProtoMessage() {}
 
-func (x *AgentEndpoints) ProtoReflect() protoreflect.Message {
+func (x *EndpointRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_pcap_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -643,26 +643,26 @@ func (x *AgentEndpoints) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use AgentEndpoints.ProtoReflect.Descriptor instead.
-func (*AgentEndpoints) Descriptor() ([]byte, []int) {
+// Deprecated: Use EndpointRequest.ProtoReflect.Descriptor instead.
+func (*EndpointRequest) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{8}
 }
 
-func (m *AgentEndpoints) GetCapture() isCapture_Capture {
+func (m *EndpointRequest) GetCapture() isCapture_Capture {
 	if m != nil {
 		return m.Capture
 	}
 	return nil
 }
 
-func (x *AgentEndpoints) GetBosh() *BoshQuery {
+func (x *EndpointRequest) GetBosh() *BoshQuery {
 	if x, ok := x.GetCapture().(*Capture_Bosh); ok {
 		return x.Bosh
 	}
 	return nil
 }
 
-func (x *AgentEndpoints) GetCf() *CloudfoundryQuery {
+func (x *EndpointRequest) GetCf() *CloudfoundryQuery {
 	if x, ok := x.GetCapture().(*Capture_Cf); ok {
 		return x.Cf
 	}
@@ -690,8 +690,8 @@ type StartCapture struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Capture *AgentEndpoints `protobuf:"bytes,1,opt,name=capture,proto3" json:"capture,omitempty"`
-	Options *CaptureOptions `protobuf:"bytes,2,opt,name=options,proto3" json:"options,omitempty"`
+	Capture *EndpointRequest `protobuf:"bytes,1,opt,name=capture,proto3" json:"capture,omitempty"`
+	Options *CaptureOptions  `protobuf:"bytes,2,opt,name=options,proto3" json:"options,omitempty"`
 }
 
 func (x *StartCapture) Reset() {
@@ -726,7 +726,7 @@ func (*StartCapture) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *StartCapture) GetCapture() *AgentEndpoints {
+func (x *StartCapture) GetCapture() *EndpointRequest {
 	if x != nil {
 		return x.Capture
 	}
@@ -1198,7 +1198,7 @@ var file_pcap_proto_goTypes = []interface{}{
 	(*StatusRequest)(nil),     // 6: pcap.StatusRequest
 	(*CaptureRequest)(nil),    // 7: pcap.CaptureRequest
 	(*StopCapture)(nil),       // 8: pcap.StopCapture
-	(*AgentEndpoints)(nil),    // 9: pcap.AgentEndpoints
+	(*EndpointRequest)(nil),   // 9: pcap.EndpointRequest
 	(*StartCapture)(nil),      // 10: pcap.StartCapture
 	(*BoshQuery)(nil),         // 11: pcap.BoshQuery
 	(*CloudfoundryQuery)(nil), // 12: pcap.CloudfoundryQuery
@@ -1212,21 +1212,21 @@ var file_pcap_proto_depIdxs = []int32{
 	0,  // 2: pcap.Message.type:type_name -> pcap.MessageType
 	10, // 3: pcap.CaptureRequest.start:type_name -> pcap.StartCapture
 	8,  // 4: pcap.CaptureRequest.stop:type_name -> pcap.StopCapture
-	11, // 5: pcap.AgentEndpoints.bosh:type_name -> pcap.BoshQuery
-	12, // 6: pcap.AgentEndpoints.cf:type_name -> pcap.CloudfoundryQuery
-	9,  // 7: pcap.StartCapture.capture:type_name -> pcap.AgentEndpoints
+	11, // 5: pcap.EndpointRequest.bosh:type_name -> pcap.BoshQuery
+	12, // 6: pcap.EndpointRequest.cf:type_name -> pcap.CloudfoundryQuery
+	9,  // 7: pcap.StartCapture.capture:type_name -> pcap.EndpointRequest
 	1,  // 8: pcap.StartCapture.options:type_name -> pcap.CaptureOptions
 	14, // 9: pcap.AgentRequest.start:type_name -> pcap.StartAgentCapture
 	15, // 10: pcap.AgentRequest.stop:type_name -> pcap.StopAgentCapture
 	1,  // 11: pcap.StartAgentCapture.capture:type_name -> pcap.CaptureOptions
 	6,  // 12: pcap.API.Status:input_type -> pcap.StatusRequest
-	7,  // 13: pcap.API.AgentEndpoints:input_type -> pcap.CaptureRequest
+	7,  // 13: pcap.API.EndpointRequest:input_type -> pcap.CaptureRequest
 	6,  // 14: pcap.Agent.Status:input_type -> pcap.StatusRequest
-	13, // 15: pcap.Agent.AgentEndpoints:input_type -> pcap.AgentRequest
+	13, // 15: pcap.Agent.EndpointRequest:input_type -> pcap.AgentRequest
 	5,  // 16: pcap.API.Status:output_type -> pcap.StatusResponse
-	2,  // 17: pcap.API.AgentEndpoints:output_type -> pcap.CaptureResponse
+	2,  // 17: pcap.API.EndpointRequest:output_type -> pcap.CaptureResponse
 	5,  // 18: pcap.Agent.Status:output_type -> pcap.StatusResponse
-	2,  // 19: pcap.Agent.AgentEndpoints:output_type -> pcap.CaptureResponse
+	2,  // 19: pcap.Agent.EndpointRequest:output_type -> pcap.CaptureResponse
 	16, // [16:20] is the sub-list for method output_type
 	12, // [12:16] is the sub-list for method input_type
 	12, // [12:12] is the sub-list for extension type_name
@@ -1337,7 +1337,7 @@ func file_pcap_proto_init() {
 			}
 		}
 		file_pcap_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AgentEndpoints); i {
+			switch v := v.(*EndpointRequest); i {
 			case 0:
 				return &v.state
 			case 1:

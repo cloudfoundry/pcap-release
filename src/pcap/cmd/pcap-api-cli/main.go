@@ -54,7 +54,7 @@ func main() {
 	request := &pcap.CaptureRequest{
 		Operation: &pcap.CaptureRequest_Start{
 			Start: &pcap.StartCapture{
-				Capture: &pcap.AgentEndpoints{
+				Capture: &pcap.EndpointRequest{
 					Capture: &pcap.Capture_Bosh{
 						Bosh: &pcap.BoshQuery{
 							Token:      "123",

@@ -20,7 +20,7 @@ import (
 // Add test for capture options
 
 // {
-// name:        "Request AgentEndpoints Options not complete",
+// name:        "Request EndpointRequest Options not complete",
 // req:         &BoshRequest{Payload: &BoshRequest_Start{Start: &StartBoshCapture{Token: "123d24", Deployment: "cf", Groups: []string{"router"}}}},
 // wantErr:     true,
 // expectedErr: errNilField,
@@ -71,7 +71,7 @@ func TestReadMsg(t *testing.T) {
 			expectedData:     MessageType_CONNECTION_ERROR,
 		},
 		{
-			name:             "AgentEndpoints stop request from client and capture stopped with EOF",
+			name:             "EndpointRequest stop request from client and capture stopped with EOF",
 			captureStream:    &mockCaptureStream{nil, io.EOF},
 			target:           AgentEndpoint{IP: "172.20.0.2"},
 			contextCancelled: true,
@@ -183,7 +183,7 @@ func TestStopCmd(t *testing.T) {
 		},
 		{
 			name:        "Invalid payload type",
-			recv:        &mockBoshRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Capture: &AgentEndpoints{Capture: &Capture_Bosh{Bosh: &BoshQuery{}}}}}}, err: nil},
+			recv:        &mockBoshRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Capture: &EndpointRequest{Capture: &Capture_Bosh{Bosh: &BoshQuery{}}}}}}, err: nil},
 			expectedErr: errInvalidPayload,
 			wantErr:     true,
 		},
@@ -338,7 +338,7 @@ func TestCapture(t *testing.T) {
 		wantErr        bool
 	}{
 		{
-			name:           "AgentEndpoints cannot be started for all targets due to error",
+			name:           "EndpointRequest cannot be started for all targets due to error",
 			targets:        []AgentEndpoint{{"localhost", 8083, "router/1abc"}, {"localhost", 8084, "router/2abc"}},
 			streamPreparer: &mockStreamPreparer{err: errNilField},
 			opts:           &CaptureOptions{},
