@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 	"os"
 	"time"
 
@@ -26,9 +27,9 @@ var DefaultAPIConfig = APIConfig{
 	Agents: &pcap.AgentMTLS{
 		MTLS: nil,
 	},
-	DrainTimeout:       10 * time.Second,                                                                                               //nolint:gomnd // default value
-	ConcurrentCaptures: 5,                                                                                                              //nolint:gomnd // default value
-	ManualEndpoints:    pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}, //nolint:gomnd // default value
+	DrainTimeout:       10 * time.Second,
+	ConcurrentCaptures: 5,
+	//ManualEndpoints:    pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}},
 }
 
 type APIConfig struct {
@@ -37,8 +38,9 @@ type APIConfig struct {
 	ConcurrentCaptures int             `yaml:"concurrent_captures"`
 	DrainTimeout       time.Duration   `yaml:"drain_timeout"`
 
+	BoshEnvironments []bosh.Environment `yaml:"bosh_environments"`
 	// TODO: Add BOSH and CF specific config fragments
-	ManualEndpoints pcap.ManualEndpoints
+	//ManualEndpoints pcap.ManualEndpoints
 }
 
 func (c APIConfig) validate() error {

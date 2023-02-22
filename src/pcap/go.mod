@@ -5,6 +5,7 @@ go 1.19
 require (
 	code.cloudfoundry.org/bytefmt v0.0.0-20211005130812-5bb3c17173e5
 	github.com/go-playground/validator/v10 v10.11.1
+	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/gopacket v1.1.19
 	github.com/google/uuid v1.1.2
 	github.com/jessevdk/go-flags v1.5.0

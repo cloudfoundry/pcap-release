@@ -48,7 +48,10 @@ func main() {
 		log.Fatal("unable to create api", zap.Error(err))
 	}
 
-	api.RegisterResolver(&pcap.BoshHandler{Config: config.ManualEndpoints})
+	// setup a BoshHandler for each bosh environment
+	for _, env := range config.BoshEnvironments {
+		api.RegisterHandler(pcap.NewBoshHandler(env))
+	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Listen.Port))
 	if err != nil {

@@ -39,7 +39,7 @@ func boshRequest(bosh *pcap.BoshQuery, options *pcap.CaptureOptions) *pcap.Captu
 	return &pcap.CaptureRequest{
 		Operation: &pcap.CaptureRequest_Start{
 			Start: &pcap.StartCapture{
-				Capture: &pcap.AgentEndpoints{
+				Capture: &pcap.EndpointRequest{
 					Capture: &pcap.Capture_Bosh{
 						Bosh: bosh,
 					},

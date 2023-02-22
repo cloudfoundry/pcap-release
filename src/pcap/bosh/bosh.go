@@ -1,5 +1,7 @@
 package bosh
 
+import "time"
+
 type Config struct {
 	Environments []Environment `yaml:"environments"`
 }
@@ -11,6 +13,18 @@ type Environment struct {
 	CaCert          string `yaml:"ca_cert"`
 	RefreshToken    string `yaml:"refresh_token"`
 	Url             string `yaml:"url"`
+}
+
+type Instance struct {
+	AgentId     string    `json:"agent_id"`
+	Cid         string    `json:"cid"`
+	Job         string    `json:"job"`
+	Index       int       `json:"index"`
+	Id          string    `json:"id"`
+	Az          string    `json:"az"`
+	Ips         []string  `json:"ips"`
+	VmCreatedAt time.Time `json:"vm_created_at"`
+	ExpectsVm   bool      `json:"expects_vm"`
 }
 
 type Info struct {

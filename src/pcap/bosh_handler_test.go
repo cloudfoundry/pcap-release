@@ -54,7 +54,7 @@ func TestValidateBoshCaptureRequest(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			bosh := &BoshHandler{}
 
-			testCapture := &AgentEndpoints{Capture: &Capture_Bosh{test.req}}
+			testCapture := &EndpointRequest{Capture: &Capture_Bosh{test.req}}
 
 			err := bosh.validate(testCapture)
 			if (err != nil) != test.wantErr {
