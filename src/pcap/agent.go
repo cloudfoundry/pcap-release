@@ -307,6 +307,7 @@ func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream
 				return
 			}
 		}
+		cancel(errorf(codes.Aborted, "no data is left to forward"))
 	}()
 }
 

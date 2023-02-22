@@ -6,18 +6,16 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"io"
+	"os"
+	"sync"
+	"sync/atomic"
 )
 
 const concurrentCapturesPerClient = 10
@@ -26,6 +24,9 @@ type API struct {
 	// done is used to gracefully shut down the agent, all ongoing streams terminate
 	// whenever this channel is closed.
 	done chan struct{}
+	// captureWG tracks any running capture requests.
+	// TODO: expose as metric?
+	captureWG sync.WaitGroup
 
 	bufConf  BufferConf
 	handlers map[string]CaptureHandler
@@ -41,7 +42,7 @@ type ManualEndpoints struct {
 	Targets []AgentEndpoint
 }
 
-func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int, drainTimeout time.Duration) *API {
+func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int) *API {
 	return &API{
 		done:                  make(chan struct{}),
 		bufConf:               bufConf,
@@ -121,6 +122,11 @@ func (api *API) Stop() {
 	}
 }
 
+// Wait for all open capture requests to terminate.
+func (api *API) Wait() {
+	api.captureWG.Wait()
+}
+
 // draining returns true after API.Stop has been called.
 func (api *API) draining() bool {
 	select {
@@ -135,6 +141,9 @@ func (api *API) draining() bool {
 
 // Capture receives messages (start or stop capture) from the client and streams payload (messages or pcap data) back.
 func (api *API) Capture(stream API_CaptureServer) (err error) {
+	api.captureWG.Add(1)
+	defer api.captureWG.Done()
+
 	currentStreams := api.concurrentStreams.Add(1)
 	defer api.concurrentStreams.Add(-1)
 	if currentStreams > int32(api.maxConcurrentCaptures) {
@@ -420,6 +429,12 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 				out <- newMessageResponse(MessageType_CAPTURE_STOPPED, msg, target.Identifier)
 				return
 			}
+			if err != nil {
+				msg := fmt.Sprintf("Capturing stopped on agent pcap-agent %s", target)
+				out <- newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, msg, target.Identifier)
+				//cancel(fmt.Errorf("receiving packet: %w", err))
+				return
+			}
 			code := status.Code(err)
 			if code != codes.OK {
 				out <- convertStatusCodeToMsg(err, target)
@@ -500,7 +515,6 @@ type streamPreparer interface {
 
 func (api *API) capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
-
 	runningCaptures := 0
 	for _, target := range targets {
 		log = log.With(zap.String("target", target.String()))
@@ -521,8 +535,6 @@ func (api *API) capture(ctx context.Context, stream responseSender, streamPrep s
 		}
 
 		runningCaptures++
-
-		log.Info("Add capture waiting group")
 
 		c := readMsgFromStream(ctx, captureStream, target, api.bufConf.Size)
 		captureCs = append(captureCs, c)

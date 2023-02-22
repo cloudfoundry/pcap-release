@@ -4,17 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/metadata"
-	"io"
-	"sync"
-	"testing"
-	"time"
-
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"io"
+	"sync"
+	"testing"
 )
 
 // Add test for capture options
@@ -65,10 +63,10 @@ func TestReadMsg(t *testing.T) {
 		},
 		{
 			name:             "Unexpected error from capture stream",
-			captureStream:    &mockCaptureStream{nil, errorf(codes.Unknown, "unexpected error")},
+			captureStream:    &mockCaptureStream{nil, errorf(codes.Aborted, "unexpected error")},
 			target:           AgentEndpoint{IP: "172.20.0.2"},
 			contextCancelled: false,
-			expectedData:     MessageType_CONNECTION_ERROR,
+			expectedData:     MessageType_INSTANCE_UNAVAILABLE,
 		},
 		{
 			name:             "Capture stop request from client and capture stopped with EOF",
@@ -370,7 +368,7 @@ func TestCapture(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
-			api := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1, time.Second*10)
+			api := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
 			ctx := metadata.NewOutgoingContext(context.Background(), metadata.MD{HeaderVcapID: []string{"captureTest123"}})
 			got, err := api.capture(ctx, &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, insecure.NewCredentials(), log)
 			if (err != nil) != tt.wantErr && status.Code(err) != codes.FailedPrecondition {
