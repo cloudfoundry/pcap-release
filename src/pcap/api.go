@@ -171,7 +171,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 
 	log.Info("Started capture stream")
 
-	creds, err := api.prepareTLSToAgent(log)
+	creds, err := api.loadTLSCredentials(log)
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	return nil
 }
 
-func (api *API) prepareTLSToAgent(log *zap.Logger) (credentials.TransportCredentials, error) {
+func (api *API) loadTLSCredentials(log *zap.Logger) (credentials.TransportCredentials, error) {
 	if api.agents.MTLS == nil || api.agents.MTLS.SkipVerify {
 		return insecure.NewCredentials(), nil
 	}
@@ -364,17 +364,6 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 		convertStatusCodeToMsg(err, target)
 		return nil, err
 	}
-
-	patchedFilter, err := patchFilter(req.Filter)
-	if err != nil {
-		err = pcapError{
-			status: status.New(codes.FailedPrecondition, "Expanding the pcap filter to exclude traffic to pcap-api failed"),
-			inner:  err,
-		}
-		convertStatusCodeToMsg(err, target)
-		return nil, err
-	}
-	req.Filter = patchedFilter
 
 	err = captureStream.Send(&AgentRequest{
 		Payload: &AgentRequest_Start{
@@ -516,6 +505,14 @@ type streamPreparer interface {
 func (api *API) capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
 	runningCaptures := 0
+
+	patchedFilter, err := patchFilter(opts.Filter)
+	if err != nil {
+		return nil, errorf(codes.FailedPrecondition, "Expanding the pcap filter to exclude traffic to pcap-api failed: %w", err)
+	}
+
+	opts.Filter = patchedFilter
+
 	for _, target := range targets {
 		log = log.With(zap.String("target", target.String()))
 		log.Info("starting capture")
