@@ -6,10 +6,8 @@
 package main
 
 import (
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"net"
 	"os"
 	"os/signal"
@@ -17,37 +15,13 @@ import (
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 )
 
 var zapConfig zap.Config
 
 func init() {
-	zapConfig = zap.Config{
-		Level:             zap.NewAtomicLevelAt(zap.InfoLevel),
-		DisableCaller:     true,
-		DisableStacktrace: true,
-		Encoding:          "json",
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "timestamp",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			MessageKey:     "msg",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.LowercaseLevelEncoder,
-			EncodeTime:     zapcore.RFC3339TimeEncoder,
-			EncodeDuration: zapcore.SecondsDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		},
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-		// InitialFields:    map[string]interface{}{"component": "pcap-api"},
-	}
-	zap.ReplaceGlobals(zap.Must(zapConfig.Build()))
-
-	zap.NewProductionEncoderConfig()
+	cmd.InitZapLogger()
 }
 
 func main() {
@@ -84,11 +58,16 @@ func main() {
 
 	api.RegisterHandler(&pcap.BoshHandler{Config: config.ManualEndpoints})
 
-	lis, err := listen(config)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Listen.Port))
 	if err != nil {
 		log.Fatal("unable to create listener", zap.Error(err))
 	}
-	server := grpc.NewServer()
+
+	tlsCredentials, err := cmd.LoadTLSCredentials(config.CommonConfig)
+	if err != nil {
+		log.Fatal("unable to load provided TLS credentials", zap.Error(err))
+	}
+	server := grpc.NewServer(grpc.Creds(tlsCredentials))
 	pcap.RegisterAPIServer(server, api)
 
 	go waitForSignal(log, api, server)
@@ -102,57 +81,6 @@ func main() {
 	log.Info("serve returned successfully")
 }
 
-// listen creates a new listener based off of the given Config. If Config.TLS is
-// nil a TCP listener is returned, otherwise a TLS listener is returned.
-//
-// Note: the TLS version is currently hard-coded to TLSv1.3.
-func listen(c APIConfig) (net.Listener, error) {
-	if c.Listen.TLS == nil {
-		return net.Listen("tcp", fmt.Sprintf(":%d", c.Listen.Port))
-	}
-
-	cert, err := tls.LoadX509KeyPair(c.Listen.TLS.Certificate, c.Listen.TLS.PrivateKey)
-	if err != nil {
-		return nil, err
-	}
-
-	caFile, err := os.ReadFile(c.Listen.TLS.CertificateAuthority)
-	if err != nil {
-		return nil, err
-	}
-
-	caPool := x509.NewCertPool()
-
-	// We do not use x509.CertPool.AppendCertsFromPEM because it swallows any errors.
-	// We would like to now if any certificate failed (and not just if any certificate
-	// could be parsed).
-	for len(caFile) > 0 {
-		var block *pem.Block
-
-		block, caFile = pem.Decode(caFile)
-		if block.Type != "CERTIFICATE" {
-			return nil, fmt.Errorf("ca file contains non-certificate blocks")
-		}
-
-		ca, caErr := x509.ParseCertificate(block.Bytes)
-		if caErr != nil {
-			return nil, caErr
-		}
-
-		caPool.AddCert(ca)
-	}
-
-	tlsConf := tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS13,
-		MaxVersion:   tls.VersionTLS13,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    caPool,
-	}
-
-	return tls.Listen("tcp", fmt.Sprintf(":%d", c.Listen.Port), &tlsConf)
-}
-
 func waitForSignal(log *zap.Logger, api *pcap.API, server *grpc.Server) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -161,10 +89,7 @@ func waitForSignal(log *zap.Logger, api *pcap.API, server *grpc.Server) {
 		switch sig {
 		case syscall.SIGUSR1, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM:
 			zap.L().Info("received signal, stopping api", zap.String("signal", sig.String()))
-			err := api.Drain()
-			if err != nil {
-				zap.L().Warn("Could not stop all clients gracefully", zap.Error(err))
-			}
+			api.Stop()
 
 			log.Info("shutting down server")
 			server.GracefulStop()

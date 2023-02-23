@@ -347,13 +347,13 @@ var _ = Describe("IntegrationTests", func() {
 				err := stream.Send(request)
 				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 				go func() {
-					time.Sleep(3 * time.Second)
+					time.Sleep(2 * time.Second)
 					agentServer2.Stop()
 				}()
 				time.Sleep(3 * time.Second)
 				errCode, messages, err := recvCapture(500, stream)
 				GinkgoWriter.Printf("receive non-OK code: %s\n", errCode.String())
-				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
 			})
 		})
 	})
@@ -469,7 +469,7 @@ var _ = Describe("IntegrationTests", func() {
 			os.RemoveAll("api")
 			os.RemoveAll("agent")
 		})
-		Context("with one agents and one API", func() {
+		Context("with one agent and one API", func() {
 			It("finished without errors", func() {
 				ctx := context.Background()
 				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})

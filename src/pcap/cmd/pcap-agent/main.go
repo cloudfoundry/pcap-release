@@ -6,16 +6,11 @@
 package main
 
 import (
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"os"
 	"os/signal"
@@ -23,29 +18,7 @@ import (
 )
 
 func init() {
-	zap.ReplaceGlobals(zap.Must(zap.Config{
-		Level:             zap.NewAtomicLevelAt(zap.DebugLevel),
-		DisableCaller:     true,
-		DisableStacktrace: true,
-		Encoding:          "json",
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "ts",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			MessageKey:     "msg",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.LowercaseLevelEncoder,
-			EncodeTime:     zapcore.RFC3339TimeEncoder,
-			EncodeDuration: zapcore.SecondsDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		},
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-		InitialFields:    map[string]interface{}{"component": "pcap-agent"}, // TODO: this is probably already done by syslog_shipper?
-	}.Build()))
-
-	zap.NewProductionEncoderConfig()
+	cmd.InitZapLogger()
 }
 
 func main() {
@@ -78,7 +51,7 @@ func main() {
 		log.Fatal("unable to create listener", zap.Error(err))
 	}
 
-	tlsCredentials, err := loadTLSCredentials(config)
+	tlsCredentials, err := cmd.LoadTLSCredentials(config.CommonConfig)
 	if err != nil {
 		log.Fatal("unable to load provided TLS credentials", zap.Error(err))
 	}
@@ -95,57 +68,6 @@ func main() {
 	}
 
 	log.Info("serve returned successfully")
-}
-
-// load server certificate and private key from the given Config. If Config.Tls is
-// nil a credentials which disable transport security will be used
-//
-// Note: the TLS version is currently hard-coded to TLSv1.3.
-func loadTLSCredentials(c Config) (credentials.TransportCredentials, error) {
-	if c.Listen.TLS == nil {
-		return insecure.NewCredentials(), nil
-	}
-
-	cert, err := tls.LoadX509KeyPair(c.Listen.TLS.Certificate, c.Listen.TLS.PrivateKey)
-	if err != nil {
-		return nil, err
-	}
-
-	caFile, err := os.ReadFile(c.Listen.TLS.CertificateAuthority)
-	if err != nil {
-		return nil, err
-	}
-
-	caPool := x509.NewCertPool()
-
-	// We do not use x509.CertPool.AppendCertsFromPEM because it swallows any errors.
-	// We would like to now if any certificate failed (and not just if any certificate
-	// could be parsed).
-	for len(caFile) > 0 {
-		var block *pem.Block
-
-		block, caFile = pem.Decode(caFile)
-		if block.Type != "CERTIFICATE" {
-			return nil, fmt.Errorf("ca file contains non-certificate blocks")
-		}
-
-		ca, caErr := x509.ParseCertificate(block.Bytes)
-		if caErr != nil {
-			return nil, caErr
-		}
-
-		caPool.AddCert(ca)
-	}
-
-	tlsConf := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS13,
-		MaxVersion:   tls.VersionTLS13,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    caPool,
-	}
-
-	return credentials.NewTLS(tlsConf), nil
 }
 
 // waitForSignal to tell the agent to stop processing any streams. Will first tell the agent

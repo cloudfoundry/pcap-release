@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"os"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
@@ -9,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var DefaultConfig = Config{
+var DefaultConfig = Config{cmd.CommonConfig{
 	Listen: pcap.Listen{Port: 8083},
 	Buffer: pcap.BufferConf{
 		Size:       100,
@@ -18,15 +19,16 @@ var DefaultConfig = Config{
 	},
 	LogLevel: "debug",
 	ID:       "test-agent",
-}
+}}
 
 type Config struct {
 	// Port is the port the agent will listen on.
-	Listen   pcap.Listen     `yaml:"listen"`
-	Buffer   pcap.BufferConf `yaml:"buffer"`
-	LogLevel string          `yaml:"logLevel"`
-	ID       string          `yaml:"id" validate:"required"`
+	cmd.CommonConfig
 }
+
+/*func NewConfig(genericConfig cmd.CommonConfig) *Config {
+	return &Config{CommonConfig: genericConfig}
+}*/
 
 func (c Config) validate() error {
 	return validator.New().Struct(c)

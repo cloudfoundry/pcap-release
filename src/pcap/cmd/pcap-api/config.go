@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"os"
 	"time"
 
@@ -11,13 +12,16 @@ import (
 )
 
 var DefaultAPIConfig = APIConfig{
-	Listen: &pcap.Listen{Port: 8080},
-	Buffer: pcap.BufferConf{
-		Size:       100,
-		UpperLimit: 95,
-		LowerLimit: 60,
+	CommonConfig: cmd.CommonConfig{
+		Listen: pcap.Listen{Port: 8080},
+		Buffer: pcap.BufferConf{
+			Size:       100,
+			UpperLimit: 95,
+			LowerLimit: 60,
+		},
+		LogLevel: "debug",
+		ID:       "test-api",
 	},
-	LogLevel: "debug",
 	Agents: &pcap.AgentMTLS{
 		DefaultPort: 9494,
 		MTLS:        nil,
@@ -28,11 +32,8 @@ var DefaultAPIConfig = APIConfig{
 }
 
 type APIConfig struct {
-	Listen             *pcap.Listen    `yaml:"listen"`
-	ID                 string          `yaml:"id"`
+	cmd.CommonConfig
 	Agents             *pcap.AgentMTLS `yaml:"agents"`
-	Buffer             pcap.BufferConf `yaml:"buffer"`
-	LogLevel           string          `yaml:"log_level"`
 	ConcurrentCaptures int             `yaml:"concurrent_captures"`
 	DrainTimeout       time.Duration   `yaml:"drain_timeout"`
 
