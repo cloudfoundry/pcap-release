@@ -3,9 +3,7 @@ package pcap
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
-	"sync"
 	"testing"
 	"time"
 
@@ -16,13 +14,10 @@ import (
 )
 
 var (
-	errTestEnded        = fmt.Errorf("test ended")
-	errContextCancelled = fmt.Errorf("context error")
-	errDiscardedMsg     = fmt.Errorf("discarding packets")
-	bufSize             = 5
-	bufUpperLimit       = 4
-	bufLowerLimit       = 3
-	agentOrigin         = "pcap-agent-router/1234ab"
+	bufSize       = 5
+	bufUpperLimit = 4
+	bufLowerLimit = 3
+	agentOrigin   = "pcap-agent-router/1234ab"
 )
 
 type mockStreamReceiver struct {
@@ -164,102 +159,6 @@ func TestReadPackets(t *testing.T) {
 				if test.expectedData != data {
 					t.Errorf("Invalid data response %s", data)
 				}
-			}
-		})
-	}
-}
-
-type mockPacketSender struct {
-	err                  error
-	resCounter           int
-	sentRes              int
-	stopAfterErrorOccurs bool
-}
-
-func (m *mockPacketSender) Send(res *CaptureResponse) error {
-	message, isMsg := res.Payload.(*CaptureResponse_Message)
-	m.resCounter++
-
-	if m.stopAfterErrorOccurs && isMsg && message.Message.Type == MessageType_CONGESTED {
-		return fmt.Errorf("%w", errDiscardedMsg)
-	}
-
-	if !m.stopAfterErrorOccurs && m.sentRes == m.resCounter {
-		return errTestEnded
-	}
-
-	return m.err
-}
-
-func TestForwardToStream(t *testing.T) {
-	tests := []struct {
-		name        string
-		resToBeSent int
-		stream      responseSender
-		response    *CaptureResponse
-		expectedErr error
-	}{
-		{
-			name:        "error during sending of packets",
-			stream:      &mockPacketSender{err: io.EOF, stopAfterErrorOccurs: true},
-			resToBeSent: 2,
-			response:    newPacketResponse([]byte("ABC")),
-			expectedErr: io.EOF,
-		},
-		{
-			name:        "buffer is filled with PacketResponse, one packet discarded",
-			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
-			resToBeSent: bufUpperLimit + 2,
-			response:    newPacketResponse([]byte("ABC")),
-			expectedErr: errTestEnded,
-		},
-		{
-			name:        "buffer is filled with MessageResponse, no packets discarded",
-			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
-			resToBeSent: bufUpperLimit + 1,
-			response:    newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, "invalid id", agentOrigin),
-			expectedErr: errTestEnded,
-		},
-		{
-			name:        "buffer is filled with PacketResponse, discarding packets",
-			stream:      &mockPacketSender{err: nil, stopAfterErrorOccurs: true},
-			resToBeSent: bufUpperLimit + 1,
-			response:    newPacketResponse([]byte("ABC")),
-			expectedErr: errDiscardedMsg,
-		},
-		{
-			name:        "happy path",
-			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit - 1},
-			resToBeSent: bufUpperLimit - 1,
-			response:    newPacketResponse([]byte("ABC")),
-			expectedErr: errTestEnded,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
-			src := make(chan *CaptureResponse, bufSize)
-			defer close(src)
-			go func() {
-				for i := 0; i < test.resToBeSent; i++ {
-					src <- test.response
-				}
-			}()
-
-			wg := &sync.WaitGroup{}
-			wg.Add(1)
-
-			forwardToStream(cancel, src, test.stream, BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, wg, agentOrigin)
-
-			<-ctx.Done()
-
-			err := Cause(ctx)
-			if err == nil {
-				t.Errorf("Expected error to finish test")
-			}
-			if !errors.Is(err, test.expectedErr) {
-				t.Errorf("forwardToStream() expectedErr = %v, error = %v", test.expectedErr, err)
 			}
 		})
 	}

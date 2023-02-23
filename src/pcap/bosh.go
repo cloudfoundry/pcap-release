@@ -2,6 +2,7 @@ package pcap
 
 import (
 	"fmt"
+
 	"go.uber.org/zap"
 )
 

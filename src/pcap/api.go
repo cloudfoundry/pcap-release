@@ -6,35 +6,36 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"sync"
+	"sync/atomic"
+
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"io"
-	"os"
-	"sync"
-	"sync/atomic"
 )
 
-const concurrentCapturesPerClient = 10
-
 type API struct {
-	// done is used to gracefully shut down the agent, all ongoing streams terminate
+	// done is used to gracefully shut down the api, all captures terminate
 	// whenever this channel is closed.
 	done chan struct{}
 	// captureWG tracks any running capture requests.
 	// TODO: expose as metric?
 	captureWG sync.WaitGroup
-
-	bufConf  BufferConf
-	handlers map[string]CaptureHandler
-	agents   AgentMTLS
-	UnimplementedAPIServer
+	bufConf   BufferConf
+	handlers  map[string]CaptureHandler
+	agents    AgentMTLS
+	// ID of the instance where the api is located.
 	id                    string
 	maxConcurrentCaptures int
 	concurrentStreams     atomic.Int32
+	tlsCredentials        credentials.TransportCredentials
+
+	UnimplementedAPIServer
 }
 
 // TODO: This type should be removed once we have resolvers for BOSH or CF.
@@ -42,8 +43,10 @@ type ManualEndpoints struct {
 	Targets []AgentEndpoint
 }
 
-func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int) *API {
-	return &API{
+func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int) (*API, error) {
+	var err error
+
+	api := &API{
 		done:                  make(chan struct{}),
 		bufConf:               bufConf,
 		handlers:              make(map[string]CaptureHandler),
@@ -51,6 +54,13 @@ func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCap
 		id:                    id,
 		maxConcurrentCaptures: maxConcurrentCaptures,
 	}
+
+	api.tlsCredentials, err = api.loadTLSCredentials()
+	if err != nil {
+		return nil, fmt.Errorf("create api failed: %w", err)
+	}
+
+	return api, nil
 }
 
 // AgentEndpoint defines the endpoint for a pcap-agent.
@@ -63,10 +73,6 @@ type AgentEndpoint struct {
 func (a AgentEndpoint) String() string {
 	return fmt.Sprintf("%s:%d", a.IP, a.Port)
 }
-
-var (
-	errUnexpectedMessage = fmt.Errorf("unexpected message")
-)
 
 // CaptureHandler defines handlers for different request types that ultimately lead to a selection of AgentEndpoints.
 type CaptureHandler interface {
@@ -112,7 +118,6 @@ func (api *API) handlerRegistered(handler string) bool {
 // Stop the server. This will gracefully stop any captures that are currently running
 // by closing API.done. Further calls to Stop have no effect.
 func (api *API) Stop() {
-	fmt.Printf("stop api called")
 	select {
 	case <-api.done:
 		// if the channel is already closed, we do nothing
@@ -144,12 +149,6 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	api.captureWG.Add(1)
 	defer api.captureWG.Done()
 
-	currentStreams := api.concurrentStreams.Add(1)
-	defer api.concurrentStreams.Add(-1)
-	if currentStreams > int32(api.maxConcurrentCaptures) {
-		return errorf(codes.ResourceExhausted, "failed starting capture: %w", err)
-	}
-
 	log := zap.L().With(zap.String("handler", "capture"))
 
 	defer func() {
@@ -169,21 +168,25 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 
 	ctx, log = setVcapID(ctx, log, nil)
 
-	log.Info("Started capture stream")
+	currentStreams := api.concurrentStreams.Add(1)
 
-	creds, err := api.loadTLSCredentials(log)
-	if err != nil {
-		return err
+	defer api.concurrentStreams.Add(-1)
+
+	if currentStreams > int32(api.maxConcurrentCaptures) {
+		vcapID := ctx.Value(HeaderVcapID).(string)
+		return errorf(codes.ResourceExhausted, "failed starting capture with vcap-id %s: %w", vcapID, errTooManyCaptures)
 	}
+
+	log.Info("Started capture stream")
 
 	req, err := stream.Recv()
 	if err != nil {
-		return errorf(codes.Unimplemented, "unable to receive message: %w", err)
+		return errorf(codes.Unknown, "unable to receive message: %w", err)
 	}
 
 	opts, isStart := req.Operation.(*CaptureRequest_Start)
 	if !isStart {
-		return fmt.Errorf("expected start message, got %v: %w", req.Operation, errUnexpectedMessage)
+		return errorf(codes.InvalidArgument, "expected start message, got %v: %w", req.Operation, errUnexpectedMessage)
 	}
 
 	targets, resolveErr := api.resolveAgentEndpoints(opts.Start.Capture, log)
@@ -191,10 +194,8 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		return errorf(codes.InvalidArgument, "capture targets not found: %w", err)
 	}
 
-	streamPreparer := &streamPrep{}
-
 	// Start capture
-	out, err := api.capture(ctx, stream, streamPreparer, opts.Start.Options, targets, creds, log)
+	out, err := api.capture(ctx, stream, opts.Start.Options, targets, log, connectToTarget)
 	if err != nil {
 		return err
 	}
@@ -229,7 +230,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	return nil
 }
 
-func (api *API) loadTLSCredentials(log *zap.Logger) (credentials.TransportCredentials, error) {
+func (api *API) loadTLSCredentials() (credentials.TransportCredentials, error) {
 	if api.agents.MTLS == nil || api.agents.MTLS.SkipVerify {
 		return insecure.NewCredentials(), nil
 	}
@@ -237,8 +238,7 @@ func (api *API) loadTLSCredentials(log *zap.Logger) (credentials.TransportCreden
 	// Load certificate of the CA who signed agent's certificate
 	pemAgentCA, readErr := os.ReadFile(api.agents.MTLS.CertificateAuthority)
 	if readErr != nil {
-		log.Error("Load Agent CA certificate failed")
-		return nil, readErr
+		return nil, fmt.Errorf("load agent CA's certificate failed: %w", readErr)
 	}
 
 	certPool := x509.NewCertPool()
@@ -256,11 +256,12 @@ func (api *API) loadTLSCredentials(log *zap.Logger) (credentials.TransportCreden
 
 	// Load client's certificate and private key
 	if api.agents.MTLS.Certificate != "" && api.agents.MTLS.PrivateKey != "" {
+		// TODO certificate contains client CA
 		clientCert, err := tls.LoadX509KeyPair(api.agents.MTLS.Certificate, api.agents.MTLS.PrivateKey)
 		if err != nil {
-			log.Error("Load API client certificate or private key failed")
-			return nil, err
+			return nil, fmt.Errorf("load API client certificate or private key failed: %w", err)
 		}
+
 		config.Certificates = []tls.Certificate{clientCert}
 	}
 
@@ -332,12 +333,8 @@ func mergeResponseChannels(cs []<-chan *CaptureResponse, bufSize int) <-chan *Ca
 	return out
 }
 
-type streamPrep struct {
-}
-
-// prepareStreamToTarget creates a client connection to the given target, contacts the client API for the Agent service
-// to start the Capture.
-func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
+// connectToTarget creates connection to the agent, if the agent is available and healthy, and start the Agent.Capture.
+func connectToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
 	cc, err := grpc.Dial(target.String(), grpc.WithTransportCredentials(creds))
 	if err != nil {
 		err = fmt.Errorf("start capture from '%s': %w", target, err)
@@ -353,15 +350,16 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 	}
 
 	agentContext := context.Background()
-	vcapID, err := vcapIDFromOutgoingCtx(ctx)
-	if err != nil {
-		// TODO impelement error handling
-	}
-	agentContext, log = setVcapID(agentContext, log, vcapID)
-	captureStream, err := agent.Capture(agentContext)
 
+	vcapID, ok := ctx.Value(HeaderVcapID).(string)
+	if !ok {
+		agentContext, _ = setVcapID(agentContext, log, nil)
+	} else {
+		agentContext, _ = setVcapID(agentContext, log, &vcapID)
+	}
+
+	captureStream, err := agent.Capture(agentContext)
 	if err != nil {
-		convertStatusCodeToMsg(err, target)
 		return nil, err
 	}
 
@@ -373,9 +371,9 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 		},
 	})
 	if err != nil {
-		// out <- convertStatusCodeToMsg(err, target)
 		return nil, err
 	}
+
 	return captureStream, nil
 }
 
@@ -397,7 +395,7 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 		defer func(captureStream captureReceiver) {
 			closeSendErr := captureStream.CloseSend()
 			if closeSendErr != nil {
-				out <- convertStatusCodeToMsg(closeSendErr, target)
+				out <- convertStatusCodeToMsg(closeSendErr, target.Identifier)
 				return
 			}
 		}(captureStream)
@@ -408,7 +406,7 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 					Payload: &AgentRequest_Stop{},
 				})
 				if err != nil {
-					out <- convertStatusCodeToMsg(err, target)
+					out <- convertStatusCodeToMsg(err, target.Identifier)
 					return
 				}
 			}
@@ -421,12 +419,11 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 			if err != nil {
 				msg := fmt.Sprintf("Capturing stopped on agent pcap-agent %s", target)
 				out <- newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, msg, target.Identifier)
-				//cancel(fmt.Errorf("receiving packet: %w", err))
 				return
 			}
 			code := status.Code(err)
 			if code != codes.OK {
-				out <- convertStatusCodeToMsg(err, target)
+				out <- convertStatusCodeToMsg(err, target.Identifier)
 				return
 			}
 			out <- msg
@@ -435,36 +432,7 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 	return out
 }
 
-func convertStatusCodeToMsg(err error, target AgentEndpoint) *CaptureResponse {
-	code := status.Code(err)
-	if code == codes.Unknown {
-		unwrappedError := errors.Unwrap(err)
-		if unwrappedError != nil {
-			code = status.Code(unwrappedError)
-		}
-	}
-	err = fmt.Errorf("capturing from agent %s: %w", target, err)
-
-	//FIXME: internal+unknown and default are the same. Is default really a connection error?
-	switch code { //nolint:exhaustive // we do not need to cover all the codes here
-	case codes.InvalidArgument:
-		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error(), target.Identifier)
-	case codes.Aborted:
-		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), target.Identifier)
-	case codes.Internal, codes.Unknown:
-		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error(), target.Identifier)
-	case codes.FailedPrecondition:
-		return newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error(), target.Identifier)
-	case codes.ResourceExhausted:
-		return newMessageResponse(MessageType_LIMIT_REACHED, err.Error(), target.Identifier)
-	case codes.Unavailable:
-		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), target.Identifier)
-	default:
-		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error(), target.Identifier)
-	}
-}
-
-// boshRequestReceiver is an interface used by boshStopCmd to simplify testing.
+// requestReceiver is an interface used by boshStopCmd to simplify testing.
 type requestReceiver interface {
 	Recv() (*CaptureRequest, error)
 }
@@ -498,11 +466,9 @@ func stopCmd(cancel CancelCauseFunc, stream requestReceiver) {
 	}()
 }
 
-type streamPreparer interface {
-	prepareStreamToTarget(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials, *zap.Logger) (captureReceiver, error)
-}
+type streamPreparer func(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials, *zap.Logger) (captureReceiver, error)
 
-func (api *API) capture(ctx context.Context, stream responseSender, streamPrep streamPreparer, opts *CaptureOptions, targets []AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (<-chan *CaptureResponse, error) {
+func (api *API) capture(ctx context.Context, stream responseSender, opts *CaptureOptions, targets []AgentEndpoint, log *zap.Logger, fn streamPreparer) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
 	runningCaptures := 0
 
@@ -517,9 +483,10 @@ func (api *API) capture(ctx context.Context, stream responseSender, streamPrep s
 		log = log.With(zap.String("target", target.String()))
 		log.Info("starting capture")
 
-		captureStream, err := streamPrep.prepareStreamToTarget(ctx, opts, target, creds, log)
+		var captureStream captureReceiver
+		captureStream, err = fn(ctx, opts, target, api.tlsCredentials, log)
 		if err != nil {
-			errMsg := convertStatusCodeToMsg(err, target)
+			errMsg := convertStatusCodeToMsg(err, target.Identifier)
 			sendErr := stream.Send(errMsg)
 			if sendErr != nil {
 				// FIXME the return interrupts the for-loop over targets and returns in case of send error

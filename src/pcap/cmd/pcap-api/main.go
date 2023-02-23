@@ -7,15 +7,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
-	"net"
-	"os"
-	"os/signal"
-	"syscall"
-
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"net"
+	"os"
 )
 
 var zapConfig zap.Config
@@ -48,13 +45,12 @@ func main() {
 		log.Fatal("unable to validate config", zap.Error(err))
 	}
 
-	if level, levelErr := zap.ParseAtomicLevel(config.LogLevel); levelErr == nil {
-		zapConfig.Level.SetLevel(level.Level())
-	} else {
-		log.Sugar().Warnf("Configured log level '%s' could not be parsed: %v. Remaining at default level: '%s'", config.LogLevel, levelErr, zapConfig.Level.String())
-	}
+	cmd.SetLogLevel(log, config.LogLevel)
 
-	api := pcap.NewAPI(config.Buffer, *config.Agents, config.ID, config.ConcurrentCaptures, config.DrainTimeout)
+	api, err := pcap.NewAPI(config.Buffer, *config.Agents, config.ID, config.ConcurrentCaptures)
+	if err != nil {
+		log.Fatal("unable to create api", zap.Error(err))
+	}
 
 	api.RegisterHandler(&pcap.BoshHandler{Config: config.ManualEndpoints})
 
@@ -70,7 +66,7 @@ func main() {
 	server := grpc.NewServer(grpc.Creds(tlsCredentials))
 	pcap.RegisterAPIServer(server, api)
 
-	go waitForSignal(log, api, server)
+	go cmd.WaitForSignal(log, api, server)
 
 	log.Info("starting server")
 	err = server.Serve(lis)
@@ -79,23 +75,4 @@ func main() {
 	}
 
 	log.Info("serve returned successfully")
-}
-
-func waitForSignal(log *zap.Logger, api *pcap.API, server *grpc.Server) {
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-	for {
-		sig := <-signals
-		switch sig {
-		case syscall.SIGUSR1, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM:
-			zap.L().Info("received signal, stopping api", zap.String("signal", sig.String()))
-			api.Stop()
-
-			log.Info("shutting down server")
-			server.GracefulStop()
-			return
-		default:
-			log.Warn("ignoring unknown signal", zap.String("signal", sig.String()))
-		}
-	}
 }

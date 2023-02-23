@@ -3,16 +3,17 @@ package pcap
 import (
 	"context"
 	"errors"
-	"fmt"
-	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 	"io"
 	"sync"
 	"testing"
+	"time"
+
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // Add test for capture options
@@ -24,7 +25,10 @@ import (
 // expectedErr: errNilField,
 // },
 
-var origin = "pcap-api-1234ab"
+var (
+	origin          = "pcap-api-1234ab"
+	agentIdentifier = "router/123"
+)
 
 type mockCaptureStream struct {
 	msg *CaptureResponse
@@ -146,14 +150,25 @@ func TestCheckAgentStatus(t *testing.T) {
 	}
 }
 
-type mockBoshRequestReceiver struct {
+type mockRequestReceiver struct {
 	req *CaptureRequest
 	err error
+	grpc.ServerStream
+	context context.Context
 }
 
-func (m *mockBoshRequestReceiver) Recv() (*CaptureRequest, error) {
+func (m *mockRequestReceiver) Recv() (*CaptureRequest, error) {
 	return m.req, m.err
 }
+
+func (m *mockRequestReceiver) Send(res *CaptureResponse) error {
+	return nil
+}
+
+func (m *mockRequestReceiver) Context() context.Context {
+	return m.context
+}
+
 func TestStopCmd(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -163,31 +178,31 @@ func TestStopCmd(t *testing.T) {
 	}{
 		{
 			name:        "EOF during reading of message",
-			recv:        &mockBoshRequestReceiver{req: nil, err: io.EOF},
+			recv:        &mockRequestReceiver{req: nil, err: io.EOF},
 			expectedErr: io.EOF,
 			wantErr:     true,
 		},
 		{
 			name:        "Empty payload",
-			recv:        &mockBoshRequestReceiver{req: &CaptureRequest{Operation: nil}, err: nil},
+			recv:        &mockRequestReceiver{req: &CaptureRequest{Operation: nil}, err: nil},
 			expectedErr: errNilField,
 			wantErr:     true,
 		},
 		{
 			name:        "Empty message",
-			recv:        &mockBoshRequestReceiver{req: nil, err: nil},
+			recv:        &mockRequestReceiver{req: nil, err: nil},
 			expectedErr: errNilField,
 			wantErr:     true,
 		},
 		{
 			name:        "Invalid payload type",
-			recv:        &mockBoshRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Capture: &Capture{Capture: &Capture_Bosh{Bosh: &BoshCapture{}}}}}}, err: nil},
+			recv:        &mockRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Capture: &Capture{Capture: &Capture_Bosh{Bosh: &BoshCapture{}}}}}}, err: nil},
 			expectedErr: errInvalidPayload,
 			wantErr:     true,
 		},
 		{
 			name:        "Happy path",
-			recv:        &mockBoshRequestReceiver{req: makeStopRequest(), err: nil},
+			recv:        &mockRequestReceiver{req: makeStopRequest(), err: nil},
 			expectedErr: context.Canceled,
 			wantErr:     true,
 		},
@@ -267,64 +282,6 @@ func TestMergeResponseChannels(t *testing.T) {
 		})
 	}
 }
-func TestConvertStatusCodeToMsg(t *testing.T) {
-	tests := []struct {
-		name        string
-		err         error
-		wantMsgType MessageType
-	}{
-		{
-			name:        "Invalid argument error",
-			err:         errorf(codes.InvalidArgument, "read message: %w", fmt.Errorf("invalid argument")),
-			wantMsgType: MessageType_INVALID_REQUEST,
-		},
-		{
-			name:        "Agent unavailable error",
-			err:         errorf(codes.Unavailable, "read message: %w", fmt.Errorf("unavailable")),
-			wantMsgType: MessageType_INSTANCE_UNAVAILABLE,
-		},
-		{
-			name:        "Agent internal error",
-			err:         errorf(codes.Internal, "read message: %w", fmt.Errorf("internal error")),
-			wantMsgType: MessageType_CONNECTION_ERROR,
-		},
-		{
-			name:        "Agent failed precondition error",
-			err:         errorf(codes.FailedPrecondition, "read message: %w", fmt.Errorf("failed precondition")),
-			wantMsgType: MessageType_START_CAPTURE_FAILED,
-		},
-		{
-			name:        "Agent aborted error",
-			err:         errorf(codes.Aborted, "read message: %w", fmt.Errorf("aborted")),
-			wantMsgType: MessageType_INSTANCE_UNAVAILABLE,
-		},
-		{
-			name:        "Agent limit reached error",
-			err:         errorf(codes.ResourceExhausted, "read message: %w", fmt.Errorf("limit reached")),
-			wantMsgType: MessageType_LIMIT_REACHED,
-		},
-		{
-			name:        "Agent Unknown or internal error",
-			err:         errorf(codes.Unknown, "read message: %w", fmt.Errorf("unknown")),
-			wantMsgType: MessageType_CONNECTION_ERROR,
-		},
-		{
-			name:        "Any other error",
-			err:         errorf(codes.NotFound, "read message: %w", fmt.Errorf("unknown")),
-			wantMsgType: MessageType_CONNECTION_ERROR,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := convertStatusCodeToMsg(tt.err, AgentEndpoint{"localhost", 8083, "router/1abc"})
-			if got.GetMessage().GetType() != tt.wantMsgType {
-				t.Errorf("convertStatusCodeToMsg() = %v, want %v", got.GetMessage().GetType(), tt.wantMsgType)
-
-				t.Logf("message: %v", got.GetMessage().Message)
-			}
-		})
-	}
-}
 
 type mockResponseSender struct {
 }
@@ -333,45 +290,46 @@ func (m *mockResponseSender) Send(_ *CaptureResponse) error {
 	return nil
 }
 
-type mockStreamPreparer struct {
-	stream captureReceiver
-	err    error
-}
-
-func (m *mockStreamPreparer) prepareStreamToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
-	return m.stream, m.err
-}
-
 func TestCapture(t *testing.T) {
 	tests := []struct {
 		name           string
 		targets        []AgentEndpoint
-		streamPreparer streamPreparer
-		opts           *CaptureOptions
+		stream         captureReceiver
+		err            error
+		wantStatusCode codes.Code
 		wantErr        bool
 	}{
 		{
 			name:           "Capture cannot be started for all targets due to error",
-			targets:        []AgentEndpoint{{"localhost", 8083, "router/1abc"}, {"localhost", 8084, "router/2abc"}},
-			streamPreparer: &mockStreamPreparer{err: errNilField},
-			opts:           &CaptureOptions{},
+			targets:        []AgentEndpoint{{"localhost", 8083, agentIdentifier}, {"localhost", 8084, "router/2abc"}},
+			err:            errNilField,
+			wantStatusCode: codes.FailedPrecondition,
 			wantErr:        true,
 		},
 		{
-			name:           "Test capture finished successfully with EOF",
-			targets:        []AgentEndpoint{{"localhost", 8083, "router/1abc"}, {"localhost", 8084, "router/2abc"}},
-			streamPreparer: &mockStreamPreparer{stream: &mockCaptureStream{nil, io.EOF}, err: nil},
-			opts:           &CaptureOptions{},
-			wantErr:        false,
+			name:    "Test capture finished successfully with EOF",
+			targets: []AgentEndpoint{{"localhost", 8083, agentIdentifier}, {"localhost", 8084, "router/2abc"}},
+			stream:  &mockCaptureStream{nil, io.EOF},
+			err:     nil,
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
-			api := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
-			ctx := metadata.NewOutgoingContext(context.Background(), metadata.MD{HeaderVcapID: []string{"captureTest123"}})
-			got, err := api.capture(ctx, &mockResponseSender{}, tt.streamPreparer, tt.opts, tt.targets, insecure.NewCredentials(), log)
-			if (err != nil) != tt.wantErr && status.Code(err) != codes.FailedPrecondition {
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
+			if err != nil {
+				t.Errorf("capture() unexpected error during api creation: %v", err)
+			}
+
+			vcapIDKey := HeaderVcapID.String()
+
+			ctx := metadata.NewOutgoingContext(context.Background(), metadata.MD{vcapIDKey: []string{"captureTest123"}})
+			got, err := api.capture(ctx, &mockResponseSender{}, &CaptureOptions{}, tt.targets, log,
+				func(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
+					return tt.stream, tt.err
+				})
+			if (err != nil) != tt.wantErr && status.Code(err) != tt.wantStatusCode {
 				t.Errorf("capture() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
@@ -381,6 +339,140 @@ func TestCapture(t *testing.T) {
 						t.Errorf("capture() message type = %v, wantErr %v", m.GetMessage().GetType(), MessageType_CAPTURE_STOPPED)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestAPIStatus(t *testing.T) {
+	tests := []struct {
+		name       string
+		draining   bool
+		wantHealth bool
+	}{
+		{
+			name:       "up and running",
+			draining:   false,
+			wantHealth: true,
+		},
+		{
+			name:       "draining",
+			draining:   true,
+			wantHealth: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
+			if err != nil {
+				t.Errorf("Status() unexpected error during api creation: %v", err)
+			}
+
+			if tt.draining {
+				api.Stop()
+			}
+			got, err := api.Status(context.Background(), nil)
+			if err != nil {
+				t.Errorf("Status() unexpected error = %v", err)
+			}
+			if got.Healthy != tt.wantHealth {
+				t.Errorf("Status() healthy = %v, wantHealth %v", got.Healthy, tt.wantHealth)
+			}
+		})
+	}
+}
+
+func TestAPIRegisterHandler(t *testing.T) {
+	tests := []struct {
+		name              string
+		handler           CaptureHandler
+		wantRegistered    bool
+		wantedHandlerName string
+	}{
+		{
+			name:              "Register bosh handler and check the handler with correct name",
+			handler:           &BoshHandler{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
+			wantRegistered:    true,
+			wantedHandlerName: "bosh",
+		},
+		{
+			name:              "Register cf handler and check the handler with correct name",
+			handler:           &CloudfoundryHandler{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
+			wantRegistered:    true,
+			wantedHandlerName: "cf",
+		},
+		{
+			name:              "Register bosh handler and check the handler with invalid name",
+			handler:           &BoshHandler{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
+			wantRegistered:    false,
+			wantedHandlerName: "cf",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
+			if err != nil {
+				t.Errorf("RegisterHandler() unexpected error during api creation: %v", err)
+			}
+
+			api.RegisterHandler(tt.handler)
+			registered := api.handlerRegistered(tt.wantedHandlerName)
+			if registered != tt.wantRegistered {
+				t.Errorf("RegisterHandler() expected registered %v but got: %v", tt.wantRegistered, registered)
+			}
+		})
+	}
+}
+
+func TestAPICapture(t *testing.T) {
+	tests := []struct {
+		name           string
+		stream         mockRequestReceiver
+		apiRunning     bool
+		wantErr        bool
+		wantStatusCode codes.Code
+	}{
+		{
+			name:           "API is draining",
+			stream:         mockRequestReceiver{nil, nil, nil, context.Background()},
+			apiRunning:     false,
+			wantErr:        true,
+			wantStatusCode: codes.Unavailable,
+		},
+		{
+			name:           "Receiving of incoming request finished with error",
+			stream:         mockRequestReceiver{nil, errNilField, nil, context.Background()},
+			apiRunning:     true,
+			wantErr:        true,
+			wantStatusCode: codes.Unknown,
+		},
+		{
+			name:           "Incoming Request is invalid",
+			stream:         mockRequestReceiver{makeStopRequest(), nil, nil, context.Background()},
+			apiRunning:     true,
+			wantErr:        true,
+			wantStatusCode: codes.InvalidArgument,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
+			if err != nil {
+				t.Errorf("Capture() unexpected error during api creation: %v", err)
+			}
+			if !tt.apiRunning {
+				api.Stop()
+				time.Sleep(1 * time.Second)
+			}
+
+			err = api.Capture(&tt.stream)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Capture() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			code := status.Code(err)
+			if tt.wantErr && code != tt.wantStatusCode {
+				t.Errorf("Capture() statusCode = %v, wantStatusCode = %v", code, tt.wantStatusCode)
 			}
 		})
 	}

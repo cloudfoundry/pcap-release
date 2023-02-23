@@ -20,8 +20,7 @@ type Agent struct {
 	// streamsWG tracks any running streams.
 	// TODO: expose as metric?
 	streamsWG sync.WaitGroup
-	// log carries the logger all session loggers are derived from.
-	bufConf BufferConf
+	bufConf   BufferConf
 	// ID of the instance or app where the agent is co-located.
 	id string
 
@@ -251,64 +250,6 @@ func readPackets(ctx context.Context, cancel CancelCauseFunc, handle pcapHandle,
 // responseSender is an interface used by forwardToStream to simplify testing.
 type responseSender interface {
 	Send(*CaptureResponse) error
-}
-
-// forwardToStream reads Packets from src until it's closed and writes them to stream.
-// If it encounters an error while doing so the error is set to cause and the cancel function
-// is called. Any data left in src is discarded after a write-error occurred.
-func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, bufConf BufferConf, wg *sync.WaitGroup, id string) {
-	go func() {
-		// After this function returns we want to make sure that this channel is
-		// drained properly if there is anything left in it. This avoids responses
-		// left after the connection to the client broke and no more responses are
-		// read from the channel.
-		defer purge(src)
-		defer wg.Done()
-
-		discarding := false
-		for res := range src {
-			// we never discard messages, only data
-			_, isMsg := res.Payload.(*CaptureResponse_Message)
-
-			// example (values are probably a bad choice):
-			// buffer size: 10
-			// lower limit: 2
-			// upper limit: 8
-			// len(src)      => fill level of buffer
-			// discarding    => are we currently discarding packet responses?
-			// messages sent => how many messages have been sent up until now
-			// len(src) | discarding | messages sent
-			// 2        | false      | 0
-			// 1        | false      | 1
-			// 7        | false      | 2
-			// 6        | false      | 3
-			// 9        | true       | 4 // last packet was DISCARDING_MESSAGES
-			// 8        | true       | 4
-			// 7        | true       | 4
-			// ...
-			// 3        | true       | 4
-			// 2        | false      | 5
-			// 1        | false      | 6
-
-			switch {
-			case len(src) <= bufConf.LowerLimit: // if buffer size is zero this case will always match
-				discarding = false
-			case discarding && !isMsg:
-				continue
-			case len(src) >= bufConf.UpperLimit && !isMsg:
-				discarding = true
-				// this only is sent when we start discarding (and discards the current data packet)
-				res = newMessageResponse(MessageType_CONGESTED, "too much back pressure, discarding packets", id)
-			}
-
-			err := stream.Send(res)
-			if err != nil {
-				cancel(errorf(codes.Unknown, "send response: %w", err))
-				return
-			}
-		}
-		cancel(errorf(codes.Aborted, "no data is left to forward"))
-	}()
 }
 
 // agentRequestReceiver is an interface used by agentStopCmd to simplify testing.

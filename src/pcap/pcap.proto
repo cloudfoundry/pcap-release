@@ -88,7 +88,7 @@ service API {
 
 message CaptureRequest {
   oneof operation {
-    StartCapture start  = 1;
+    StartCapture start = 1;
     StopCapture stop = 2;
   }
 }

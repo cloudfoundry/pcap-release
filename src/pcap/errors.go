@@ -8,6 +8,21 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var (
+	errTestEnded         = fmt.Errorf("test ended")
+	errContextCancelled  = fmt.Errorf("context error")
+	errDiscardedMsg      = fmt.Errorf("discarding packets")
+	errValidationFailed  = fmt.Errorf("validation failed")
+	errNilField          = fmt.Errorf("field is nil: %w", errValidationFailed)
+	errEmptyField        = fmt.Errorf("field is empty: %w", errValidationFailed)
+	errInvalidPayload    = fmt.Errorf("invalid payload: %w", errValidationFailed)
+	errIllegalCharacter  = fmt.Errorf("illegal character: %w", errValidationFailed)
+	errNoVcapID          = fmt.Errorf("no vcap-id")
+	errTooManyCaptures   = fmt.Errorf("too many concurrent captures")
+	errDraining          = fmt.Errorf("draining")
+	errUnexpectedMessage = fmt.Errorf("unexpected message")
+)
+
 // pcapError is an attempt to work around the shortcomings of error handling in the gRPC
 // library. It's gRPC status compatible and supports unwrapping (if an error has been
 // wrapped).

@@ -7,7 +7,7 @@ import (
 )
 
 type CloudfoundryHandler struct {
-	config ManualEndpoints
+	Config ManualEndpoints
 }
 
 func (cf *CloudfoundryHandler) name() string {
@@ -24,7 +24,7 @@ func (cf *CloudfoundryHandler) handle(request *Capture, log *zap.Logger) ([]Agen
 
 	// TODO Validate & get targets from bosh
 
-	_ = cf.config.Targets
+	_ = cf.Config.Targets
 
 	_ = request
 	// TODO: Add the static IP addresses here, if needed

@@ -4,15 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest/observer"
-	"google.golang.org/grpc/metadata"
+	"io"
 	"math/rand"
 	"net"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/go-playground/validator/v10"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestCaptureOptionsValidate(t *testing.T) {
@@ -326,7 +329,7 @@ func TestSetVcapId(t *testing.T) {
 	tests := []struct {
 		name           string
 		md             metadata.MD
-		externalVcapId string
+		externalVcapID string
 		vcapID         string
 	}{
 		{
@@ -340,12 +343,12 @@ func TestSetVcapId(t *testing.T) {
 		},
 		{
 			name:   "Metadata with vcap request id",
-			md:     metadata.MD{HeaderVcapID: []string{"123"}},
+			md:     metadata.MD{HeaderVcapID.String(): []string{"123"}},
 			vcapID: "123",
 		},
 		{
 			name:           "Metadata with vcap request id",
-			externalVcapId: "external123",
+			externalVcapID: "external123",
 			vcapID:         "external123",
 		},
 	}
@@ -356,16 +359,21 @@ func TestSetVcapId(t *testing.T) {
 			observedZapCore, observedLogs := observer.New(zap.InfoLevel)
 			log := zap.New(observedZapCore)
 
-			ctx, log = setVcapID(ctx, log, &tt.externalVcapId)
+			externalVcapID := &tt.externalVcapID
+			if tt.externalVcapID == "" {
+				externalVcapID = nil
+			}
+			ctx, log = setVcapID(ctx, log, externalVcapID)
 
-			got, ok := metadata.FromOutgoingContext(ctx)
-			if !ok {
-				t.Fatal("missing outgoing context")
+			got := ctx.Value(HeaderVcapID)
+			if got == nil {
+				t.Fatal("missing vcapID")
 			}
 
-			vcapID, _ := getVcapFromMD(got)
-			if vcapID != nil && tt.vcapID != "" && *vcapID != tt.vcapID {
-				t.Errorf("expected %s but got %s", tt.vcapID, *vcapID)
+			vcapID := fmt.Sprint(got)
+
+			if vcapID != "" && tt.vcapID != "" && vcapID != tt.vcapID {
+				t.Errorf("expected %s but got %s", tt.vcapID, vcapID)
 			}
 
 			// ensure that at least one log has been observed
@@ -388,42 +396,156 @@ func TestSetVcapId(t *testing.T) {
 	}
 }
 
-func Test_vcapIDFromOutgoingCtx(t *testing.T) {
+type mockPacketSender struct {
+	err                  error
+	resCounter           int
+	sentRes              int
+	stopAfterErrorOccurs bool
+}
+
+func (m *mockPacketSender) Send(res *CaptureResponse) error {
+	message, isMsg := res.Payload.(*CaptureResponse_Message)
+	m.resCounter++
+
+	if m.stopAfterErrorOccurs && isMsg && message.Message.Type == MessageType_CONGESTED {
+		return fmt.Errorf("%w", errDiscardedMsg)
+	}
+
+	if !m.stopAfterErrorOccurs && m.sentRes == m.resCounter {
+		return errTestEnded
+	}
+
+	return m.err
+}
+
+func TestForwardToStream(t *testing.T) {
 	tests := []struct {
-		name    string
-		md      metadata.MD
-		want    string
-		wantErr error
+		name        string
+		resToBeSent int
+		stream      responseSender
+		response    *CaptureResponse
+		expectedErr error
 	}{
 		{
-			name:    "no metadata",
-			md:      nil,
-			wantErr: errNoMetadata,
+			name:        "error during sending of packets",
+			stream:      &mockPacketSender{err: io.EOF, stopAfterErrorOccurs: true},
+			resToBeSent: 2,
+			response:    newPacketResponse([]byte("ABC")),
+			expectedErr: io.EOF,
 		},
 		{
-			name:    "metadata without vcap-id",
-			md:      metadata.MD{},
-			wantErr: errNoVcapID,
+			name:        "buffer is filled with PacketResponse, one packet discarded",
+			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
+			resToBeSent: bufUpperLimit + 2,
+			response:    newPacketResponse([]byte("ABC")),
+			expectedErr: errTestEnded,
 		},
 		{
-			name: "metadata with vcap-id",
-			md:   metadata.MD{HeaderVcapID: []string{"123"}},
-			want: "123",
+			name:        "buffer is filled with MessageResponse, no packets discarded",
+			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
+			resToBeSent: bufUpperLimit + 1,
+			response:    newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, "invalid id", agentOrigin),
+			expectedErr: errTestEnded,
+		},
+		{
+			name:        "buffer is filled with PacketResponse, discarding packets",
+			stream:      &mockPacketSender{err: nil, stopAfterErrorOccurs: true},
+			resToBeSent: bufUpperLimit + 1,
+			response:    newPacketResponse([]byte("ABC")),
+			expectedErr: errDiscardedMsg,
+		},
+		{
+			name:        "happy path",
+			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit - 1},
+			resToBeSent: bufUpperLimit - 1,
+			response:    newPacketResponse([]byte("ABC")),
+			expectedErr: errTestEnded,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			ctx, cancel := WithCancelCause(ctx)
+			src := make(chan *CaptureResponse, bufSize)
+			defer close(src)
+			go func() {
+				for i := 0; i < test.resToBeSent; i++ {
+					src <- test.response
+				}
+			}()
+
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+
+			forwardToStream(cancel, src, test.stream, BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, wg, agentOrigin)
+
+			<-ctx.Done()
+
+			err := Cause(ctx)
+			if err == nil {
+				t.Errorf("Expected error to finish test")
+			}
+			if !errors.Is(err, test.expectedErr) {
+				t.Errorf("forwardToStream() expectedErr = %v, error = %v", test.expectedErr, err)
+			}
+		})
+	}
+}
+
+func TestConvertStatusCodeToMsg(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		wantMsgType MessageType
+	}{
+		{
+			name:        "Invalid argument error",
+			err:         errorf(codes.InvalidArgument, "read message: %w", fmt.Errorf("invalid argument")),
+			wantMsgType: MessageType_INVALID_REQUEST,
+		},
+		{
+			name:        "Agent unavailable error",
+			err:         errorf(codes.Unavailable, "read message: %w", fmt.Errorf("unavailable")),
+			wantMsgType: MessageType_INSTANCE_UNAVAILABLE,
+		},
+		{
+			name:        "Agent internal error",
+			err:         errorf(codes.Internal, "read message: %w", fmt.Errorf("internal error")),
+			wantMsgType: MessageType_CONNECTION_ERROR,
+		},
+		{
+			name:        "Agent failed precondition error",
+			err:         errorf(codes.FailedPrecondition, "read message: %w", fmt.Errorf("failed precondition")),
+			wantMsgType: MessageType_START_CAPTURE_FAILED,
+		},
+		{
+			name:        "Agent aborted error",
+			err:         errorf(codes.Aborted, "read message: %w", fmt.Errorf("aborted")),
+			wantMsgType: MessageType_INSTANCE_UNAVAILABLE,
+		},
+		{
+			name:        "Agent limit reached error",
+			err:         errorf(codes.ResourceExhausted, "read message: %w", fmt.Errorf("limit reached")),
+			wantMsgType: MessageType_LIMIT_REACHED,
+		},
+		{
+			name:        "Agent Unknown or internal error",
+			err:         errorf(codes.Unknown, "read message: %w", fmt.Errorf("unknown")),
+			wantMsgType: MessageType_CONNECTION_ERROR,
+		},
+		{
+			name:        "Any other error",
+			err:         errorf(codes.NotFound, "read message: %w", fmt.Errorf("unknown")),
+			wantMsgType: MessageType_UNKNOWN,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			if tt.md != nil {
-				ctx = metadata.NewOutgoingContext(ctx, tt.md)
-			}
-			got, err := vcapIDFromOutgoingCtx(ctx)
-			if err != nil && !errors.Is(err, tt.wantErr) {
-				t.Errorf("vcapIDFromOutgoingCtx() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != nil && tt.want != "" && *got != tt.want {
-				t.Errorf("vcapIDFromOutgoingCtx() got = %v, want %v", got, tt.want)
+			got := convertStatusCodeToMsg(tt.err, agentIdentifier)
+			if got.GetMessage().GetType() != tt.wantMsgType {
+				t.Errorf("convertStatusCodeToMsg() = %v, want %v", got.GetMessage().GetType(), tt.wantMsgType)
+
+				t.Logf("message: %v", got.GetMessage().Message)
 			}
 		})
 	}

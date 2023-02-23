@@ -135,32 +135,18 @@ var _ = Describe("IntegrationTests", func() {
 
 			})
 			It("many concurrent captures from the same client", func() {
-				request := boshRequest(&pcap.BoshCapture{
-					Token:      "123",
-					Deployment: "cf",
-					Groups:     []string{"router"},
-				}, defaultOptions)
-
-				ctx := context.Background()
 				streams := make([]pcap.API_CaptureClient, 2)
 				for i := 0; i < 2; i++ {
-					requestVcapID := uuid.Must(uuid.NewRandom()).String()
-					ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{requestVcapID}})
+					stream, err := createStreamAndStartCapture(defaultOptions)
 
-					stream, _ := apiClient.Capture(ctx)
-					streams[i] = stream
-
-					err := stream.Send(request)
 					Expect(err).NotTo(HaveOccurred(), "Sending the request")
+					streams[i] = stream
 
 					expectReceivingFirstMessages(stream)
 				}
 
-				requestVcapID := uuid.Must(uuid.NewRandom()).String()
-				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{requestVcapID}})
+				streamLimitReached, err := createStreamAndStartCapture(defaultOptions)
 
-				streamLimitReached, _ := apiClient.Capture(ctx)
-				err := streamLimitReached.Send(request)
 				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 				errCode, _, err := recvCapture(1, streamLimitReached)
 
@@ -177,8 +163,10 @@ var _ = Describe("IntegrationTests", func() {
 				}
 			})
 			It("finished with errors due to invalid start capture request", func() {
+				var md = metadata.MD{pcap.HeaderVcapID.String(): []string{"requestVcapID"}}
+
 				ctx := context.Background()
-				ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
+				ctx = metadata.NewOutgoingContext(ctx, md)
 
 				stream, err := apiClient.Capture(ctx)
 
@@ -511,8 +499,12 @@ func expectReceivingFirstMessages(stream pcap.API_CaptureClient) {
 }
 
 func createStreamAndStartCapture(defaultOptions *pcap.CaptureOptions) (pcap.API_CaptureClient, error) {
+	requestVcapID := uuid.Must(uuid.NewRandom()).String()
+
+	var md = metadata.MD{pcap.HeaderVcapID.String(): []string{requestVcapID}}
+
 	ctx := context.Background()
-	ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123abc"}})
+	ctx = metadata.NewOutgoingContext(ctx, md)
 	stream, _ := apiClient.Capture(ctx)
 	request := boshRequest(&pcap.BoshCapture{
 		Token:      "123",
@@ -684,10 +676,10 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 
 func createAPI(port int, targets []pcap.AgentEndpoint, bufconf pcap.BufferConf, mTLSConfig pcap.AgentMTLS, id string, maxConcurrentCaptures int) (pcap.APIClient, *grpc.Server, *pcap.API) {
 	var server *grpc.Server
-	api := pcap.NewAPI(bufconf, mTLSConfig, id, maxConcurrentCaptures)
+	api, err := pcap.NewAPI(bufconf, mTLSConfig, id, maxConcurrentCaptures)
+	Expect(err).NotTo(HaveOccurred())
 	api.RegisterHandler(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
-	var err error
 	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
 	Expect(err).NotTo(HaveOccurred())
 

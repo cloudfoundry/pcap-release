@@ -9,11 +9,14 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pcap.proto
@@ -27,22 +30,21 @@ const (
 
 	// LogKeyVcapID sets on which field the vcap request id will be logged.
 	LogKeyVcapID        = "vcap-id"
-	HeaderVcapID        = "x-vcap-request-id"
+	HeaderVcapID        = contextKeyVcapID("x-vcap-request-id")
 	maxDeviceNameLength = 16
 	maxFilterLength     = 5000
 )
 
-var (
-	errValidationFailed = fmt.Errorf("validation failed")
-	errNilField         = fmt.Errorf("field is nil: %w", errValidationFailed)
-	errEmptyField       = fmt.Errorf("field is empty: %w", errValidationFailed)
-	errInvalidPayload   = fmt.Errorf("invalid payload: %w", errValidationFailed)
-	errIllegalCharacter = fmt.Errorf("illegal character: %w", errValidationFailed)
-	errNoMetadata       = fmt.Errorf("no metadata")
-	errNoVcapID         = fmt.Errorf("no vcap-id")
-	errTooManyCaptures  = fmt.Errorf("too many concurrent captures")
-	errDraining         = fmt.Errorf("draining")
-)
+type contextKeyVcapID string
+
+func (c contextKeyVcapID) String() string {
+	return string(c)
+}
+
+type Stoppable interface {
+	Stop()
+	Wait()
+}
 
 // purge reads all messages from the given channel and discards them. The
 // discarded messages are logged on the trace level.
@@ -139,9 +141,6 @@ func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (co
 	vcapID, err := vcapIDFromIncomingCtx(ctx)
 
 	if err != nil {
-		if errors.Is(err, errNoMetadata) {
-			ctx = metadata.NewOutgoingContext(ctx, metadata.MD{})
-		}
 		if externalVcapID != nil {
 			vcapID = externalVcapID
 		} else {
@@ -150,14 +149,10 @@ func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (co
 			vcapID = &newVcapID
 		}
 	}
-	// outgoing context is current context
-	ctx = metadata.AppendToOutgoingContext(ctx, HeaderVcapID, *vcapID)
+	ctx = context.WithValue(ctx, HeaderVcapID, *vcapID)
 
 	log = log.With(zap.String(LogKeyVcapID, *vcapID))
 
-	if errors.Is(err, errNoMetadata) {
-		log.Warn("request does not contain metadata, generated new vcap request id")
-	}
 	if errors.Is(err, errNoVcapID) {
 		log.Warn("request does not contain request id, generating one")
 	}
@@ -165,28 +160,8 @@ func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (co
 	return ctx, log
 }
 
-// vcapIDFromOutgoingCtx finds the vcap-id from the context metadata, always set by pcap
-//
-// returns errNoMetadata if no metadata was found
-// returns errNoVcapID if no vcap-id was found in the metadata.
-func vcapIDFromOutgoingCtx(ctx context.Context) (*string, error) {
-	var vcap *string
-	var err error
-	if md, ok := metadata.FromOutgoingContext(ctx); ok {
-		vcap, err = getVcapFromMD(md)
-		if err == nil {
-			return vcap, nil
-		} else {
-			return nil, err
-		}
-	}
-
-	return nil, errNoMetadata
-}
-
 // vcapIDFromIncomingCtx finds the vcap-id from the context metadata, if available.
 //
-// returns errNoMetadata if no metadata was found
 // returns errNoVcapID if no vcap-id was found in the metadata.
 func vcapIDFromIncomingCtx(ctx context.Context) (*string, error) {
 	var vcap *string
@@ -195,15 +170,13 @@ func vcapIDFromIncomingCtx(ctx context.Context) (*string, error) {
 		vcap, err = getVcapFromMD(md)
 		if err == nil {
 			return vcap, nil
-		} else {
-			return nil, err
 		}
 	}
-	return nil, errNoMetadata
+	return nil, errNoVcapID
 }
 
 func getVcapFromMD(md metadata.MD) (*string, error) {
-	vcapReqIDs := md.Get(HeaderVcapID)
+	vcapReqIDs := md.Get(HeaderVcapID.String())
 
 	if len(vcapReqIDs) > 0 {
 		vcapID := vcapReqIDs[0]
@@ -265,15 +238,16 @@ func generateAPIFilter() (string, error) {
 		// * it is not a loopback address
 		// * can be represented in either 4- or 16-bytes representation
 		if ok && !ipNet.IP.IsLoopback() {
-			v4 := ipNet.IP.To4() != nil
-			v6 := !v4 && ipNet.IP.To16() != nil
-
-			expression := "ip"
-			if !v4 && !v6 {
-				return "", fmt.Errorf("address %s is not IPv4 or v6", ipNet.IP.String())
-			}
-			if v6 {
+			// Check whether the IP is v4 or v6. If both evaluate to true
+			// v4 takes precedence.
+			var expression string
+			switch {
+			case ipNet.IP.To4() != nil:
+				expression = "ip"
+			case ipNet.IP.To16() != nil:
 				expression = "ip6"
+			default:
+				return "", fmt.Errorf("address %s is not IPv4 or v6", ipNet.IP.String())
 			}
 
 			ipFilters = append(ipFilters, fmt.Sprintf("%s host %s", expression, ipNet.IP.String()))
@@ -285,4 +259,91 @@ func generateAPIFilter() (string, error) {
 // makeStopRequest creates the generic stop CaptureRequest that can be sent to api and agent.
 func makeStopRequest() *CaptureRequest {
 	return &CaptureRequest{Operation: &CaptureRequest_Stop{Stop: &StopCapture{}}}
+}
+
+// forwardToStream reads Packets from src until it's closed and writes them to stream.
+// If it encounters an error while doing so the error is set to cause and the cancel function
+// is called. Any data left in src is discarded after a write-error occurred.
+func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, bufConf BufferConf, wg *sync.WaitGroup, id string) {
+	go func() {
+		// After this function returns we want to make sure that this channel is
+		// drained properly if there is anything left in it. This avoids responses
+		// left after the connection to the client broke and no more responses are
+		// read from the channel.
+		defer purge(src)
+		defer wg.Done()
+
+		discarding := false
+		for res := range src {
+			// we never discard messages, only data
+			_, isMsg := res.Payload.(*CaptureResponse_Message)
+
+			// example (values are probably a bad choice):
+			// buffer size: 10
+			// lower limit: 2
+			// upper limit: 8
+			// len(src)      => fill level of buffer
+			// discarding    => are we currently discarding packet responses?
+			// messages sent => how many messages have been sent up until now
+			// len(src) | discarding | messages sent
+			// 2        | false      | 0
+			// 1        | false      | 1
+			// 7        | false      | 2
+			// 6        | false      | 3
+			// 9        | true       | 4 // last packet was DISCARDING_MESSAGES
+			// 8        | true       | 4
+			// 7        | true       | 4
+			// ...
+			// 3        | true       | 4
+			// 2        | false      | 5
+			// 1        | false      | 6
+
+			switch {
+			case len(src) <= bufConf.LowerLimit: // if buffer size is zero this case will always match
+				discarding = false
+			case discarding && !isMsg:
+				continue
+			case len(src) >= bufConf.UpperLimit && !isMsg:
+				discarding = true
+				// this only is sent when we start discarding (and discards the current data packet)
+				res = newMessageResponse(MessageType_CONGESTED, "too much back pressure, discarding packets", id)
+			}
+
+			err := stream.Send(res)
+			if err != nil {
+				cancel(errorf(codes.Unknown, "send response: %w", err))
+				return
+			}
+		}
+		cancel(errorf(codes.Aborted, "no data is left to forward"))
+	}()
+}
+
+func convertStatusCodeToMsg(err error, targetIdentifier string) *CaptureResponse {
+	code := status.Code(err)
+	if code == codes.Unknown {
+		unwrappedError := errors.Unwrap(err)
+		if unwrappedError != nil {
+			code = status.Code(unwrappedError)
+		}
+	}
+	err = fmt.Errorf("capturing from agent %s: %w", targetIdentifier, err)
+
+	//FIXME: internal+unknown are the same.
+	switch code { //nolint:exhaustive // we do not need to cover all the codes here
+	case codes.InvalidArgument:
+		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error(), targetIdentifier)
+	case codes.Aborted:
+		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), targetIdentifier)
+	case codes.Internal, codes.Unknown:
+		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error(), targetIdentifier)
+	case codes.FailedPrecondition:
+		return newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error(), targetIdentifier)
+	case codes.ResourceExhausted:
+		return newMessageResponse(MessageType_LIMIT_REACHED, err.Error(), targetIdentifier)
+	case codes.Unavailable:
+		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), targetIdentifier)
+	default:
+		return newMessageResponse(MessageType_UNKNOWN, err.Error(), targetIdentifier)
+	}
 }
