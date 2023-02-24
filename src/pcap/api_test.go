@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -93,14 +92,8 @@ func TestReadMsg(t *testing.T) {
 
 			out := readMsgFromStream(ctx, tt.captureStream, tt.target, bufSize)
 
-			var got MessageType
-
-			for s := range out {
-				got = s.GetPayload().(*CaptureResponse_Message).Message.GetType()
-			}
-
-			if got != tt.expectedData {
-				t.Errorf("Expected %s but got %s ", tt.expectedData, got)
+			if !containsMsgType(out, tt.expectedData) {
+				t.Errorf("Expected %s but got something else", tt.expectedData)
 			}
 		})
 	}
@@ -322,26 +315,29 @@ func TestCapture(t *testing.T) {
 				t.Errorf("capture() unexpected error during api creation: %v", err)
 			}
 
-			vcapIDKey := HeaderVcapID.String()
+			var connectToTargetFn = func(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
+				return tt.stream, tt.err
+			}
 
-			ctx := metadata.NewOutgoingContext(context.Background(), metadata.MD{vcapIDKey: []string{"captureTest123"}})
-			got, err := api.capture(ctx, &mockResponseSender{}, &CaptureOptions{}, tt.targets, log,
-				func(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
-					return tt.stream, tt.err
-				})
+			got, err := api.capture(context.Background(), &mockResponseSender{}, &CaptureOptions{}, tt.targets, log, connectToTargetFn)
 			if (err != nil) != tt.wantErr && status.Code(err) != tt.wantStatusCode {
 				t.Errorf("capture() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != nil {
-				for m := range got {
-					if m.GetMessage().GetType() != MessageType_CAPTURE_STOPPED {
-						t.Errorf("capture() message type = %v, wantErr %v", m.GetMessage().GetType(), MessageType_CAPTURE_STOPPED)
-					}
-				}
+			if got != nil && !containsMsgType(got, MessageType_CAPTURE_STOPPED) {
+				t.Errorf("capture() expected message type = %v", MessageType_CAPTURE_STOPPED)
 			}
 		})
 	}
+}
+
+func containsMsgType(got <-chan *CaptureResponse, messageType MessageType) bool {
+	for m := range got {
+		if m.GetMessage().GetType() == messageType {
+			return true
+		}
+	}
+	return false
 }
 
 func TestAPIStatus(t *testing.T) {

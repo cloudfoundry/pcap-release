@@ -168,7 +168,11 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	defer api.concurrentStreams.Add(-1)
 
 	if currentStreams > int32(api.maxConcurrentCaptures) {
-		vcapID := ctx.Value(HeaderVcapID).(string)
+		vcapID, ok := ctx.Value(HeaderVcapID).(string)
+		if !ok {
+			return errorf(codes.ResourceExhausted, "failed starting capture: %w", errTooManyCaptures)
+		}
+
 		return errorf(codes.ResourceExhausted, "failed starting capture with vcap-id %s: %w", vcapID, errTooManyCaptures)
 	}
 
@@ -386,23 +390,11 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 	stopped := false
 	go func() {
 		defer close(out)
-		defer func(captureStream captureReceiver) {
-			closeSendErr := captureStream.CloseSend()
-			if closeSendErr != nil {
-				out <- convertStatusCodeToMsg(closeSendErr, target.Identifier)
-				return
-			}
-		}(captureStream)
+		defer closeCaptureStream(out, target, captureStream)
 		for {
 			if ctx.Err() != nil && !stopped {
 				stopped = true
-				err := captureStream.Send(&AgentRequest{
-					Payload: &AgentRequest_Stop{},
-				})
-				if err != nil {
-					out <- convertStatusCodeToMsg(err, target.Identifier)
-					return
-				}
+				stopAgentCapture(captureStream, out, target)
 			}
 			msg, err := captureStream.Recv()
 			if err != nil && errors.Is(err, io.EOF) {
@@ -424,6 +416,23 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 		}
 	}()
 	return out
+}
+
+func closeCaptureStream(out chan *CaptureResponse, target AgentEndpoint, captureStream captureReceiver) {
+	closeSendErr := captureStream.CloseSend()
+	if closeSendErr != nil {
+		out <- convertStatusCodeToMsg(closeSendErr, target.Identifier)
+		return
+	}
+}
+
+func stopAgentCapture(captureStream captureReceiver, out chan *CaptureResponse, target AgentEndpoint) {
+	err := captureStream.Send(&AgentRequest{
+		Payload: &AgentRequest_Stop{},
+	})
+	if err != nil {
+		out <- convertStatusCodeToMsg(err, target.Identifier)
+	}
 }
 
 // requestReceiver is an interface used by boshStopCmd to simplify testing.

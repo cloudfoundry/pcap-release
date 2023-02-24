@@ -274,8 +274,8 @@ func agentStopCmd(cancel CancelCauseFunc, stream agentRequestReceiver) {
 		}
 
 		// request is empty, no need to save it
-		stop := msg.GetStop()
-		if stop == nil {
+		_, ok := msg.Payload.(*AgentRequest_Stop)
+		if !ok {
 			cancel(errorf(codes.InvalidArgument, "read payload: expected Payload of type StopAgentCapture: %w", errInvalidPayload))
 			return
 		}

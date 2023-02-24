@@ -347,7 +347,7 @@ func TestSetVcapId(t *testing.T) {
 			vcapID: "123",
 		},
 		{
-			name:           "Metadata with vcap request id",
+			name:           "Metadata with external vcap request id",
 			externalVcapID: "external123",
 			vcapID:         "external123",
 		},
@@ -364,6 +364,8 @@ func TestSetVcapId(t *testing.T) {
 				externalVcapID = nil
 			}
 			ctx, log = setVcapID(ctx, log, externalVcapID)
+			// ensure that at least one log has been observed
+			log.Info("test")
 
 			got := ctx.Value(HeaderVcapID)
 			if got == nil {
@@ -376,24 +378,27 @@ func TestSetVcapId(t *testing.T) {
 				t.Errorf("expected %s but got %s", tt.vcapID, vcapID)
 			}
 
-			// ensure that at least one log has been observed
-			log.Info("test")
-
-			if observedLogs == nil || observedLogs.Len() == 0 {
-				t.Fatal("No logs are written")
-			}
-
-			entry := observedLogs.All()[observedLogs.Len()-1]
-
-			for _, logField := range entry.Context {
-				if logField.Key == LogKeyVcapID && (tt.vcapID == "" || logField.String == tt.vcapID) {
-					return
-				}
-			}
-
-			t.Errorf("missing field %s or field has wrong value", LogKeyVcapID)
+			checkLogsContainExpectedField(t, observedLogs, tt.vcapID, LogKeyVcapID)
 		})
 	}
+}
+
+func checkLogsContainExpectedField(t *testing.T, observedLogs *observer.ObservedLogs, vcapID string, expectedLogField string) {
+	t.Helper()
+
+	if observedLogs == nil || observedLogs.Len() == 0 {
+		t.Fatal("No logs are written")
+	}
+
+	entry := observedLogs.All()[observedLogs.Len()-1]
+
+	for _, logField := range entry.Context {
+		if logField.Key == expectedLogField && (vcapID == "" || logField.String == vcapID) {
+			return
+		}
+	}
+
+	t.Errorf("missing field %s or field has wrong value", expectedLogField)
 }
 
 type mockPacketSender struct {
@@ -529,9 +534,9 @@ func TestConvertStatusCodeToMsg(t *testing.T) {
 			wantMsgType: MessageType_LIMIT_REACHED,
 		},
 		{
-			name:        "Agent Unknown or internal error",
+			name:        "Agent unknown error",
 			err:         errorf(codes.Unknown, "read message: %w", fmt.Errorf("unknown")),
-			wantMsgType: MessageType_CONNECTION_ERROR,
+			wantMsgType: MessageType_UNKNOWN,
 		},
 		{
 			name:        "Any other error",

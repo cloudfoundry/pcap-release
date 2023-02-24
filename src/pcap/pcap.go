@@ -140,7 +140,6 @@ func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (co
 	vcapID, err := vcapIDFromIncomingCtx(ctx)
 
 	if err != nil {
-
 		if errors.Is(err, errNoVcapID) {
 			log.Warn("request does not contain request id, generating one")
 		}
@@ -329,14 +328,15 @@ func convertStatusCodeToMsg(err error, targetIdentifier string) *CaptureResponse
 	}
 	err = fmt.Errorf("capturing from agent %s: %w", targetIdentifier, err)
 
-	//FIXME: internal+unknown are the same.
 	switch code { //nolint:exhaustive // we do not need to cover all the codes here
 	case codes.InvalidArgument:
 		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error(), targetIdentifier)
 	case codes.Aborted:
 		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), targetIdentifier)
-	case codes.Internal, codes.Unknown:
+	case codes.Internal:
 		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error(), targetIdentifier)
+	case codes.Unknown:
+		return newMessageResponse(MessageType_UNKNOWN, err.Error(), targetIdentifier)
 	case codes.FailedPrecondition:
 		return newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error(), targetIdentifier)
 	case codes.ResourceExhausted:
