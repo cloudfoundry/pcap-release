@@ -2,16 +2,10 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 	"io"
 	"net/http"
 	"net/url"
@@ -139,7 +133,6 @@ type options struct {
 	InstanceIds     []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"`
 }
 
-// -o test.pcap -u localhost:8080 -d haproxy -g ha_proxy_z1
 func init() {
 	var err error
 	defer func() {
@@ -208,32 +201,14 @@ func main() {
 		return
 	}
 
-	cc, err := grpc.Dial(opts.PcapAPIURL, grpc.WithTransportCredentials(insecure.NewCredentials())) // fixme: credentials
-	if err != nil {
-		panic(err.Error())
-	}
-
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-
-	api := pcap.NewAPIClient(cc)
-
-	statusResponse, err := api.Status(ctx, &pcap.StatusRequest{})
-
-	if !statusResponse.GetHealthy() {
-		err = fmt.Errorf("api not up")
-		return
-	}
-	if !statusResponse.GetBosh() {
-		err = fmt.Errorf("api server does not support bosh")
-		return
-	}
-
-	boshQuery := &pcap.BoshQuery{
-		Token:      token.access,
-		Deployment: opts.Deployment,
-		Groups:     opts.InstanceGroups,
+	boshQuery := &pcap.EndpointRequest{
+		Capture: &pcap.Capture_Bosh{
+			Bosh: &pcap.BoshQuery{
+				Token:      token.access,
+				Deployment: opts.Deployment,
+				Groups:     opts.InstanceGroups,
+			},
+		},
 	}
 
 	captureOptions := &pcap.CaptureOptions{
@@ -242,42 +217,9 @@ func main() {
 		SnapLen: 65_000, // fixme
 	}
 
-	stream, err := api.Capture(ctx)
-
-	request := &pcap.CaptureRequest{
-		Operation: &pcap.CaptureRequest_Start{
-			Start: &pcap.StartCapture{
-				Capture: &pcap.EndpointRequest{
-					Capture: &pcap.Capture_Bosh{
-						Bosh: boshQuery,
-					},
-				},
-				Options: captureOptions,
-			},
-		},
-	}
-
-	err = stream.Send(request)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// keep receiving some data long enough to start a manual drain
-	for i := 0; i < 10000; i++ {
-		readN(1000, stream)
-		time.Sleep(200 * time.Millisecond)
-	}
-
-	stop := &pcap.CaptureRequest{
-		Operation: &pcap.CaptureRequest_Stop{},
-	}
-
-	err = stream.Send(stop)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	readN(10_000, stream)
+	client := pcap.NewClient(boshQuery, captureOptions, opts.File, opts.PcapAPIURL)
+	client.Setup()
+	client.HandleRequest()
 
 }
 
@@ -311,30 +253,4 @@ func getToken(config *bosh.Config, boshEnv string) (*boshToken, error) {
 // silentClose ignores errors returned when closing the io.Closer.
 func silentClose(closer io.Closer) {
 	_ = closer.Close()
-}
-
-type genericStreamReceiver interface {
-	Recv() (*pcap.CaptureResponse, error)
-}
-
-func readN(n int, stream genericStreamReceiver) {
-	for i := 0; i < n; i++ {
-		res, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			fmt.Println("clean stop, done")
-			return
-		}
-		code := status.Code(err)
-		if code != codes.OK {
-			fmt.Printf("receive non-OK code: %s: %s\n", code.String(), err.Error())
-			return
-		}
-
-		switch p := res.Payload.(type) {
-		case *pcap.CaptureResponse_Message:
-			fmt.Printf("received message (%d/%d): %s: %s\n", i+1, n, p.Message.Type.String(), p.Message.Message)
-		case *pcap.CaptureResponse_Packet:
-			fmt.Printf("received packet  (%d/%d): %d bytes\n", i+1, n, len(p.Packet.Data))
-		}
-	}
 }
