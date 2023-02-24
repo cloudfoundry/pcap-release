@@ -43,7 +43,6 @@ func InitZapLogger() {
 		},
 		OutputPaths:      []string{"stdout"},
 		ErrorOutputPaths: []string{"stderr"},
-		//InitialFields:    map[string]interface{}{"component": "pcap-agent"}, // TODO: this is probably already done by syslog_shipper?
 	}
 	zap.ReplaceGlobals(zap.Must(zapConfig.Build()))
 

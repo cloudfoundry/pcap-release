@@ -409,13 +409,13 @@ var _ = Describe("IntegrationTests", func() {
 			targets = append(targets, target)
 
 			agentTLSConf := pcap.AgentMTLS{
-				DefaultPort: 9494,
 				MTLS: &pcap.MutualTLS{
 					SkipVerify: false,
 					CommonName: agentServerCertCN,
 					TLS: pcap.TLS{
-						Certificate: clientCertFile,
-						PrivateKey:  clientKeyFile, CertificateAuthority: caPath,
+						Certificate:          clientCertFile,
+						PrivateKey:           clientKeyFile,
+						CertificateAuthority: caPath,
 					},
 				},
 			}

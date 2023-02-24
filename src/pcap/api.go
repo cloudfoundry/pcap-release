@@ -38,11 +38,6 @@ type API struct {
 	UnimplementedAPIServer
 }
 
-// TODO: This type should be removed once we have resolvers for BOSH or CF.
-type ManualEndpoints struct {
-	Targets []AgentEndpoint
-}
-
 func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int) (*API, error) {
 	var err error
 
@@ -177,7 +172,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		return errorf(codes.ResourceExhausted, "failed starting capture with vcap-id %s: %w", vcapID, errTooManyCaptures)
 	}
 
-	log.Info("Started capture stream")
+	log.Info("started capture stream")
 
 	req, err := stream.Recv()
 	if err != nil {
@@ -256,7 +251,6 @@ func (api *API) loadTLSCredentials() (credentials.TransportCredentials, error) {
 
 	// Load client's certificate and private key
 	if api.agents.MTLS.Certificate != "" && api.agents.MTLS.PrivateKey != "" {
-		// TODO certificate contains client CA
 		clientCert, err := tls.LoadX509KeyPair(api.agents.MTLS.Certificate, api.agents.MTLS.PrivateKey)
 		if err != nil {
 			return nil, fmt.Errorf("load API client certificate or private key failed: %w", err)
@@ -273,7 +267,7 @@ func (api *API) loadTLSCredentials() (credentials.TransportCredentials, error) {
 func (api *API) resolveAgentEndpoints(capture *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
 	for name, handler := range api.handlers {
 		if handler.canHandle(capture) {
-			log.Sugar().Debugf("Resolving agent endpoints via handler %s for capture %s", name, capture)
+			log.Debug("resolving agent endpoints")
 
 			agents, err := handler.handle(capture, log)
 			if err != nil {
@@ -438,7 +432,7 @@ type requestReceiver interface {
 }
 
 // stopCmd reads the next message from the stream. It ensures that the message
-// has a payload of StopBoshCapture. If any error is encountered or the payload is
+// has a payload of StopCapture. If any error is encountered or the payload is
 // of a different type an appropriate cause is set and the cancel function is called.
 func stopCmd(cancel CancelCauseFunc, stream requestReceiver) {
 	go func() {
@@ -448,7 +442,7 @@ func stopCmd(cancel CancelCauseFunc, stream requestReceiver) {
 			return
 		}
 
-		if msg.GetOperation() == nil {
+		if msg == nil || msg.Operation == nil {
 			cancel(errorf(codes.InvalidArgument, "read operation: operation was nil: %w", errNilField))
 			return
 		}
@@ -489,8 +483,7 @@ func (api *API) capture(ctx context.Context, stream responseSender, opts *Captur
 			errMsg := convertStatusCodeToMsg(err, target.Identifier)
 			sendErr := stream.Send(errMsg)
 			if sendErr != nil {
-				// FIXME the return interrupts the for-loop over targets and returns in case of send error
-				return nil, sendErr
+				log.Error(fmt.Sprintf("cannot send error to receiver: %s", errMsg.String()))
 			}
 
 			log.Info("capture cannot be started")
@@ -505,7 +498,7 @@ func (api *API) capture(ctx context.Context, stream responseSender, opts *Captur
 	}
 
 	if runningCaptures == 0 {
-		log.Error("Starting of all captures failed during stream preparation")
+		log.Error("starting of all captures failed during stream preparation")
 		return nil, errorf(codes.FailedPrecondition, "Starting of all captures failed")
 	}
 

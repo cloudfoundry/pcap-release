@@ -50,10 +50,7 @@ type Listen struct {
 	TLS  *TLS `yaml:"tls,omitempty"`
 }
 
-// AgentMTLS defines the DefaultPort on which agents woudl listen and the optional mTLS configuration to connect to agents.
-//
-// The DefaultPort can be used by resolvers, when the deployed agent port is always located on the same port.
+// AgentMTLS defines the optional mTLS configuration to connect to agents.
 type AgentMTLS struct {
-	DefaultPort int        `yaml:"port" validate:"gt=0,lte=65535"`
-	MTLS        *MutualTLS `yaml:"mtls,omitempty"`
+	MTLS *MutualTLS `yaml:"mtls,omitempty"`
 }

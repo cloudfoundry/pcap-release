@@ -317,7 +317,7 @@ func TestCapture(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
 			if err != nil {
 				t.Errorf("capture() unexpected error during api creation: %v", err)
 			}
@@ -363,7 +363,7 @@ func TestAPIStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
 			if err != nil {
 				t.Errorf("Status() unexpected error during api creation: %v", err)
 			}
@@ -410,7 +410,7 @@ func TestAPIRegisterHandler(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
 			if err != nil {
 				t.Errorf("RegisterHandler() unexpected error during api creation: %v", err)
 			}
@@ -456,7 +456,7 @@ func TestAPICapture(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{DefaultPort: 9494, MTLS: nil}, origin, 1)
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
 			if err != nil {
 				t.Errorf("Capture() unexpected error during api creation: %v", err)
 			}

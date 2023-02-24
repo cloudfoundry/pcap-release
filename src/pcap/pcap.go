@@ -134,13 +134,17 @@ func validateDevice(name string) (err error) {
 	return nil
 }
 
-// setVcapID expands log to include the vcap-id extracted from ctx, if available and copy vcap-id to
-// outgoing context of metadata.
-// When no vcap-id is defined in ctx, a new random GUID is generated and set in outgoing context of metadata and the logger.
+// setVcapID expands log to include the vcap-id extracted from ctx, if available.
+// When no vcap-id is defined in ctx, a new random GUID is generated and add to context key HeaderVcapID and the logger.
 func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (context.Context, *zap.Logger) {
 	vcapID, err := vcapIDFromIncomingCtx(ctx)
 
 	if err != nil {
+
+		if errors.Is(err, errNoVcapID) {
+			log.Warn("request does not contain request id, generating one")
+		}
+
 		if externalVcapID != nil {
 			vcapID = externalVcapID
 		} else {
@@ -152,10 +156,6 @@ func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (co
 	ctx = context.WithValue(ctx, HeaderVcapID, *vcapID)
 
 	log = log.With(zap.String(LogKeyVcapID, *vcapID))
-
-	if errors.Is(err, errNoVcapID) {
-		log.Warn("request does not contain request id, generating one")
-	}
 
 	return ctx, log
 }

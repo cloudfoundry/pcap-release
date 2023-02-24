@@ -21,7 +21,7 @@ func (bosh *BoshHandler) canHandle(request *Capture) bool {
 
 func (bosh *BoshHandler) handle(request *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
 	log = log.With(zap.String("handler", bosh.name()))
-	log.Info("Handling request")
+	log.Info("handling request")
 
 	err := bosh.validate(request)
 	if err != nil {

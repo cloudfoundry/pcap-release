@@ -23,8 +23,7 @@ var DefaultAPIConfig = APIConfig{
 		ID:       "test-api",
 	},
 	Agents: &pcap.AgentMTLS{
-		DefaultPort: 9494,
-		MTLS:        nil,
+		MTLS: nil,
 	},
 	DrainTimeout:       10 * time.Second,
 	ConcurrentCaptures: 5,
