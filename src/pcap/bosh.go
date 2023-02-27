@@ -20,7 +20,7 @@ func (bosh *BoshHandler) canHandle(request *Capture) bool {
 }
 
 func (bosh *BoshHandler) handle(request *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
-	log = log.With(zap.String("handler", bosh.name()))
+	log = log.With(zap.String("resolver", bosh.name()))
 	log.Info("handling request")
 
 	err := bosh.validate(request)
