@@ -382,9 +382,9 @@ type captureReceiver interface {
 	Context() context.Context
 }
 
-// readMsgFromStream reads Capture messages from stream and outputs them to the out channel.If the given context errors
-// an AgentRequest_Stop is sent and the messages continue to be read.if context will be cancelled from other routine
-// (mostly  because client requests to stop capture), the stop request will be forwarded to agent. The data from the agent will be read till stream ends with EOF.
+// readMsgFromStream reads Capture messages from stream and outputs them to the out channel.
+// If context will be cancelled from other routine (mostly because client requests to stop capture), the stop request will be forwarded to agent.
+// The data from the agent will be read till stream ends with EOF.
 func readMsgFromStream(ctx context.Context, captureStream captureReceiver, target AgentEndpoint, bufSize int) <-chan *CaptureResponse {
 	out := make(chan *CaptureResponse, bufSize)
 	stopped := false

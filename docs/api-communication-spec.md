@@ -308,7 +308,6 @@ The following attributes are part of all capture requests and define the details
 | `application_id` | `string`   | yes       |         | The ID of the target application.                                                                                                                            |
 | `type`           | `string`   | no        | `web`   | An app can have processes of different types, `web` being the default. This allows targeting processes of a specific type for this app.                      |
 | `instance_ids`   | `[]int`    | no        | `[]`    | List of instance indexes of the application. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_guids`.    |
-| `instance_guids` | `[]string` | no        | `[]`    | List of instance IDs for finer-grained targeting. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_ids`. |
 
 Example request, serialized as JSON:
 
@@ -330,7 +329,7 @@ Example request, serialized as JSON:
 
 | Parameter        | Type       | Required? | Default | Description                                                                                                                                                  |
 |------------------|------------|-----------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|                  | `Common`   | yes       |         | All [common fields](#common-fields-for-pcap-agent) are included in a CF capture request                                                                      |
+|                  | `Common`   | yes       |         | All [common fields](#common-fields-for-pcap-agent) are included in a Bosh capture request                                                                    |
 | `token`          | `string`   | yes       |         | The BOSH UAA token for the user sending the capture request.                                                                                                 |
 | `deployment`     | `string`   | yes       |         | The name of the target BOSH deployment.                                                                                                                      |
 | `groups`         | `[]string` | yes       |         | A list of instance groups from which to capture. **Must contain at least one instance group**.                                                               |
@@ -364,20 +363,20 @@ The stop capture request just indicates that the capture on the current stream i
 | Parameter      | Type               | Required? | Description                                                                                                                                          |
 |----------------|--------------------|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `message_type` | `enum MessageType` | yes       | The type of message sent. This allows for logic based on the message type                                                                            |
-| `origin`       | `string`           | yes       | The sender of this message, e.g. `pcap-api-[group/guid]`, `pcap-agent-[instance_id]`                                                                 |
+| `origin`       | `string`           | yes       | The sender of this message, e.g. `pcap-api-[bosh VM guid]`, `pcap-agent-[group/guid]` (bosh case) or `pcap-agent-[instance_id]` (CF case)            |
 | `message`      | `string`           | no        | The detailed message, human readable, explaining the reason for this message. Optional but recommended, as it could be shown on the CLI to the user. |
 
 Examples for origin:
 ```
 # bosh, originating from the pcap-api:
-pcap-api-router/d55baeba-f645-4219-8b49-2b4654a17165
+pcap-api-c45baeba-f645-4219-8b49-2b4654a17165
 
 # bosh, originating from the pcap-agent
 pcap-agent-router/d55baeba-f645-4219-8b49-2b4654a17165
 
 
 # cf, orginating from the pcap-api
-pcap-api-f9281cda-1234-bbcd-ef12-1337cafe0048
+pcap-api-c45baeba-f645-4219-8b49-2b4654a17165
 
 # cf, originating from the pcap-agent
 pcap-agent-f9281cda-1234-bbcd-ef12-1337cafe0048
@@ -388,7 +387,7 @@ Example message:
 ```json
 {
   "message_type": "Message_CAPTURE_STOPPED",
-  "origin": "pcap-api-router/d55baeba-f645-4219-8b49-2b4654a17165",
+  "origin": "pcap-api-c45baeba-f645-4219-8b49-2b4654a17165",
   "message": "Capturing stopped on agent pcap-agent-router/d55baeba-f645-4219-8b49-2b4654a17165"
 }
 ```
@@ -642,7 +641,7 @@ sequenceDiagram
         end
     end
     pcap-agent1 --X pcap-api: Connection terminated
-    pcap-api ->> pcap-cli: Message: INSTANCE_DISCONNECTED (pcap-agent1)
+    pcap-api ->> pcap-cli: Message: INSTANCE_UNAVAILABLE (pcap-agent1)
     note over pcap-cli, pcap-api: Client requests a graceful stop
     pcap-cli ->> pcap-api: Stop
     par
