@@ -34,6 +34,7 @@
     * [Unexpected Disconnects](#unexpected-disconnects)
     * [Invalid Requests](#invalid-requests)
     * [Resource Limits](#resource-limits)
+    * [Draining during regular request](#draining-during-regular-request)
 <!-- TOC -->
 
 This document contains the API specification for the PCAP release.
@@ -1014,4 +1015,39 @@ sequenceDiagram
     pcap-api ->>- pcap-cli: OK
 ```
 
-FIXME: Add draining use case description
+### Draining during regular request
+Draining of pcap-api leads to a graceful shutdown of all components:
+
+BOSH Case:
+
+```mermaid
+sequenceDiagram
+    pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>BOSH (Deployment, Groups, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
+    pcap-api ->> bosh-uaa: Token Keys?
+    bosh-uaa ->> pcap-api: Token Keys
+    note over pcap-api, bosh-uaa: Token and scope verification    
+    pcap-api ->> bosh-director: Instances (Deployment)?
+    bosh-director ->> pcap-api: Instances (Deployment)
+    par
+        pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
+        pcap-api ->> pcap-agent2: Capture pcap(eth0, "host 1.2.3.4", 65k)
+        loop
+            pcap-agent1 ->> pcap-api: pcap data
+            pcap-api ->> pcap-cli: pcap data
+            pcap-agent2 ->> pcap-api: pcap data
+            pcap-api ->> pcap-cli: pcap data
+        end
+    end
+    note right of pcap-api: Drain
+    pcap-api ->> pcap-api: 
+    par
+        pcap-api ->> pcap-agent1: Stop
+        pcap-api ->> pcap-agent2: Stop
+        pcap-agent2 ->> pcap-api: OK (pcap-agent2 stopped)
+        pcap-agent1 ->> pcap-api: OK (pcap-agent1 stopped)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent1)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent2)
+    end
+
+    pcap-api ->>- pcap-cli: OK
+```
