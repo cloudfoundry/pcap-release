@@ -89,7 +89,7 @@ func (opts *CaptureOptions) validate() error {
 	}
 
 	if len(opts.Filter) > maxFilterLength {
-		return fmt.Errorf("expected filter to be less than 5000 characters, received %d", len(opts.Filter))
+		return fmt.Errorf("expected filter to be at most %d characters, received %d", maxFilterLength, len(opts.Filter))
 	}
 
 	if opts.SnapLen == 0 {
@@ -109,7 +109,7 @@ func validateDevice(name string) (err error) {
 	}()
 
 	if len(name) > maxDeviceNameLength {
-		return fmt.Errorf("name too long: %d > 16", len(name))
+		return fmt.Errorf("name too long: %d > %d", len(name), maxDeviceNameLength)
 	}
 
 	if name == "." || name == ".." {

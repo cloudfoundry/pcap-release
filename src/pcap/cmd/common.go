@@ -6,7 +6,13 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
@@ -14,10 +20,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"io"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 var zapConfig zap.Config
@@ -56,9 +58,8 @@ type CommonConfig struct {
 	ID       string          `yaml:"id" validate:"required"`
 }
 
-// load server certificate and private key from the given Config. If Config.Tls is
-// nil a credentials which disable transport security will be used
-//
+// LoadTLSCredentials from the given Config. If CommonConfig.Listen.TLS is
+// nil credentials which disable transport security will be used
 // Note: the TLS version is currently hard-coded to TLSv1.3.
 func LoadTLSCredentials(c CommonConfig) (credentials.TransportCredentials, error) {
 	if c.Listen.TLS == nil {

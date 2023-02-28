@@ -413,8 +413,8 @@ func TestAPIRegisterHandler(t *testing.T) {
 
 			api.RegisterHandler(tt.handler)
 			registered := api.handlerRegistered(tt.wantedHandlerName)
-			if registered != tt.wantRegistered {
-				t.Errorf("RegisterHandler() expected registered %v but got: %v", tt.wantRegistered, registered)
+			if *registered != tt.wantRegistered {
+				t.Errorf("RegisterHandler() expected registered %v but got %v", tt.wantRegistered, *registered)
 			}
 		})
 	}

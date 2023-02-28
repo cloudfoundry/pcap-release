@@ -29,7 +29,7 @@ type API struct {
 	bufConf   BufferConf
 	handlers  map[string]CaptureHandler
 	agents    AgentMTLS
-	// ID of the instance where the api is located.
+	// id of the instance where the api is located.
 	id                    string
 	maxConcurrentCaptures int
 	concurrentStreams     atomic.Int32
@@ -92,8 +92,8 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 		Healthy:            !api.draining(),
 		CompatibilityLevel: 0,
 		Message:            "Ready.",
-		Bosh:               &bosh,
-		Cf:                 &cf,
+		Bosh:               bosh,
+		Cf:                 cf,
 	}
 
 	if api.draining() {
@@ -105,9 +105,9 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 
 // handlerRegistered checks if handler is registered.
 // returns false, if the handler is not registered.
-func (api *API) handlerRegistered(handler string) bool {
+func (api *API) handlerRegistered(handler string) *bool {
 	_, ok := api.handlers[handler]
-	return ok
+	return &ok
 }
 
 // Stop the server. This will gracefully stop any captures that are currently running
@@ -291,13 +291,13 @@ func checkAgentStatus(statusRes *StatusResponse, err error, target AgentEndpoint
 		return err
 	}
 
-	if !(statusRes.Healthy) {
+	if !statusRes.Healthy {
 		statusErr := fmt.Errorf("agent unhealthy '%s': %s", target, statusRes.Message)
 		return statusErr
 	}
 
 	if CompatibilityLevel > statusRes.CompatibilityLevel {
-		statusErr := fmt.Errorf("incompatible versions for '%s': expected compatibility level %d+ but got %d ", target, CompatibilityLevel, statusRes.CompatibilityLevel)
+		statusErr := fmt.Errorf("incompatible versions for '%s': expected compatibility level >= %d but got %d", target, CompatibilityLevel, statusRes.CompatibilityLevel)
 		return statusErr
 	}
 	return nil
@@ -477,7 +477,7 @@ func (api *API) capture(ctx context.Context, stream responseSender, opts *Captur
 
 	patchedFilter, err := patchFilter(opts.Filter)
 	if err != nil {
-		return nil, errorf(codes.FailedPrecondition, "Expanding the pcap filter to exclude traffic to pcap-api failed: %w", err)
+		return nil, errorf(codes.FailedPrecondition, "expanding the pcap filter to exclude traffic to pcap-api failed: %w", err)
 	}
 
 	opts.Filter = patchedFilter
