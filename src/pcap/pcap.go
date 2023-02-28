@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/credentials"
 	"net"
 	"os"
 	"strings"
@@ -20,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -35,7 +35,7 @@ const (
 
 	// LogKeyVcapID sets on which field the vcap request id will be logged.
 	LogKeyVcapID = "vcap-id"
-	// LogKeyHandler sets the handler
+	// LogKeyHandler sets the handler.
 	LogKeyHandler = "handler"
 
 	LogKeyTarget        = "target"
@@ -358,6 +358,7 @@ func convertStatusCodeToMsg(err error, targetIdentifier string) *CaptureResponse
 	}
 }
 
+// LoadTLSCredentials creates TLS transport credentials from the given parameters
 func LoadTLSCredentials(certFile, keyFile string, caFile *string, peerCAFile *string, peerCommonName *string) (credentials.TransportCredentials, error) {
 	tlsConf := &tls.Config{
 		MinVersion: tls.VersionTLS13,

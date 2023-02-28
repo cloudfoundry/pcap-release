@@ -9,7 +9,6 @@ import (
 	"syscall"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
@@ -21,7 +20,7 @@ import (
 
 var zapConfig zap.Config
 
-func InitZapLogger() {
+func init() {
 
 	zapConfig = zap.Config{
 		Level:             zap.NewAtomicLevelAt(zap.InfoLevel),
@@ -92,12 +91,6 @@ func ReadN(n int, stream genericStreamReceiver) {
 	}
 }
 
-func P(err error) {
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
 // WaitForSignal to tell the agent to stop processing any streams. Will first tell the agent
 // to end any running streams, wait for them to terminate and gracefully stop the gRPC server
 // afterwards. Currently listens for SIGUSR1 and SIGINT, SIGQUIT and SIGTERM.
@@ -127,6 +120,7 @@ func SetLogLevel(log *zap.Logger, logLevel string) {
 	if level, levelErr := zap.ParseAtomicLevel(logLevel); levelErr == nil {
 		zapConfig.Level.SetLevel(level.Level())
 	} else {
-		log.Warn("unable to parse: %v. Remaining at default level:", zap.Error(levelErr))
+		log.Warn("unable to parse log level", zap.Error(levelErr))
+		log.Warn("remaining at default log level")
 	}
 }

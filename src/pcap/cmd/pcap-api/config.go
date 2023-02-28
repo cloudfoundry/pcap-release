@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"os"
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v3"
 )

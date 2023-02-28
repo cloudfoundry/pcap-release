@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
-
 	gopcap "github.com/google/gopacket/pcap"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"

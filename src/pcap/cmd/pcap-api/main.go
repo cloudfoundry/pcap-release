@@ -7,19 +7,16 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"os"
+
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"net"
-	"os"
 )
 
 var zapConfig zap.Config
-
-func init() {
-	cmd.InitZapLogger()
-}
 
 func main() {
 	log := zap.L()

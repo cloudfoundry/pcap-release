@@ -12,26 +12,30 @@ package main
 
 import (
 	"context"
-	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
+	"fmt"
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
 	cc, err := grpc.Dial("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	cmd.P(err)
+	if err != nil {
+		fmt.Errorf("unable to establish connection: %v", err)
+	}
 
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	// ctx = metadata.NewOutgoingContext(ctx, metadata.MD{pcap.HeaderVcapID: []string{"123"}})
-
 	api := pcap.NewAPIClient(cc)
 	stream, err := api.Capture(ctx)
+	if err != nil {
+		fmt.Errorf("error during capturing: %v", err)
+	}
 
 	request := &pcap.CaptureRequest{
 		Operation: &pcap.CaptureRequest_Start{
@@ -54,7 +58,10 @@ func main() {
 	}
 
 	err = stream.Send(request)
-	cmd.P(err)
+	if err != nil {
+		fmt.Errorf("unable to start capture: %v", err)
+	}
+
 	// keep receiving some data long enough to start a manual drain
 	for i := 0; i < 10000; i++ {
 		cmd.ReadN(1000, stream)
@@ -66,7 +73,9 @@ func main() {
 	}
 
 	err = stream.Send(stop)
-	cmd.P(err)
+	if err != nil {
+		fmt.Errorf("unable to stop capture: %v", err)
+	}
 
 	cmd.ReadN(10_000, stream)
 }

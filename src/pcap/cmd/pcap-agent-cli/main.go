@@ -18,17 +18,20 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
 	cc, err := grpc.Dial("localhost:8083", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	cmd.P(err)
+	if err != nil {
+		fmt.Errorf("unable to establish connection: %v", err)
+	}
+
 	agentClient := pcap.NewAgentClient(cc)
 
 	ctx := context.Background()
@@ -36,14 +39,18 @@ func main() {
 	defer cancel()
 
 	statusRes, err := agentClient.Status(ctx, &pcap.StatusRequest{})
-	cmd.P(err)
+	if err != nil {
+		fmt.Errorf("unable to get agent status: %v", err)
+	}
 	fmt.Println("status:")
 	fmt.Printf("  healthy: %v\n", statusRes.Healthy)
 	fmt.Printf("  compLvl: %d\n", statusRes.CompatibilityLevel)
 	fmt.Printf("  message: %s\n", statusRes.Message)
 
 	stream, err := agentClient.Capture(ctx)
-	cmd.P(err)
+	if err != nil {
+		fmt.Errorf("error during capturing: %v", err)
+	}
 
 	err = stream.Send(&pcap.AgentRequest{
 		Payload: &pcap.AgentRequest_Start{
@@ -56,14 +63,18 @@ func main() {
 			},
 		},
 	})
-	cmd.P(err)
+	if err != nil {
+		fmt.Errorf("unable to start capture: %v", err)
+	}
 
 	cmd.ReadN(10, stream)
 
 	err = stream.Send(&pcap.AgentRequest{
 		Payload: &pcap.AgentRequest_Stop{},
 	})
-	cmd.P(err)
+	if err != nil {
+		fmt.Errorf("unable to stop capture: %v", err)
+	}
 
 	cmd.ReadN(10_000, stream)
 }
