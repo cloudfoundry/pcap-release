@@ -22,14 +22,17 @@ import (
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
+	log := zap.L()
+
 	cc, err := grpc.Dial("localhost:8083", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		fmt.Errorf("unable to establish connection: %v", err)
+		log.Fatal("unable to establish connection", zap.Error(err))
 	}
 
 	agentClient := pcap.NewAgentClient(cc)
@@ -40,7 +43,7 @@ func main() {
 
 	statusRes, err := agentClient.Status(ctx, &pcap.StatusRequest{})
 	if err != nil {
-		fmt.Errorf("unable to get agent status: %v", err)
+		log.Fatal("unable to get agent status", zap.Error(err))
 	}
 	fmt.Println("status:")
 	fmt.Printf("  healthy: %v\n", statusRes.Healthy)
@@ -49,7 +52,7 @@ func main() {
 
 	stream, err := agentClient.Capture(ctx)
 	if err != nil {
-		fmt.Errorf("error during capturing: %v", err)
+		log.Fatal("error during capturing", zap.Error(err))
 	}
 
 	err = stream.Send(&pcap.AgentRequest{
@@ -64,7 +67,7 @@ func main() {
 		},
 	})
 	if err != nil {
-		fmt.Errorf("unable to start capture: %v", err)
+		log.Fatal("unable to start capture", zap.Error(err))
 	}
 
 	cmd.ReadN(10, stream)
@@ -73,7 +76,7 @@ func main() {
 		Payload: &pcap.AgentRequest_Stop{},
 	})
 	if err != nil {
-		fmt.Errorf("unable to stop capture: %v", err)
+		log.Fatal("unable to stop capture", zap.Error(err))
 	}
 
 	cmd.ReadN(10_000, stream)

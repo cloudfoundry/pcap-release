@@ -3,6 +3,7 @@ package pcap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"testing"
@@ -14,15 +15,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 )
-
-// Add test for capture options
-
-// {
-// name:        "Request Capture Options not complete",
-// req:         &BoshRequest{Payload: &BoshRequest_Start{Start: &StartBoshCapture{Token: "123d24", Deployment: "cf", Groups: []string{"router"}}}},
-// wantErr:     true,
-// expectedErr: errNilField,
-// },
 
 var (
 	origin          = "pcap-api-1234ab"
@@ -469,6 +461,65 @@ func TestAPICapture(t *testing.T) {
 			code := status.Code(err)
 			if tt.wantErr && code != tt.wantStatusCode {
 				t.Errorf("Capture() statusCode = %v, wantStatusCode = %v", code, tt.wantStatusCode)
+			}
+		})
+	}
+}
+
+func TestConvertStatusCodeToMsg(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		wantMsgType MessageType
+	}{
+		{
+			name:        "Invalid argument error",
+			err:         errorf(codes.InvalidArgument, "read message: %w", fmt.Errorf("invalid argument")),
+			wantMsgType: MessageType_INVALID_REQUEST,
+		},
+		{
+			name:        "Agent unavailable error",
+			err:         errorf(codes.Unavailable, "read message: %w", fmt.Errorf("unavailable")),
+			wantMsgType: MessageType_INSTANCE_UNAVAILABLE,
+		},
+		{
+			name:        "Agent internal error",
+			err:         errorf(codes.Internal, "read message: %w", fmt.Errorf("internal error")),
+			wantMsgType: MessageType_CONNECTION_ERROR,
+		},
+		{
+			name:        "Agent failed precondition error",
+			err:         errorf(codes.FailedPrecondition, "read message: %w", fmt.Errorf("failed precondition")),
+			wantMsgType: MessageType_START_CAPTURE_FAILED,
+		},
+		{
+			name:        "Agent aborted error",
+			err:         errorf(codes.Aborted, "read message: %w", fmt.Errorf("aborted")),
+			wantMsgType: MessageType_INSTANCE_UNAVAILABLE,
+		},
+		{
+			name:        "Agent limit reached error",
+			err:         errorf(codes.ResourceExhausted, "read message: %w", fmt.Errorf("limit reached")),
+			wantMsgType: MessageType_LIMIT_REACHED,
+		},
+		{
+			name:        "Agent unknown error",
+			err:         errorf(codes.Unknown, "read message: %w", fmt.Errorf("unknown")),
+			wantMsgType: MessageType_UNKNOWN,
+		},
+		{
+			name:        "Any other error",
+			err:         errorf(codes.NotFound, "read message: %w", fmt.Errorf("unknown")),
+			wantMsgType: MessageType_UNKNOWN,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := convertAgentStatusCodeToMsg(tt.err, agentIdentifier)
+			if got.GetMessage().GetType() != tt.wantMsgType {
+				t.Errorf("convertAgentStatusCodeToMsg() = %v, want %v", got.GetMessage().GetType(), tt.wantMsgType)
+
+				t.Logf("message: %v", got.GetMessage().Message)
 			}
 		})
 	}

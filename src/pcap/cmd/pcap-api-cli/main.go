@@ -17,14 +17,17 @@ import (
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
+	log := zap.L()
+
 	cc, err := grpc.Dial("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		fmt.Errorf("unable to establish connection: %v", err)
+		log.Fatal("unable to establish connection", zap.Error(err))
 	}
 
 	ctx := context.Background()
@@ -32,9 +35,19 @@ func main() {
 	defer cancel()
 
 	api := pcap.NewAPIClient(cc)
+
+	statusRes, err := api.Status(ctx, &pcap.StatusRequest{})
+	if err != nil {
+		log.Fatal("unable to get api status", zap.Error(err))
+	}
+	fmt.Println("status:")
+	fmt.Printf("  healthy: %v\n", statusRes.Healthy)
+	fmt.Printf("  compLvl: %d\n", statusRes.CompatibilityLevel)
+	fmt.Printf("  message: %s\n", statusRes.Message)
+
 	stream, err := api.Capture(ctx)
 	if err != nil {
-		fmt.Errorf("error during capturing: %v", err)
+		log.Fatal("error during capturing", zap.Error(err))
 	}
 
 	request := &pcap.CaptureRequest{
@@ -59,7 +72,7 @@ func main() {
 
 	err = stream.Send(request)
 	if err != nil {
-		fmt.Errorf("unable to start capture: %v", err)
+		log.Fatal("unable to start capture", zap.Error(err))
 	}
 
 	// keep receiving some data long enough to start a manual drain
@@ -74,7 +87,7 @@ func main() {
 
 	err = stream.Send(stop)
 	if err != nil {
-		fmt.Errorf("unable to stop capture: %v", err)
+		log.Fatal("unable to stop capture", zap.Error(err))
 	}
 
 	cmd.ReadN(10_000, stream)

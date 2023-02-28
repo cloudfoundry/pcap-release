@@ -25,7 +25,6 @@ type API struct {
 	captureWG sync.WaitGroup
 	bufConf   BufferConf
 	resolvers map[string]AgentResolver
-	agents    AgentMTLS
 	// id of the instance where the api is located.
 	id                    string
 	maxConcurrentCaptures int
@@ -42,12 +41,11 @@ func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCap
 		done:                  make(chan struct{}),
 		bufConf:               bufConf,
 		resolvers:             make(map[string]AgentResolver),
-		agents:                agentmTLS,
 		id:                    id,
 		maxConcurrentCaptures: maxConcurrentCaptures,
 	}
 
-	api.tlsCredentials, err = api.loadTLSCredentials()
+	api.tlsCredentials, err = loadTLSCredentials(agentmTLS)
 	if err != nil {
 		return nil, fmt.Errorf("create api failed: %w", err)
 	}
@@ -226,11 +224,11 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	return nil
 }
 
-func (api *API) loadTLSCredentials() (credentials.TransportCredentials, error) {
-	if api.agents.MTLS == nil || api.agents.MTLS.SkipVerify {
+func loadTLSCredentials(agents AgentMTLS) (credentials.TransportCredentials, error) {
+	if agents.MTLS == nil || agents.MTLS.SkipVerify {
 		return insecure.NewCredentials(), nil
 	}
-	mTLS := api.agents.MTLS
+	mTLS := agents.MTLS
 	return LoadTLSCredentials(mTLS.Certificate, mTLS.PrivateKey, nil, &mTLS.CertificateAuthority, &mTLS.CommonName)
 }
 
@@ -378,7 +376,7 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 			}
 			code := status.Code(err)
 			if code != codes.OK {
-				out <- convertStatusCodeToMsg(err, target.Identifier)
+				out <- convertAgentStatusCodeToMsg(err, target.Identifier)
 				return
 			}
 			out <- msg
@@ -390,7 +388,7 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 func closeCaptureStream(out chan *CaptureResponse, target AgentEndpoint, captureStream captureReceiver) {
 	closeSendErr := captureStream.CloseSend()
 	if closeSendErr != nil {
-		out <- convertStatusCodeToMsg(closeSendErr, target.Identifier)
+		out <- convertAgentStatusCodeToMsg(closeSendErr, target.Identifier)
 		return
 	}
 }
@@ -400,7 +398,7 @@ func stopAgentCapture(captureStream captureReceiver, out chan *CaptureResponse, 
 		Payload: &AgentRequest_Stop{},
 	})
 	if err != nil {
-		out <- convertStatusCodeToMsg(err, target.Identifier)
+		out <- convertAgentStatusCodeToMsg(err, target.Identifier)
 	}
 }
 
@@ -458,7 +456,7 @@ func (api *API) capture(ctx context.Context, stream responseSender, opts *Captur
 		var captureStream captureReceiver
 		captureStream, err = prepareStream(ctx, opts, target, api.tlsCredentials, log)
 		if err != nil {
-			errMsg := convertStatusCodeToMsg(err, target.Identifier)
+			errMsg := convertAgentStatusCodeToMsg(err, target.Identifier)
 			sendErr := stream.Send(errMsg)
 			if sendErr != nil {
 				log.Error(fmt.Sprintf("cannot send error to receiver: %s", errMsg.String()))
@@ -483,4 +481,35 @@ func (api *API) capture(ctx context.Context, stream responseSender, opts *Captur
 	// merge channels to one channel and send to forward to stream
 	out := mergeResponseChannels(captureCs, api.bufConf.Size)
 	return out, nil
+}
+
+// convertAgentStatusCodeToMsg matches response code from agent to suitable message type.
+func convertAgentStatusCodeToMsg(err error, targetIdentifier string) *CaptureResponse {
+	code := status.Code(err)
+	if code == codes.Unknown {
+		unwrappedError := errors.Unwrap(err)
+		if unwrappedError != nil {
+			code = status.Code(unwrappedError)
+		}
+	}
+	err = fmt.Errorf("capturing from agent %s: %w", targetIdentifier, err)
+
+	switch code { //nolint:exhaustive // we do not need to cover all the codes here
+	case codes.InvalidArgument:
+		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error(), targetIdentifier)
+	case codes.Aborted:
+		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), targetIdentifier)
+	case codes.Internal:
+		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error(), targetIdentifier)
+	case codes.Unknown:
+		return newMessageResponse(MessageType_UNKNOWN, err.Error(), targetIdentifier)
+	case codes.FailedPrecondition:
+		return newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error(), targetIdentifier)
+	case codes.ResourceExhausted:
+		return newMessageResponse(MessageType_LIMIT_REACHED, err.Error(), targetIdentifier)
+	case codes.Unavailable:
+		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), targetIdentifier)
+	default:
+		return newMessageResponse(MessageType_UNKNOWN, err.Error(), targetIdentifier)
+	}
 }

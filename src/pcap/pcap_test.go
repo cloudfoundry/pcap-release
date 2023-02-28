@@ -14,7 +14,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -492,65 +491,6 @@ func TestForwardToStream(t *testing.T) {
 			}
 			if !errors.Is(err, test.expectedErr) {
 				t.Errorf("forwardToStream() expectedErr = %v, error = %v", test.expectedErr, err)
-			}
-		})
-	}
-}
-
-func TestConvertStatusCodeToMsg(t *testing.T) {
-	tests := []struct {
-		name        string
-		err         error
-		wantMsgType MessageType
-	}{
-		{
-			name:        "Invalid argument error",
-			err:         errorf(codes.InvalidArgument, "read message: %w", fmt.Errorf("invalid argument")),
-			wantMsgType: MessageType_INVALID_REQUEST,
-		},
-		{
-			name:        "Agent unavailable error",
-			err:         errorf(codes.Unavailable, "read message: %w", fmt.Errorf("unavailable")),
-			wantMsgType: MessageType_INSTANCE_UNAVAILABLE,
-		},
-		{
-			name:        "Agent internal error",
-			err:         errorf(codes.Internal, "read message: %w", fmt.Errorf("internal error")),
-			wantMsgType: MessageType_CONNECTION_ERROR,
-		},
-		{
-			name:        "Agent failed precondition error",
-			err:         errorf(codes.FailedPrecondition, "read message: %w", fmt.Errorf("failed precondition")),
-			wantMsgType: MessageType_START_CAPTURE_FAILED,
-		},
-		{
-			name:        "Agent aborted error",
-			err:         errorf(codes.Aborted, "read message: %w", fmt.Errorf("aborted")),
-			wantMsgType: MessageType_INSTANCE_UNAVAILABLE,
-		},
-		{
-			name:        "Agent limit reached error",
-			err:         errorf(codes.ResourceExhausted, "read message: %w", fmt.Errorf("limit reached")),
-			wantMsgType: MessageType_LIMIT_REACHED,
-		},
-		{
-			name:        "Agent unknown error",
-			err:         errorf(codes.Unknown, "read message: %w", fmt.Errorf("unknown")),
-			wantMsgType: MessageType_UNKNOWN,
-		},
-		{
-			name:        "Any other error",
-			err:         errorf(codes.NotFound, "read message: %w", fmt.Errorf("unknown")),
-			wantMsgType: MessageType_UNKNOWN,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := convertStatusCodeToMsg(tt.err, agentIdentifier)
-			if got.GetMessage().GetType() != tt.wantMsgType {
-				t.Errorf("convertStatusCodeToMsg() = %v, want %v", got.GetMessage().GetType(), tt.wantMsgType)
-
-				t.Logf("message: %v", got.GetMessage().Message)
 			}
 		})
 	}

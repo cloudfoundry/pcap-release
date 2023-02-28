@@ -21,7 +21,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pcap.proto
@@ -328,37 +327,7 @@ func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream
 	}()
 }
 
-func convertStatusCodeToMsg(err error, targetIdentifier string) *CaptureResponse {
-	code := status.Code(err)
-	if code == codes.Unknown {
-		unwrappedError := errors.Unwrap(err)
-		if unwrappedError != nil {
-			code = status.Code(unwrappedError)
-		}
-	}
-	err = fmt.Errorf("capturing from agent %s: %w", targetIdentifier, err)
-
-	switch code { //nolint:exhaustive // we do not need to cover all the codes here
-	case codes.InvalidArgument:
-		return newMessageResponse(MessageType_INVALID_REQUEST, err.Error(), targetIdentifier)
-	case codes.Aborted:
-		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), targetIdentifier)
-	case codes.Internal:
-		return newMessageResponse(MessageType_CONNECTION_ERROR, err.Error(), targetIdentifier)
-	case codes.Unknown:
-		return newMessageResponse(MessageType_UNKNOWN, err.Error(), targetIdentifier)
-	case codes.FailedPrecondition:
-		return newMessageResponse(MessageType_START_CAPTURE_FAILED, err.Error(), targetIdentifier)
-	case codes.ResourceExhausted:
-		return newMessageResponse(MessageType_LIMIT_REACHED, err.Error(), targetIdentifier)
-	case codes.Unavailable:
-		return newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, err.Error(), targetIdentifier)
-	default:
-		return newMessageResponse(MessageType_UNKNOWN, err.Error(), targetIdentifier)
-	}
-}
-
-// LoadTLSCredentials creates TLS transport credentials from the given parameters
+// LoadTLSCredentials creates TLS transport credentials from the given parameters.
 func LoadTLSCredentials(certFile, keyFile string, caFile *string, peerCAFile *string, peerCommonName *string) (credentials.TransportCredentials, error) {
 	tlsConf := &tls.Config{
 		MinVersion: tls.VersionTLS13,
