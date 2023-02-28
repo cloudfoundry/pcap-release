@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -622,26 +621,7 @@ func generateCerts(commonName string, dir string) (string, string, string, error
 
 func configureServer(certFile string, keyFile string, clientCAFile string) (credentials.TransportCredentials, error) {
 
-	pemClientCA, err := os.ReadFile(clientCAFile)
-	if err != nil {
-		return nil, err
-	}
-
-	serverCert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-
-	certPool := x509.NewCertPool()
-	certPool.AppendCertsFromPEM(pemClientCA)
-
-	config := &tls.Config{
-		Certificates: []tls.Certificate{serverCert},
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    certPool,
-	}
-
-	return credentials.NewTLS(config), nil
+	return pcap.LoadTLSCredentials(certFile, keyFile, &clientCAFile, nil, nil)
 }
 
 func createAgent(port int, id string, tlsCreds credentials.TransportCredentials) (pcap.AgentClient, *grpc.Server, pcap.AgentEndpoint, *pcap.Agent) {

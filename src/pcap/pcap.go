@@ -5,9 +5,14 @@ package pcap
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/credentials"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"unicode"
@@ -351,4 +356,71 @@ func convertStatusCodeToMsg(err error, targetIdentifier string) *CaptureResponse
 	default:
 		return newMessageResponse(MessageType_UNKNOWN, err.Error(), targetIdentifier)
 	}
+}
+
+func LoadTLSCredentials(certFile, keyFile string, caFile *string, peerCAFile *string, peerCommonName *string) (credentials.TransportCredentials, error) {
+	tlsConf := &tls.Config{
+		MinVersion: tls.VersionTLS13,
+		MaxVersion: tls.VersionTLS13,
+		ClientAuth: tls.RequireAndVerifyClientCert,
+	}
+
+	if certFile != "" && keyFile != "" {
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("load client certificate or private key failed: %w", err)
+		}
+		tlsConf.Certificates = []tls.Certificate{cert}
+	}
+
+	if caFile != nil {
+		caPool, err := createCAPool(*caFile)
+		if err != nil {
+			return nil, fmt.Errorf("load certificate authority file failed: %w", err)
+		}
+		tlsConf.ClientCAs = caPool
+	}
+
+	if peerCAFile != nil {
+		caPool, err := createCAPool(*peerCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("load certificate authority file failed: %w", err)
+		}
+		tlsConf.RootCAs = caPool
+	}
+
+	if peerCommonName != nil {
+		tlsConf.ServerName = *peerCommonName
+	}
+
+	return credentials.NewTLS(tlsConf), nil
+}
+
+func createCAPool(certificateAuthorityFile string) (*x509.CertPool, error) {
+	caFile, err := os.ReadFile(certificateAuthorityFile)
+	if err != nil {
+		return nil, err
+	}
+
+	caPool := x509.NewCertPool()
+
+	// We do not use x509.CertPool.AppendCertsFromPEM because it swallows any errors.
+	// We would like to now if any certificate failed (and not just if any certificate
+	// could be parsed).
+	for len(caFile) > 0 {
+		var block *pem.Block
+
+		block, caFile = pem.Decode(caFile)
+		if block.Type != "CERTIFICATE" {
+			return nil, fmt.Errorf("ca file contains non-certificate blocks")
+		}
+
+		ca, caErr := x509.ParseCertificate(block.Bytes)
+		if caErr != nil {
+			return nil, caErr
+		}
+
+		caPool.AddCert(ca)
+	}
+	return caPool, nil
 }

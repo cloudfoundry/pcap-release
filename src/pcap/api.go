@@ -2,12 +2,9 @@ package pcap
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 	"sync/atomic"
 
@@ -233,37 +230,8 @@ func (api *API) loadTLSCredentials() (credentials.TransportCredentials, error) {
 	if api.agents.MTLS == nil || api.agents.MTLS.SkipVerify {
 		return insecure.NewCredentials(), nil
 	}
-
-	// Load certificate of the CA who signed agent's certificate
-	pemAgentCA, readErr := os.ReadFile(api.agents.MTLS.CertificateAuthority)
-	if readErr != nil {
-		return nil, fmt.Errorf("load agent CA's certificate failed: %w", readErr)
-	}
-
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(pemAgentCA) {
-		return nil, fmt.Errorf("failed to add agent CA's certificate")
-	}
-
-	// Create the credentials and return it
-	config := &tls.Config{
-		RootCAs:    certPool,
-		ServerName: api.agents.MTLS.CommonName,
-		MinVersion: tls.VersionTLS12,
-		MaxVersion: tls.VersionTLS13,
-	}
-
-	// Load client's certificate and private key
-	if api.agents.MTLS.Certificate != "" && api.agents.MTLS.PrivateKey != "" {
-		clientCert, err := tls.LoadX509KeyPair(api.agents.MTLS.Certificate, api.agents.MTLS.PrivateKey)
-		if err != nil {
-			return nil, fmt.Errorf("load API client certificate or private key failed: %w", err)
-		}
-
-		config.Certificates = []tls.Certificate{clientCert}
-	}
-
-	return credentials.NewTLS(config), nil
+	mTLS := api.agents.MTLS
+	return LoadTLSCredentials(mTLS.Certificate, mTLS.PrivateKey, nil, &mTLS.CertificateAuthority, &mTLS.CommonName)
 }
 
 // resolveAgentEndpoints tries all registered api.resolvers until one responds or none can be found that
@@ -331,7 +299,8 @@ func mergeResponseChannels(cs []<-chan *CaptureResponse, bufSize int) <-chan *Ca
 	return out
 }
 
-// connectToTarget creates connection to the agent, if the agent is available and healthy, and start the Agent.Capture.
+// connectToTarget creates connection to the agent. If the agent is available and healthy
+// a new capture is started using Agent.Capture.
 func connectToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
 	cc, err := grpc.Dial(target.String(), grpc.WithTransportCredentials(creds))
 	if err != nil {
@@ -471,7 +440,7 @@ func stopCmd(cancel CancelCauseFunc, stream requestReceiver) {
 
 type streamPreparer func(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials, *zap.Logger) (captureReceiver, error)
 
-func (api *API) capture(ctx context.Context, stream responseSender, opts *CaptureOptions, targets []AgentEndpoint, log *zap.Logger, fn streamPreparer) (<-chan *CaptureResponse, error) {
+func (api *API) capture(ctx context.Context, stream responseSender, opts *CaptureOptions, targets []AgentEndpoint, log *zap.Logger, prepareStream streamPreparer) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
 	runningCaptures := 0
 
@@ -487,7 +456,7 @@ func (api *API) capture(ctx context.Context, stream responseSender, opts *Captur
 		log.Info("starting capture")
 
 		var captureStream captureReceiver
-		captureStream, err = fn(ctx, opts, target, api.tlsCredentials, log)
+		captureStream, err = prepareStream(ctx, opts, target, api.tlsCredentials, log)
 		if err != nil {
 			errMsg := convertStatusCodeToMsg(err, target.Identifier)
 			sendErr := stream.Send(errMsg)

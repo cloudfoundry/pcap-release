@@ -1,9 +1,6 @@
 package cmd
 
 import (
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -65,47 +62,8 @@ func LoadTLSCredentials(c CommonConfig) (credentials.TransportCredentials, error
 	if c.Listen.TLS == nil {
 		return insecure.NewCredentials(), nil
 	}
-
-	cert, err := tls.LoadX509KeyPair(c.Listen.TLS.Certificate, c.Listen.TLS.PrivateKey)
-	if err != nil {
-		return nil, err
-	}
-
-	caFile, err := os.ReadFile(c.Listen.TLS.CertificateAuthority)
-	if err != nil {
-		return nil, err
-	}
-
-	caPool := x509.NewCertPool()
-
-	// We do not use x509.CertPool.AppendCertsFromPEM because it swallows any errors.
-	// We would like to now if any certificate failed (and not just if any certificate
-	// could be parsed).
-	for len(caFile) > 0 {
-		var block *pem.Block
-
-		block, caFile = pem.Decode(caFile)
-		if block.Type != "CERTIFICATE" {
-			return nil, fmt.Errorf("ca file contains non-certificate blocks")
-		}
-
-		ca, caErr := x509.ParseCertificate(block.Bytes)
-		if caErr != nil {
-			return nil, caErr
-		}
-
-		caPool.AddCert(ca)
-	}
-
-	tlsConf := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS13,
-		MaxVersion:   tls.VersionTLS13,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    caPool,
-	}
-
-	return credentials.NewTLS(tlsConf), nil
+	tls := c.Listen.TLS
+	return pcap.LoadTLSCredentials(tls.Certificate, tls.PrivateKey, &tls.CertificateAuthority, nil, nil)
 }
 
 type genericStreamReceiver interface {
