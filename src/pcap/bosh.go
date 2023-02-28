@@ -15,11 +15,11 @@ func (bosh *BoshHandler) name() string {
 	return "bosh"
 }
 
-func (bosh *BoshHandler) canHandle(request *Capture) bool {
+func (bosh *BoshHandler) canResolve(request *Capture) bool {
 	return request.GetBosh() != nil
 }
 
-func (bosh *BoshHandler) handle(request *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
+func (bosh *BoshHandler) resolve(request *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
 	log = log.With(zap.String(LogKeyResolver, bosh.name()))
 	log.Info("handling request")
 

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+
 	gopcap "github.com/google/gopacket/pcap"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -678,7 +679,7 @@ func createAPI(port int, targets []pcap.AgentEndpoint, bufconf pcap.BufferConf, 
 	var server *grpc.Server
 	api, err := pcap.NewAPI(bufconf, mTLSConfig, id, maxConcurrentCaptures)
 	Expect(err).NotTo(HaveOccurred())
-	api.RegisterHandler(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
+	api.RegisterResolver(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
 	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
 	Expect(err).NotTo(HaveOccurred())

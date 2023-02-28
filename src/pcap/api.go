@@ -27,7 +27,7 @@ type API struct {
 	// TODO: expose as metric?
 	captureWG sync.WaitGroup
 	bufConf   BufferConf
-	handlers  map[string]CaptureHandler
+	resolvers map[string]AgentResolver
 	agents    AgentMTLS
 	// id of the instance where the api is located.
 	id                    string
@@ -44,7 +44,7 @@ func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCap
 	api := &API{
 		done:                  make(chan struct{}),
 		bufConf:               bufConf,
-		handlers:              make(map[string]CaptureHandler),
+		resolvers:             make(map[string]AgentResolver),
 		agents:                agentmTLS,
 		id:                    id,
 		maxConcurrentCaptures: maxConcurrentCaptures,
@@ -69,18 +69,18 @@ func (a AgentEndpoint) String() string {
 	return fmt.Sprintf("%s:%d", a.IP, a.Port)
 }
 
-// CaptureHandler defines handlers for different request types that ultimately lead to a selection of AgentEndpoints.
-type CaptureHandler interface {
+// AgentResolver defines resolver for different request types that ultimately lead to a selection of AgentEndpoints.
+type AgentResolver interface {
 	// name provides the name of the handler for outputs and internal mapping.
 	name() string
-	// canHandle determines if this handler is responsible for handling the Capture
-	canHandle(*Capture) bool
-	// handle either resolves and returns the agents targeted by Capture or provides an error
-	handle(*Capture, *zap.Logger) ([]AgentEndpoint, error)
+	// canResolve determines if this handler is responsible for handling the Capture
+	canResolve(*Capture) bool
+	// resolve either resolves and returns the agents targeted by Capture or provides an error
+	resolve(*Capture, *zap.Logger) ([]AgentEndpoint, error)
 }
 
-func (api *API) RegisterHandler(handler CaptureHandler) {
-	api.handlers[handler.name()] = handler
+func (api *API) RegisterResolver(resolver AgentResolver) {
+	api.resolvers[resolver.name()] = resolver
 }
 
 // Status provides the current status information for the pcap-api service.
@@ -106,7 +106,7 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 // handlerRegistered checks if handler is registered.
 // returns false, if the handler is not registered.
 func (api *API) handlerRegistered(handler string) *bool {
-	_, ok := api.handlers[handler]
+	_, ok := api.resolvers[handler]
 	return &ok
 }
 
@@ -266,14 +266,14 @@ func (api *API) loadTLSCredentials() (credentials.TransportCredentials, error) {
 	return credentials.NewTLS(config), nil
 }
 
-// resolveAgentEndpoints tries all registered api.handlers until one responds or none can be found that
+// resolveAgentEndpoints tries all registered api.resolvers until one responds or none can be found that
 // support this capture request. The responsible handler is then queried for the applicable pcap-agent endpoints corresponding to this capture request.
 func (api *API) resolveAgentEndpoints(capture *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
-	for name, handler := range api.handlers {
-		if handler.canHandle(capture) {
+	for name, resolver := range api.resolvers {
+		if resolver.canResolve(capture) {
 			log.Debug("resolving agent endpoints")
 
-			agents, err := handler.handle(capture, log)
+			agents, err := resolver.resolve(capture, log)
 			if err != nil {
 				return nil, fmt.Errorf("error while handling %v via %s: %w", capture, name, err)
 			}
@@ -282,7 +282,7 @@ func (api *API) resolveAgentEndpoints(capture *Capture, log *zap.Logger) ([]Agen
 		}
 	}
 
-	return nil, fmt.Errorf("no handler for %v", capture)
+	return nil, fmt.Errorf("no resolver for %v", capture)
 }
 
 func checkAgentStatus(statusRes *StatusResponse, err error, target AgentEndpoint) error {

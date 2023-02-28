@@ -14,11 +14,11 @@ func (cf *CloudfoundryHandler) name() string {
 	return "cf"
 }
 
-func (cf *CloudfoundryHandler) canHandle(request *Capture) bool {
+func (cf *CloudfoundryHandler) canResolve(request *Capture) bool {
 	return request.GetCf() != nil
 }
 
-func (cf *CloudfoundryHandler) handle(request *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
+func (cf *CloudfoundryHandler) resolve(request *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
 	log = log.With(zap.String("handler", cf.name()))
 	log.Info("Handling request")
 

@@ -381,7 +381,7 @@ func TestAPIStatus(t *testing.T) {
 func TestAPIRegisterHandler(t *testing.T) {
 	tests := []struct {
 		name              string
-		handler           CaptureHandler
+		handler           AgentResolver
 		wantRegistered    bool
 		wantedHandlerName string
 	}{
@@ -408,13 +408,13 @@ func TestAPIRegisterHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
 			if err != nil {
-				t.Errorf("RegisterHandler() unexpected error during api creation: %v", err)
+				t.Errorf("RegisterResolver() unexpected error during api creation: %v", err)
 			}
 
-			api.RegisterHandler(tt.handler)
+			api.RegisterResolver(tt.handler)
 			registered := api.handlerRegistered(tt.wantedHandlerName)
 			if *registered != tt.wantRegistered {
-				t.Errorf("RegisterHandler() expected registered %v but got %v", tt.wantRegistered, *registered)
+				t.Errorf("RegisterResolver() expected registered %v but got %v", tt.wantRegistered, *registered)
 			}
 		})
 	}
