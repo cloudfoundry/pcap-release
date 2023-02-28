@@ -29,7 +29,12 @@ const (
 	CompatibilityLevel int64 = 1
 
 	// LogKeyVcapID sets on which field the vcap request id will be logged.
-	LogKeyVcapID        = "vcap-id"
+	LogKeyVcapID = "vcap-id"
+	// LogKeyHandler sets the handler
+	LogKeyHandler = "handler"
+
+	LogKeyTarget        = "target"
+	LogKeyResolver      = "resolver"
 	HeaderVcapID        = contextKeyVcapID("x-vcap-request-id")
 	maxDeviceNameLength = 16
 	maxFilterLength     = 5000

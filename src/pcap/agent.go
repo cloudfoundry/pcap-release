@@ -86,7 +86,7 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	a.streamsWG.Add(1)
 	defer a.streamsWG.Done()
 
-	log := zap.L().With(zap.String("handler", "capture"))
+	log := zap.L().With(zap.String(LogKeyHandler, "capture"))
 	defer func() {
 		if err != nil {
 			log.Error("capture ended unsuccessfully", zap.Error(err))

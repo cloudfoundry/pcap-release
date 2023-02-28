@@ -144,7 +144,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	api.captureWG.Add(1)
 	defer api.captureWG.Done()
 
-	log := zap.L().With(zap.String("handler", "capture"))
+	log := zap.L().With(zap.String(LogKeyHandler, "capture"))
 
 	defer func() {
 		if err != nil {
@@ -483,7 +483,7 @@ func (api *API) capture(ctx context.Context, stream responseSender, opts *Captur
 	opts.Filter = patchedFilter
 
 	for _, target := range targets {
-		log = log.With(zap.String("target", target.String()))
+		log = log.With(zap.String(LogKeyTarget, target.String()))
 		log.Info("starting capture")
 
 		var captureStream captureReceiver
