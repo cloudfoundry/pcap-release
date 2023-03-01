@@ -34,6 +34,10 @@ var lis net.Listener
 
 var apiClient pcap.APIClient
 
+var APIPort = 8080
+
+var MaxConcurrentCaptures = 2
+
 func boshRequest(bosh *pcap.BoshCapture, options *pcap.CaptureOptions) *pcap.CaptureRequest {
 	return &pcap.CaptureRequest{
 		Operation: &pcap.CaptureRequest_Start{
@@ -85,17 +89,16 @@ var _ = Describe("IntegrationTests", func() {
 	Describe("Starting a capture", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
-			//var target pcap.AgentEndpoint
 
-			_, agentServer1, agentTarget1, agent1 = createAgent(8082, agentID1, nil)
+			agentServer1, agentTarget1, agent1 = createAgent(8082, agentID1, nil)
 			targets = append(targets, agentTarget1)
 
-			_, agentServer2, agentTarget2, _ = createAgent(8083, agentID2, nil)
+			agentServer2, agentTarget2, _ = createAgent(8083, agentID2, nil)
 			targets = append(targets, agentTarget2)
 
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180}
-			apiClient, apiServer, api = createAPI(8080, targets, apiBuffConf, agentTLSConf, apiID, 2)
+			apiClient, apiServer, api = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -148,16 +151,15 @@ var _ = Describe("IntegrationTests", func() {
 
 				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 				errCode, _, err := recvCapture(1, streamLimitReached)
-
-				GinkgoWriter.Printf("\nError code: %v\n", errCode)
+				Expect(err).To(HaveOccurred())
 				Expect(errCode).To(Equal(codes.ResourceExhausted))
 
 				for _, stream := range streams {
 					err = stream.Send(stop)
 					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-					code, _, err := recvCapture(10_000, stream)
-					Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+					code, _, recvErr := recvCapture(10_000, stream)
+					Expect(recvErr).ToNot(HaveOccurred(), "Receiving the remaining messages")
 					Expect(code).To(Equal(codes.OK))
 				}
 			})
@@ -168,6 +170,7 @@ var _ = Describe("IntegrationTests", func() {
 				ctx = metadata.NewOutgoingContext(ctx, md)
 
 				stream, err := apiClient.Capture(ctx)
+				Expect(err).NotTo(HaveOccurred())
 
 				request := boshRequest(&pcap.BoshCapture{
 					Token:  "123",
@@ -175,10 +178,10 @@ var _ = Describe("IntegrationTests", func() {
 				}, defaultOptions)
 
 				err = stream.Send(request)
-
 				Expect(err).NotTo(HaveOccurred())
 
 				errCode, _, err := recvCapture(10, stream)
+				Expect(err).To(HaveOccurred())
 				Expect(errCode).To(Equal(codes.InvalidArgument))
 			})
 			It("one agent unavailable", func() {
@@ -210,7 +213,7 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				errCode, messages, err := recvCapture(10, stream)
-
+				Expect(err).To(HaveOccurred(), "Error occurred due to failed precondition")
 				Expect(errCode).To(Equal(codes.FailedPrecondition))
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
@@ -226,7 +229,7 @@ var _ = Describe("IntegrationTests", func() {
 				}()
 
 				code, messages, err := recvCapture(500, stream)
-
+				Expect(err).NotTo(HaveOccurred())
 				Expect(code).To(Equal(codes.OK))
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
 
@@ -283,7 +286,7 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CAPTURE_STOPPED, agentTarget2.Identifier)).To(BeTrue())
 
 				statusResponse, err := apiClient.Status(context.Background(), &pcap.StatusRequest{})
-
+				Expect(err).ToNot(HaveOccurred())
 				Expect(statusResponse.Healthy).To(BeFalse())
 
 			})
@@ -293,12 +296,12 @@ var _ = Describe("IntegrationTests", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 
-			_, agentServer1, agentTarget1, agent1 = createAgent(8082, agentID1, nil)
+			agentServer1, agentTarget1, agent1 = createAgent(8082, agentID1, nil)
 			targets = append(targets, agentTarget1)
 
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 90}
-			apiClient, apiServer, _ = createAPI(8080, targets, apiBuffConf, agentTLSConf, apiID, 2)
+			apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -329,8 +332,9 @@ var _ = Describe("IntegrationTests", func() {
 				go func() {
 					agentServer1.Stop()
 				}()
-				errCode, messages, err := recvCapture(10_000, stream)
 
+				errCode, messages, err := recvCapture(10_000, stream)
+				Expect(err).To(HaveOccurred(), "Error occurred due to agent crash")
 				Expect(errCode).To(Equal(codes.Aborted))
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
 			})
@@ -340,16 +344,15 @@ var _ = Describe("IntegrationTests", func() {
 	Describe("Staring a capture with an API with a smaller buffer", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
-			//var target pcap.AgentEndpoint
 
-			_, agentServer1, agentTarget1, agent1 = createAgent(8082, agentID1, nil)
+			agentServer1, agentTarget1, agent1 = createAgent(8082, agentID1, nil)
 			targets = append(targets, agentTarget1)
 
-			_, agentServer2, agentTarget2, _ = createAgent(8083, agentID2, nil)
+			agentServer2, agentTarget2, _ = createAgent(8083, agentID2, nil)
 			targets = append(targets, agentTarget2)
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 7, UpperLimit: 6, LowerLimit: 4}
-			apiClient, apiServer, _ = createAPI(8080, targets, apiBuffConf, agentTLSConf, apiID, 2)
+			apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -404,7 +407,7 @@ var _ = Describe("IntegrationTests", func() {
 			mTLSConfig, err := configureServer(certPath, keyPath, clientCAFile)
 			Expect(err).ToNot(HaveOccurred())
 
-			_, agentServer1, target, agent1 = createAgent(8082, agentID1, mTLSConfig)
+			agentServer1, target, agent1 = createAgent(8082, agentID1, mTLSConfig)
 			targets = append(targets, target)
 
 			agentTLSConf := pcap.AgentMTLS{
@@ -419,7 +422,7 @@ var _ = Describe("IntegrationTests", func() {
 				},
 			}
 			apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}
-			apiClient, apiServer, _ = createAPI(8080, targets, apiBuffConf, agentTLSConf, agentID1, 2)
+			apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, agentID1)
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -435,10 +438,15 @@ var _ = Describe("IntegrationTests", func() {
 			}
 		})
 		AfterEach(func() {
+			var err error
 			agentServer1.GracefulStop()
 			apiServer.GracefulStop()
-			os.RemoveAll("api")
-			os.RemoveAll("agent")
+
+			err = os.RemoveAll("api")
+			Expect(err).ToNot(HaveOccurred())
+
+			err = os.RemoveAll("agent")
+			Expect(err).ToNot(HaveOccurred())
 		})
 		Context("with one agents and one API", func() {
 			It("finished without errors", func() {
@@ -480,7 +488,7 @@ var _ = Describe("IntegrationTests", func() {
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-				code, messages, err := recvCapture(10_000, stream)
+				code, _, err := recvCapture(10_000, stream)
 				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
 				Expect(code).To(Equal(codes.OK))
 
@@ -529,30 +537,10 @@ func generateCerts(commonName string, dir string) (string, string, string, error
 		BasicConstraintsValid: true,
 	}
 
-	// create our private and public key
-	caPrivKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	caKey, _, caPEM, err := generateCertAndKey(ca, ca, nil)
 	if err != nil {
 		return "", "", "", err
 	}
-
-	// create the CA
-	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivKey.PublicKey, caPrivKey)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	// pem encode
-	caPEM := new(bytes.Buffer)
-	pem.Encode(caPEM, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: caBytes,
-	})
-
-	caPrivKeyPEM := new(bytes.Buffer)
-	pem.Encode(caPrivKeyPEM, &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(caPrivKey),
-	})
 
 	// set up our server certificate
 	dns := []string{commonName}
@@ -570,27 +558,10 @@ func generateCerts(commonName string, dir string) (string, string, string, error
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 	}
 
-	certPrivKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	_, certPrivKeyPEM, certPEM, err := generateCertAndKey(cert, ca, caKey)
 	if err != nil {
 		return "", "", "", err
 	}
-
-	certBytes, err := x509.CreateCertificate(rand.Reader, cert, ca, &certPrivKey.PublicKey, caPrivKey)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	certPEM := new(bytes.Buffer)
-	pem.Encode(certPEM, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: certBytes,
-	})
-
-	certPrivKeyPEM := new(bytes.Buffer)
-	pem.Encode(certPrivKeyPEM, &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(certPrivKey),
-	})
 
 	err = os.MkdirAll(dir, os.ModePerm)
 	if err != nil {
@@ -618,31 +589,72 @@ func generateCerts(commonName string, dir string) (string, string, string, error
 	return certPath, keyPath, caPath, nil
 }
 
-func configureServer(certFile string, keyFile string, clientCAFile string) (credentials.TransportCredentials, error) {
+func generateCertAndKey(cert *x509.Certificate, ca *x509.Certificate, issuerKey *rsa.PrivateKey) (*rsa.PrivateKey, *bytes.Buffer, *bytes.Buffer, error) {
+	// create our private and public key
+	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
+	if issuerKey == nil {
+		issuerKey = privateKey
+	}
+	// create the CA
+	certBytes, err := x509.CreateCertificate(rand.Reader, cert, ca, &privateKey.PublicKey, issuerKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// pem encode
+	certPEM := new(bytes.Buffer)
+	err = pem.Encode(certPEM, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certBytes,
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	privateKeyPEM := new(bytes.Buffer)
+	err = pem.Encode(privateKeyPEM, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return privateKey, privateKeyPEM, certPEM, nil
+}
+
+func configureServer(certFile string, keyFile string, clientCAFile string) (credentials.TransportCredentials, error) {
 	return pcap.LoadTLSCredentials(certFile, keyFile, &clientCAFile, nil, nil)
 }
 
-func createAgent(port int, id string, tlsCreds credentials.TransportCredentials) (pcap.AgentClient, *grpc.Server, pcap.AgentEndpoint, *pcap.Agent) {
+func createAgent(port int, id string, tlsCreds credentials.TransportCredentials) (*grpc.Server, pcap.AgentEndpoint, *pcap.Agent) {
+	var err error
 	var server *grpc.Server
-	agent := pcap.NewAgent(pcap.BufferConf{100, 98, 80}, id)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	agent := pcap.NewAgent(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, id)
+
+	lis, err = net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	Expect(err).NotTo(HaveOccurred())
 	tcpAddr, ok := lis.Addr().(*net.TCPAddr)
 	Expect(ok).To(BeTrue())
 	GinkgoWriter.Printf("create agent with listener  %s\n", lis.Addr())
 
 	target := pcap.AgentEndpoint{IP: tcpAddr.IP.String(), Port: tcpAddr.Port, Identifier: id}
-	server = grpc.NewServer()
 	if tlsCreds != nil {
 		server = grpc.NewServer(grpc.Creds(tlsCreds))
 	} else {
 		server = grpc.NewServer()
 	}
+
 	pcap.RegisterAgentServer(server, agent)
 	go func() {
-		server.Serve(lis)
+		err = server.Serve(lis)
+		if err != nil {
+			return
+		}
 	}()
 
 	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -650,24 +662,27 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cc).ShouldNot(BeNil())
 
-	agentClient := pcap.NewAgentClient(cc)
-	return agentClient, server, target, agent
+	_ = pcap.NewAgentClient(cc)
+	return server, target, agent
 }
 
-func createAPI(port int, targets []pcap.AgentEndpoint, bufconf pcap.BufferConf, mTLSConfig pcap.AgentMTLS, id string, maxConcurrentCaptures int) (pcap.APIClient, *grpc.Server, *pcap.API) {
+func createAPI(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig pcap.AgentMTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API) {
 	var server *grpc.Server
-	api, err := pcap.NewAPI(bufconf, mTLSConfig, id, maxConcurrentCaptures)
+	api, err := pcap.NewAPI(bufConf, mTLSConfig, id, MaxConcurrentCaptures)
 	Expect(err).NotTo(HaveOccurred())
 	api.RegisterResolver(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
-	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", APIPort))
 	Expect(err).NotTo(HaveOccurred())
 
 	server = grpc.NewServer()
 	pcap.RegisterAPIServer(server, api)
 
 	go func() {
-		server.Serve(lis)
+		err = server.Serve(lis)
+		if err != nil {
+			return
+		}
 	}()
 
 	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -688,11 +703,10 @@ func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.Capt
 		}
 		code := status.Code(err)
 		if code != codes.OK {
-			return code, messages, fmt.Errorf("receive code: %s: %s\n", code.String(), err.Error())
+			return code, messages, fmt.Errorf("receive code: %s: %w", code.String(), err)
 		}
 		messages = append(messages, message)
 		logCaptureResponse(GinkgoWriter, message)
-
 	}
 	GinkgoWriter.Printf("done")
 	return codes.OK, messages, nil
@@ -708,7 +722,7 @@ func logCaptureResponse(writer GinkgoWriterInterface, response *pcap.CaptureResp
 	}
 }
 
-// contains checks if a string is present in a slice
+// contains checks if a string is present in a slice.
 func containsMsgTypeWithOrigin(messages []*pcap.CaptureResponse, msgType pcap.MessageType, origin string) bool {
 	for _, msg := range messages {
 		if msg.GetPacket() == nil && msg.GetMessage().GetType() == msgType && msg.GetMessage().GetOrigin() == origin {
