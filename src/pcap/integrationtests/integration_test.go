@@ -38,6 +38,8 @@ var APIPort = 8080
 
 var MaxConcurrentCaptures = 2
 
+var port = 8082
+
 func boshRequest(bosh *pcap.BoshCapture, options *pcap.CaptureOptions) *pcap.CaptureRequest {
 	return &pcap.CaptureRequest{
 		Operation: &pcap.CaptureRequest_Start{
@@ -89,11 +91,10 @@ var _ = Describe("IntegrationTests", func() {
 	Describe("Starting a capture", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
-
-			agentServer1, agentTarget1, agent1 = createAgent(8082, agentID1, nil)
+			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
 			targets = append(targets, agentTarget1)
 
-			agentServer2, agentTarget2, _ = createAgent(8083, agentID2, nil)
+			agentServer2, agentTarget2, _ = createAgent(nextFreePort(), agentID2, nil)
 			targets = append(targets, agentTarget2)
 
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
@@ -294,7 +295,7 @@ var _ = Describe("IntegrationTests", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 
-			agentServer1, agentTarget1, agent1 = createAgent(8082, agentID1, nil)
+			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
 			targets = append(targets, agentTarget1)
 
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
@@ -343,10 +344,10 @@ var _ = Describe("IntegrationTests", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 
-			agentServer1, agentTarget1, agent1 = createAgent(8082, agentID1, nil)
+			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
 			targets = append(targets, agentTarget1)
 
-			agentServer2, agentTarget2, _ = createAgent(8083, agentID2, nil)
+			agentServer2, agentTarget2, _ = createAgent(nextFreePort(), agentID2, nil)
 			targets = append(targets, agentTarget2)
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 7, UpperLimit: 6, LowerLimit: 4}
@@ -405,7 +406,7 @@ var _ = Describe("IntegrationTests", func() {
 			mTLSConfig, err := configureServer(certPath, keyPath, clientCAFile)
 			Expect(err).ToNot(HaveOccurred())
 
-			agentServer1, target, agent1 = createAgent(8082, agentID1, mTLSConfig)
+			agentServer1, target, agent1 = createAgent(nextFreePort(), agentID1, mTLSConfig)
 			targets = append(targets, target)
 
 			agentTLSConf := pcap.AgentMTLS{
@@ -494,6 +495,11 @@ var _ = Describe("IntegrationTests", func() {
 		})
 	})
 })
+
+func nextFreePort() int {
+	port++
+	return port
+}
 
 func expectReceivingFirstMessages(stream pcap.API_CaptureClient) {
 	statusCode, messages, err := recvCapture(10, stream)
