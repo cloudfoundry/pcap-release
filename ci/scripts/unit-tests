@@ -22,5 +22,5 @@ pushd src/pcap/integrationtests
   go install "github.com/onsi/ginkgo/v2/ginkgo@latest"
   export PATH=$PATH:$GOPATH/bin
   ginkgo version
-  ginkgo -r -trace
+  ginkgo -r -trace -vv
 popd

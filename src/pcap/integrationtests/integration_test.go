@@ -685,7 +685,7 @@ func createAPI(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig
 	go func() {
 		err = server.Serve(lis)
 		if err != nil {
-			return
+			GinkgoWriter.Printf("error occurred during api creation: %v", err)
 		}
 	}()
 
