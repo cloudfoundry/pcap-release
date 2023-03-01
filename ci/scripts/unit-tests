@@ -17,6 +17,7 @@ popd
 
 echo "> Running integration tests"
 pushd src/pcap/integrationtests
+  go install "github.com/onsi/ginkgo/v2/ginkgo@2.7.1
   ginkgo version
   ginkgo -r -trace
 popd
