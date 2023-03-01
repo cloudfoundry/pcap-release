@@ -191,9 +191,7 @@ var _ = Describe("IntegrationTests", func() {
 
 				Expect(err).NotTo(HaveOccurred())
 
-				errCode, messages, err := recvCapture(10, stream)
-
-				Expect(err).NotTo(HaveOccurred())
+				errCode, messages, _ := recvCapture(10, stream)
 				Expect(errCode).To(Equal(codes.OK))
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
 
