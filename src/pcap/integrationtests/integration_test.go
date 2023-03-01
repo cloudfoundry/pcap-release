@@ -515,7 +515,10 @@ func createStreamAndStartCapture(defaultOptions *pcap.CaptureOptions) (pcap.API_
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
 	stream, err := apiClient.Capture(ctx)
-	Expect(err).NotTo(HaveOccurred())
+	if stream == nil {
+		return nil, err
+	}
+	
 	request := boshRequest(&pcap.BoshCapture{
 		Token:      "123",
 		Deployment: "cf",
