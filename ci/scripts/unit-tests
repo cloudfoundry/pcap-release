@@ -17,7 +17,10 @@ popd
 
 echo "> Running integration tests"
 pushd src/pcap/integrationtests
+  mkdir /go
+  export GOPATH=/go
   go install "github.com/onsi/ginkgo/v2/ginkgo@latest"
+  export PATH=$PATH:$GOPATH/bin
   ginkgo version
   ginkgo -r -trace
 popd
