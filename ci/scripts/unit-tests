@@ -10,7 +10,15 @@ echo "> Running 'bundle exec rake spec'"
 bundle package
 bundle exec rake spec
 
-echo "> Running 'go test'"
+echo "> Running unit tests"
 pushd src/pcap
-  go test ./...
+  go test $(go list ./... | grep -v /integrationtests)
+popd
+
+echo "> Running integration tests"
+pushd src/pcap/integrationtests
+  export PATH=$PATH:$GOPATH/bin
+  go install "github.com/onsi/ginkgo/v2/ginkgo@2.7.1"
+  ginkgo version
+  ginkgo -r -trace
 popd
