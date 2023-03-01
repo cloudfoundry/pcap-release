@@ -34,7 +34,7 @@ var lis net.Listener
 
 var apiClient pcap.APIClient
 
-var APIPort = 8080
+var apiPort = 8080
 
 var MaxConcurrentCaptures = 2
 
@@ -518,7 +518,7 @@ func createStreamAndStartCapture(defaultOptions *pcap.CaptureOptions) (pcap.API_
 	if stream == nil {
 		return nil, err
 	}
-	
+
 	request := boshRequest(&pcap.BoshCapture{
 		Token:      "123",
 		Deployment: "cf",
@@ -678,7 +678,7 @@ func createAPI(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig
 	Expect(err).NotTo(HaveOccurred())
 	api.RegisterResolver(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
-	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", APIPort))
+	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", apiPort))
 	Expect(err).NotTo(HaveOccurred())
 
 	server = grpc.NewServer()
