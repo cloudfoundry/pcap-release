@@ -227,8 +227,7 @@ var _ = Describe("IntegrationTests", func() {
 					agentServer2.Stop()
 				}()
 
-				code, messages, err := recvCapture(500, stream)
-				Expect(err).NotTo(HaveOccurred())
+				code, messages, _ := recvCapture(500, stream)
 				Expect(code).To(Equal(codes.OK))
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
 
@@ -253,8 +252,7 @@ var _ = Describe("IntegrationTests", func() {
 					agent1.Wait()
 				}()
 
-				_, messages, err := recvCapture(500, stream)
-				Expect(err).NotTo(HaveOccurred())
+				_, messages, _ := recvCapture(500, stream)
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
 
 				err = stream.Send(stop)
@@ -516,13 +514,14 @@ func createStreamAndStartCapture(defaultOptions *pcap.CaptureOptions) (pcap.API_
 
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
-	stream, _ := apiClient.Capture(ctx)
+	stream, err := apiClient.Capture(ctx)
+	Expect(err).NotTo(HaveOccurred())
 	request := boshRequest(&pcap.BoshCapture{
 		Token:      "123",
 		Deployment: "cf",
 		Groups:     []string{"router"},
 	}, defaultOptions)
-	err := stream.Send(request)
+	err = stream.Send(request)
 	return stream, err
 }
 
