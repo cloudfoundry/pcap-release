@@ -23,7 +23,7 @@ const concurrentCapturesPerClient = 10
 
 type API struct {
 	bufConf  BufferConf
-	handlers map[string]EndpointQueryHandler
+	resolver map[string]AgentResolver
 	agents   AgentMTLS
 	UnimplementedAPIServer
 	id string
@@ -44,7 +44,7 @@ type ManualEndpoints struct {
 func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int, drainTimeout time.Duration) *API {
 	return &API{
 		bufConf:                bufConf,
-		handlers:               make(map[string]EndpointQueryHandler),
+		resolver:               make(map[string]AgentResolver),
 		agents:                 agentmTLS,
 		id:                     id,
 		maxConcurrentCaptures:  maxConcurrentCaptures,
@@ -69,24 +69,24 @@ var (
 	errUnexpectedMessage = fmt.Errorf("unexpected message")
 )
 
-// EndpointQueryHandler defines handlers for different request types that ultimately lead to a selection of EndpointRequest.
-type EndpointQueryHandler interface {
-	// name provides the name of the handler for outputs and internal mapping.
+// AgentResolver defines resolver for different request types that ultimately lead to a selection of EndpointRequest.
+type AgentResolver interface {
+	// name provides the name of the resolver for outputs and internal mapping.
 	name() string
-	// canHandle determines if this handler is responsible for handling the EndpointRequest
-	canHandle(*EndpointRequest) bool
-	// handle either resolves and returns the agents targeted by EndpointRequest or provides an error
-	handle(*EndpointRequest, *zap.Logger) ([]AgentEndpoint, error)
+	// canResolve determines if this resolver is responsible for handling the EndpointRequest
+	canResolve(*EndpointRequest) bool
+	// resolve either resolves and returns the agents targeted by EndpointRequest or provides an error
+	resolve(*EndpointRequest, *zap.Logger) ([]AgentEndpoint, error)
 }
 
-func (api *API) RegisterHandler(handler EndpointQueryHandler) {
-	api.handlers[handler.name()] = handler
+func (api *API) RegisterResolver(resolver AgentResolver) {
+	api.resolver[resolver.name()] = resolver
 }
 
 // Status provides the current status information for the pcap-api service.
 func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
-	bosh := api.handlerRegistered("bosh")
-	cf := api.handlerRegistered("cf")
+	bosh := api.resolverRegistered("bosh")
+	cf := api.resolverRegistered("cf")
 
 	apiStatus := &StatusResponse{
 		Healthy:            !api.draining,
@@ -103,16 +103,16 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	return apiStatus, nil
 }
 
-// handlerRegistered checks if handler is registered.
-// returns false, if the handler is not registered.
-func (api *API) handlerRegistered(handler string) bool {
-	_, ok := api.handlers[handler]
+// resolverRegistered checks if resolver is registered.
+// returns false, if the resolver is not registered.
+func (api *API) resolverRegistered(resolver string) bool {
+	_, ok := api.resolver[resolver]
 	return ok
 }
 
 // EndpointRequest receives messages (start or stop capture) from the client and streams payload (messages or pcap data) back.
 func (api *API) Capture(stream API_CaptureServer) (err error) {
-	log := zap.L().With(zap.String("handler", "capture"))
+	log := zap.L().With(zap.String("resolver", "capture"))
 
 	defer func() {
 		if err != nil {
@@ -157,6 +157,10 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	targets, resolveErr := api.resolveAgentEndpoints(opts.Start.Capture, log)
 	if errors.Is(resolveErr, errValidationFailed) {
 		return errorf(codes.InvalidArgument, "capture targets not found: %w", err)
+	}
+	if resolveErr != nil {
+		//TODO: Handle other errors
+		return errorf(codes.Unknown, err.Error())
 	}
 
 	streamPreparer := &streamPrep{}
@@ -227,23 +231,23 @@ func (api *API) prepareTLSToAgent(log *zap.Logger) (credentials.TransportCredent
 	return credentials.NewTLS(config), nil
 }
 
-// resolveAgentEndpoints tries all registered api.handlers until one responds or none can be found that
-// support this capture request. The responsible handler is then queried for the applicable pcap-agent endpoints corresponding to this capture request.
+// resolveAgentEndpoints tries all registered api.resolver until one responds or none can be found that
+// support this capture request. The responsible resolver is then queried for the applicable pcap-agent endpoints corresponding to this capture request.
 func (api *API) resolveAgentEndpoints(capture *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
-	for name, handler := range api.handlers {
-		if handler.canHandle(capture) {
-			log.Sugar().Debugf("Resolving agent endpoints via handler %s for capture %s", name, capture)
+	for name, resolver := range api.resolver {
+		if resolver.canResolve(capture) {
+			log.Sugar().Debugf("Resolving agent endpoints via resolver %s for capture %s", name, capture)
 
-			agents, err := handler.handle(capture, log)
+			agents, err := resolver.resolve(capture, log)
 			if err != nil {
-				return nil, fmt.Errorf("error while handling %v via %s: %w", capture, name, err)
+				return nil, fmt.Errorf("error while resolving %v via %s: %w", capture, name, err)
 			}
 
 			return agents, nil
 		}
 	}
 
-	return nil, fmt.Errorf("no handler for %v", capture)
+	return nil, fmt.Errorf("no resolver for %v", capture)
 }
 
 func checkAgentStatus(statusRes *StatusResponse, err error, target AgentEndpoint) error {
@@ -315,7 +319,7 @@ func (p *streamPrep) prepareStreamToTarget(ctx context.Context, req *CaptureOpti
 	agentContext := context.Background()
 	vcapID, err := vcapIDFromOutgoingCtx(ctx)
 	if err != nil {
-		// TODO impelement error handling
+		// TODO implement error handling
 	}
 	agentContext, log = setVcapID(agentContext, log, vcapID)
 	captureStream, err := agent.Capture(agentContext)

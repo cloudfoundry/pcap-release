@@ -48,10 +48,19 @@ func main() {
 		log.Fatal("unable to create api", zap.Error(err))
 	}
 
-	// setup a BoshHandler for each bosh environment
+	// set up a BoshAgentResolver for each bosh environment
 	for _, env := range config.BoshEnvironments {
-		api.RegisterHandler(pcap.NewBoshHandler(env))
+		resolver := pcap.NewBoshAgentResolver(env, *config.Agents)
+		err = resolver.Setup()
+		if err != nil {
+			log.Warn(err.Error()) //TODO: we only want to warn if a resolver is nonfunctional. Is this the correct way to do this?
+			break
+		}
+		api.RegisterResolver(resolver)
 	}
+
+	//TODO: CFAgentResolver
+	//TODO: Check if there are working resolvers, otherwise fail?
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Listen.Port))
 	if err != nil {

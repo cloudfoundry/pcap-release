@@ -29,7 +29,6 @@ var DefaultAPIConfig = APIConfig{
 	},
 	DrainTimeout:       10 * time.Second,
 	ConcurrentCaptures: 5,
-	//ManualEndpoints:    pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}},
 }
 
 type APIConfig struct {
@@ -39,8 +38,7 @@ type APIConfig struct {
 	DrainTimeout       time.Duration   `yaml:"drain_timeout"`
 
 	BoshEnvironments []bosh.Environment `yaml:"bosh_environments"`
-	// TODO: Add BOSH and CF specific config fragments
-	//ManualEndpoints pcap.ManualEndpoints
+	// TODO: Add CF specific config fragments
 }
 
 func (c APIConfig) validate() error {

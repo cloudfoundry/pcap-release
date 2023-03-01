@@ -36,9 +36,6 @@ type UaaKeyInfo struct {
 // and an error in case anything went wrong while verifying the token and its scopes.
 
 func VerifyJwt(tokenString string, neededScope string, issuers []string) (bool, error) {
-
-	//tokenString = strings.Replace(tokenString, "Bearer ", "", 1)
-
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if jku, ok := token.Header["jku"]; ok {
 			jkuUrl, err := url.Parse(jku.(string))

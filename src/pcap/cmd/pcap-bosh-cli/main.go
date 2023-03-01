@@ -6,16 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
+	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"time"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
-	"gopkg.in/yaml.v3"
-
-	"code.cloudfoundry.org/bytefmt"
 	"github.com/jessevdk/go-flags"
 	log "github.com/sirupsen/logrus"
 )
@@ -77,10 +74,6 @@ func newBoshToken(e bosh.Environment) (*boshToken, error) {
 }
 
 func (t *boshToken) refreshAccess() error {
-	fmt.Println(url.Values{
-		"grant_type":    {"refresh_token"},
-		"refresh_token": {t.refresh},
-	}.Encode())
 	req := http.Request{
 		Method: http.MethodPost,
 		URL: &url.URL{
@@ -217,27 +210,12 @@ func main() {
 		SnapLen: 65_000, // fixme
 	}
 
-	client := pcap.NewClient(boshQuery, captureOptions, opts.File, opts.PcapAPIURL)
-	client.Setup()
-	client.HandleRequest()
-
-}
-
-func progress(file *os.File, stop <-chan bool) {
-	ticker := time.Tick(time.Second)
-	for {
-		select {
-		case <-ticker:
-			info, err := file.Stat()
-			if err != nil {
-				panic(err.Error())
-			}
-
-			fmt.Printf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size())))
-		case <-stop:
-			return
-		}
+	client, err := pcap.NewClient(boshQuery, captureOptions, opts.File, opts.PcapAPIURL)
+	if err != nil {
+		fmt.Errorf(err.Error()) //TODO
+		return
 	}
+	client.HandleRequest()
 }
 
 func getToken(config *bosh.Config, boshEnv string) (*boshToken, error) {
@@ -248,9 +226,4 @@ func getToken(config *bosh.Config, boshEnv string) (*boshToken, error) {
 	}
 
 	return nil, fmt.Errorf("get token: environment '%s' not found", boshEnv)
-}
-
-// silentClose ignores errors returned when closing the io.Closer.
-func silentClose(closer io.Closer) {
-	_ = closer.Close()
 }
