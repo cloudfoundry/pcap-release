@@ -38,6 +38,7 @@ var port = 8110
 
 var APIPort = 8080
 
+// boshRequest prepares the properly contained gRPC request for bosh with options.
 func boshRequest(bosh *pcap.BoshCapture, options *pcap.CaptureOptions) *pcap.CaptureRequest {
 	return &pcap.CaptureRequest{
 		Operation: &pcap.CaptureRequest_Start{
@@ -53,6 +54,7 @@ func boshRequest(bosh *pcap.BoshCapture, options *pcap.CaptureOptions) *pcap.Cap
 	}
 }
 
+// findLoopback finds the first identified loopback interface.
 func findLoopback() (*gopcap.Interface, error) {
 	devs, err := gopcap.FindAllDevs()
 	if err != nil {
@@ -125,15 +127,12 @@ var _ = Describe("IntegrationTests", func() {
 
 				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-				expectReceivingFirstMessages(stream)
+				readAndExpectFirstMessages(stream)
 
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-				code, _, err := recvCapture(10_000, stream)
-				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-				Expect(code).To(Equal(codes.OK))
-
+				_ = readAndExpectCleanEnd(stream)
 			})
 			It("many concurrent captures from the same client", func() {
 				streams := make([]pcap.API_CaptureClient, 2)
@@ -143,7 +142,7 @@ var _ = Describe("IntegrationTests", func() {
 					Expect(err).NotTo(HaveOccurred(), "Sending the request")
 					streams[i] = stream
 
-					expectReceivingFirstMessages(stream)
+					readAndExpectFirstMessages(stream)
 				}
 
 				streamLimitReached, err := createStreamAndStartCapture(defaultOptions)
@@ -157,9 +156,7 @@ var _ = Describe("IntegrationTests", func() {
 					err = stream.Send(stop)
 					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-					code, _, recvErr := recvCapture(10_000, stream)
-					Expect(recvErr).ToNot(HaveOccurred(), "Receiving the remaining messages")
-					Expect(code).To(Equal(codes.OK))
+					_ = readAndExpectCleanEnd(stream)
 				}
 			})
 			It("finished with errors due to invalid start capture request", func() {
@@ -196,10 +193,7 @@ var _ = Describe("IntegrationTests", func() {
 
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
-				code, _, err := recvCapture(10_000, stream)
-				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-				Expect(code).To(Equal(codes.OK))
-
+				_ = readAndExpectCleanEnd(stream)
 			})
 			It("No pcap-agents available", func() {
 				agentServer1.GracefulStop()
@@ -219,7 +213,7 @@ var _ = Describe("IntegrationTests", func() {
 				stream, err := createStreamAndStartCapture(defaultOptions)
 				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-				expectReceivingFirstMessages(stream)
+				readAndExpectFirstMessages(stream)
 
 				go func() {
 					agentServer2.Stop()
@@ -233,17 +227,13 @@ var _ = Describe("IntegrationTests", func() {
 
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-				code, _, err = recvCapture(10_000, stream)
-
-				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-				Expect(code).To(Equal(codes.OK))
-
+				_ = readAndExpectCleanEnd(stream)
 			})
 			It("One pcap-agent drains", func() {
 				stream, err := createStreamAndStartCapture(defaultOptions)
 				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-				expectReceivingFirstMessages(stream)
+				readAndExpectFirstMessages(stream)
 
 				go func() {
 					agent1.Stop()
@@ -256,18 +246,15 @@ var _ = Describe("IntegrationTests", func() {
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-				code, messages, err := recvCapture(10_000, stream)
-
+				messages = readAndExpectCleanEnd(stream)
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CAPTURE_STOPPED, agentTarget2.Identifier)).To(BeTrue())
-				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-				Expect(code).To(Equal(codes.OK))
 			})
 			It("api drains", func() {
 				stream, err := createStreamAndStartCapture(defaultOptions)
 
 				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-				expectReceivingFirstMessages(stream)
+				readAndExpectFirstMessages(stream)
 
 				go func() {
 					api.Stop()
@@ -324,7 +311,7 @@ var _ = Describe("IntegrationTests", func() {
 
 				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-				expectReceivingFirstMessages(stream)
+				readAndExpectFirstMessages(stream)
 
 				go func() {
 					agentServer1.Stop()
@@ -383,10 +370,8 @@ var _ = Describe("IntegrationTests", func() {
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CONGESTED, apiID)).To(BeTrue())
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
-				code, _, err := recvCapture(10_000, stream)
-				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-				Expect(code).To(Equal(codes.OK))
 
+				_ = readAndExpectCleanEnd(stream)
 			})
 		})
 	})
@@ -454,17 +439,13 @@ var _ = Describe("IntegrationTests", func() {
 
 				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-				expectReceivingFirstMessages(stream)
+				readAndExpectFirstMessages(stream)
 
 				err = stream.Send(stop)
 
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-				code, _, err := recvCapture(10_000, stream)
-
-				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-				Expect(code).To(Equal(codes.OK))
-
+				_ = readAndExpectCleanEnd(stream)
 			})
 			It("without external vcapID finished without errors", func() {
 				ctx := context.Background()
@@ -488,21 +469,27 @@ var _ = Describe("IntegrationTests", func() {
 				err = stream.Send(stop)
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-				code, _, err := recvCapture(10_000, stream)
-				Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
-				Expect(code).To(Equal(codes.OK))
-
+				_ = readAndExpectCleanEnd(stream)
 			})
 		})
 	})
 })
+
+// readAndExpectCleanEnd reads up to 1000 capture responses and expects an OK termination code
+func readAndExpectCleanEnd(stream pcap.API_CaptureClient) []*pcap.CaptureResponse {
+	code, messages, err := recvCapture(10_000, stream)
+	Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")
+	Expect(code).To(Equal(codes.OK))
+
+	return messages
+}
 
 func nextFreePort() int {
 	port++
 	return port
 }
 
-func expectReceivingFirstMessages(stream pcap.API_CaptureClient) {
+func readAndExpectFirstMessages(stream pcap.API_CaptureClient) {
 	statusCode, messages, err := recvCapture(10, stream)
 
 	Expect(err).NotTo(HaveOccurred(), "Receiving the first 10 messages")

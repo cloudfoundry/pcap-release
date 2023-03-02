@@ -20,7 +20,7 @@ You might end up with errors complaining about not having access to capture from
 Change the group for the BPF devices to `staff`:
 
 ```shell
-sudo chgrp staff /dev/bpf*
+sudo chgrp staff /dev/bpf*; sudo chmod g+rw /dev/bpf*; ls -la /dev/bpf*
 ```
 
 Alternatively:
