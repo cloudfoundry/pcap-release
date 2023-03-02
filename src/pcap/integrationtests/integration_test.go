@@ -36,7 +36,7 @@ var apiClient pcap.APIClient
 
 var MaxConcurrentCaptures = 2
 
-var port = 8090
+var port = 8110
 
 func boshRequest(bosh *pcap.BoshCapture, options *pcap.CaptureOptions) *pcap.CaptureRequest {
 	return &pcap.CaptureRequest{
@@ -87,7 +87,7 @@ var _ = Describe("IntegrationTests", func() {
 	var agent1 *pcap.Agent
 
 	Describe("Starting a capture", func() {
-		var apiPort = 8080
+		var apiPort = 8090
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
@@ -291,7 +291,7 @@ var _ = Describe("IntegrationTests", func() {
 		})
 	})
 	Describe("Staring a capture with one agent and one api", func() {
-		var apiPort = 8080
+		var apiPort = 8090
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 
@@ -343,7 +343,7 @@ var _ = Describe("IntegrationTests", func() {
 	})
 
 	Describe("Staring a capture with an API with a smaller buffer", func() {
-		var apiPort = 8080
+		var apiPort = 8090
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 
@@ -397,7 +397,7 @@ var _ = Describe("IntegrationTests", func() {
 	})
 
 	Describe("Starting a capture use mTLS", func() {
-		var apiPort = 8080
+		var apiPort = 8090
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 			var target pcap.AgentEndpoint
