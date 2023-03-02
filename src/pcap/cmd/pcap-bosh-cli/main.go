@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 
 	"github.com/jessevdk/go-flags"
 	log "github.com/sirupsen/logrus"
@@ -27,90 +28,7 @@ type boshToken struct {
 	scheme  string
 	access  string
 	refresh string
-	uaaUrl  *url.URL
-}
-
-func newBoshToken(e bosh.Environment) (*boshToken, error) {
-	director, err := url.Parse(e.Url)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := client.Do(&http.Request{
-		Method: http.MethodGet,
-		URL: &url.URL{
-			Scheme: director.Scheme,
-			Host:   director.Host,
-			Path:   "/info",
-		},
-		Header: http.Header{
-			"Accept": {"application/json"},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code %d", res.StatusCode)
-	}
-
-	var info bosh.Info
-	err = json.NewDecoder(res.Body).Decode(&info)
-	if err != nil {
-		return nil, err
-	}
-
-	uaaUrl, err := url.Parse(info.UserAuthentication.Options.Url)
-	if err != nil {
-		return nil, err
-	}
-
-	return &boshToken{
-		scheme:  e.AccessTokenType,
-		access:  e.AccessToken,
-		refresh: e.RefreshToken,
-		uaaUrl:  uaaUrl,
-	}, nil
-}
-
-func (t *boshToken) refreshAccess() error {
-	req := http.Request{
-		Method: http.MethodPost,
-		URL: &url.URL{
-			Scheme: t.uaaUrl.Scheme,
-			Host:   t.uaaUrl.Host,
-			Path:   "/oauth/token",
-		},
-		Header: http.Header{
-			"Accept":        {"application/json"},
-			"Content-Type":  {"application/x-www-form-urlencoded"},
-			"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("bosh_cli:")))}, // TODO: the client name is also written in the token
-		},
-		Body: io.NopCloser(bytes.NewReader([]byte(url.Values{
-			"grant_type":    {"refresh_token"},
-			"refresh_token": {t.refresh},
-		}.Encode()))),
-	}
-	res, err := client.Do(&req)
-	if err != nil {
-		return err
-	}
-
-	var newTokens struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		TokenType    string `json:"token_type"`
-	}
-	err = json.NewDecoder(res.Body).Decode(&newTokens)
-	if err != nil {
-		return err
-	}
-
-	t.refresh = newTokens.RefreshToken
-	t.scheme = newTokens.TokenType
-	t.access = newTokens.AccessToken
-
-	return nil
+	uaaURL  *url.URL
 }
 
 type options struct {
@@ -165,14 +83,67 @@ func main() {
 		}
 	}()
 
+	token, err := updateTokens()
+	if err != nil {
+		log.Fatalf(err.Error()) // TODO
+	}
+
+	stopChannel := setupStopChannel()
+
+	endpointRequest := &pcap.EndpointRequest{
+		Capture: &pcap.Capture_Bosh{
+			Bosh: &pcap.BoshQuery{
+				Token:      token,
+				Deployment: opts.Deployment,
+				Groups:     opts.InstanceGroups,
+			},
+		},
+	}
+
+	captureOptions := &pcap.CaptureOptions{
+		Device:  opts.Interface,
+		Filter:  opts.Filter,
+		SnapLen: 65_000, // TODO: get from config or parameters
+	}
+
+	client, err := pcap.NewClient(endpointRequest, captureOptions, opts.File, opts.PcapAPIURL, stopChannel)
+	if err != nil {
+		log.Fatalf(err.Error()) // TODO
+		return
+	}
+
+	err = client.HandleRequest()
+	if err != nil {
+		log.Fatalf("encountered error during request handling: %s", err.Error()) //TODO
+	}
+}
+
+func setupStopChannel() chan pcap.StopSignal {
+	log.Debug("registering signal handler for SIGINT")
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+
+	stopChannel := make(chan pcap.StopSignal)
+
+	go func() {
+		log.Debug("waiting for SIGINT to be sent")
+		<-sigChan
+
+		log.Debug("received SIGINT, stopping progress")
+		stopChannel <- pcap.Stop_client
+	}()
+	return stopChannel
+}
+
+func updateTokens() (string, error) {
 	token, err := getToken(config, opts.BoshEnvironment)
 	if err != nil {
-		return
+		return "", err
 	}
 
 	err = token.refreshAccess()
 	if err != nil {
-		return
+		return "", err
 	}
 
 	for i, e := range config.Environments {
@@ -186,36 +157,15 @@ func main() {
 
 	configWriter, err := os.Create(opts.BoshConfig)
 	if err != nil {
-		return
+		return "", err
 	}
 
 	err = yaml.NewEncoder(configWriter).Encode(config)
 	if err != nil {
-		return
+		return "", err
 	}
 
-	boshQuery := &pcap.EndpointRequest{
-		Capture: &pcap.Capture_Bosh{
-			Bosh: &pcap.BoshQuery{
-				Token:      token.access,
-				Deployment: opts.Deployment,
-				Groups:     opts.InstanceGroups,
-			},
-		},
-	}
-
-	captureOptions := &pcap.CaptureOptions{
-		Device:  opts.Interface,
-		Filter:  opts.Filter,
-		SnapLen: 65_000, // fixme
-	}
-
-	client, err := pcap.NewClient(boshQuery, captureOptions, opts.File, opts.PcapAPIURL)
-	if err != nil {
-		fmt.Errorf(err.Error()) //TODO
-		return
-	}
-	client.HandleRequest()
+	return token.access, nil
 }
 
 func getToken(config *bosh.Config, boshEnv string) (*boshToken, error) {
@@ -226,4 +176,87 @@ func getToken(config *bosh.Config, boshEnv string) (*boshToken, error) {
 	}
 
 	return nil, fmt.Errorf("get token: environment '%s' not found", boshEnv)
+}
+
+func newBoshToken(e bosh.Environment) (*boshToken, error) {
+	director, err := url.Parse(e.Url)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.Do(&http.Request{
+		Method: http.MethodGet,
+		URL: &url.URL{
+			Scheme: director.Scheme,
+			Host:   director.Host,
+			Path:   "/info",
+		},
+		Header: http.Header{
+			"Accept": {"application/json"},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d", res.StatusCode)
+	}
+
+	var info bosh.Info
+	err = json.NewDecoder(res.Body).Decode(&info)
+	if err != nil {
+		return nil, err
+	}
+
+	uaaUrl, err := url.Parse(info.UserAuthentication.Options.Url)
+	if err != nil {
+		return nil, err
+	}
+
+	return &boshToken{
+		scheme:  e.AccessTokenType,
+		access:  e.AccessToken,
+		refresh: e.RefreshToken,
+		uaaURL:  uaaUrl,
+	}, nil
+}
+
+func (t *boshToken) refreshAccess() error {
+	req := http.Request{
+		Method: http.MethodPost,
+		URL: &url.URL{
+			Scheme: t.uaaURL.Scheme,
+			Host:   t.uaaURL.Host,
+			Path:   "/oauth/token",
+		},
+		Header: http.Header{
+			"Accept":        {"application/json"},
+			"Content-Type":  {"application/x-www-form-urlencoded"},
+			"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("bosh_cli:")))}, // TODO: the client name is also written in the token
+		},
+		Body: io.NopCloser(bytes.NewReader([]byte(url.Values{
+			"grant_type":    {"refresh_token"},
+			"refresh_token": {t.refresh},
+		}.Encode()))),
+	}
+	res, err := client.Do(&req)
+	if err != nil {
+		return err
+	}
+
+	var newTokens struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&newTokens)
+	if err != nil {
+		return err
+	}
+
+	t.refresh = newTokens.RefreshToken
+	t.scheme = newTokens.TokenType
+	t.access = newTokens.AccessToken
+
+	return nil
 }

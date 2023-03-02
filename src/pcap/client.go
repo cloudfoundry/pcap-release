@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc/status"
 	"io"
 	"os"
-	"os/signal"
 	"sync"
 	"time"
 )
@@ -22,20 +21,26 @@ type Client struct {
 	captureOptions  *CaptureOptions
 	packetOut       *os.File
 	messageOut      *os.File
-	signalChannel   chan os.Signal
-	query           *BoshQuery
-	apiClient       APIClient
 	apiURL          string
 	ctx             context.Context
+	stopChannel     chan StopSignal
+	aPIClient
 }
 
-func NewClient(request *EndpointRequest, captureOptions *CaptureOptions, outputFile string, apiURL string) (*Client, error) {
+type StopSignal int32
+
+const (
+	Stop_client StopSignal = 1
+	Stop_api    StopSignal = 2
+)
+
+func NewClient(request *EndpointRequest, captureOptions *CaptureOptions, outputFile string, apiURL string, stopChannel chan StopSignal) (*Client, error) {
 	client := &Client{
 		endpointRequest: request,
-		messageOut:      os.Stderr,
-		signalChannel:   make(chan os.Signal, 1),
-		apiURL:          apiURL,
 		captureOptions:  captureOptions,
+		messageOut:      os.Stderr,
+		stopChannel:     stopChannel,
+		apiURL:          apiURL,
 	}
 
 	if len(outputFile) == 0 {
@@ -51,43 +56,47 @@ func NewClient(request *EndpointRequest, captureOptions *CaptureOptions, outputF
 		}
 	}
 
-	client.connectToAPI()
+	err := client.connectToAPI()
+	if err != nil {
+		return nil, err
+	}
 
 	return client, nil
 }
-func (client *Client) connectToAPI() {
-
-	cc, err := grpc.Dial(client.apiURL, grpc.WithTransportCredentials(insecure.NewCredentials())) // fixme: credentials
+func (client *Client) connectToAPI() error {
+	var err error
+	client.cc, err = grpc.Dial(client.apiURL, grpc.WithTransportCredentials(insecure.NewCredentials())) // fixme: credentials
 	if err != nil {
-		log.Fatalf("Could not connect to pcap-api (%v)", client.apiURL)
+		return fmt.Errorf("Could not connect to pcap-api (%v)", client.apiURL)
 	}
 
 	client.ctx = context.Background()
 	ctx, cancel := context.WithTimeout(client.ctx, time.Minute)
 	defer cancel()
 
-	client.apiClient = NewAPIClient(cc)
-
-	statusResponse, err := client.apiClient.Status(ctx, &StatusRequest{})
+	statusResponse, err := client.Status(ctx, &StatusRequest{})
+	if err != nil {
+		return fmt.Errorf(err.Error())
+	}
 
 	if !statusResponse.GetHealthy() {
-		log.Fatalf("api not up")
+		return fmt.Errorf("api not up") // TODO
 	}
 
-	if client.endpointRequest.GetBosh() != nil {
+	switch {
+	case client.endpointRequest.GetBosh() != nil:
 		if !statusResponse.GetBosh() {
-			log.Fatalf("api server does not support bosh")
+			return fmt.Errorf("api server does not support bosh")
 		}
-	} else if client.endpointRequest.GetCf() != nil {
-		//TODO
+	case client.endpointRequest.GetCf() != nil:
 		panic("not yet implemented")
-	} else {
-		log.Fatalf("unknown endpoint request type")
+	default:
+		return fmt.Errorf("unknown endpoint request type")
 	}
+	return nil
 }
 
-func (client *Client) HandleRequest() {
-
+func (client *Client) HandleRequest() error {
 	request := &CaptureRequest{
 		Operation: &CaptureRequest_Start{
 			Start: &StartCapture{
@@ -97,83 +106,32 @@ func (client *Client) HandleRequest() {
 		},
 	}
 
-	stream, err := client.apiClient.Capture(client.ctx) //TODO: errorhandling
+	stream, err := client.Capture(client.ctx) //TODO: errorhandling
 
 	err = stream.Send(request)
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
-
-	defer silentClose(client.packetOut) // TODO: still necessary?
 
 	copyWg := &sync.WaitGroup{}
 	copyWg.Add(1)
-	go func(writer io.Writer, stream API_CaptureClient) {
-		counter := 0
+	go client.handleStream(stream, copyWg)
 
-		for {
-			counter++
-			time.Sleep(200 * time.Millisecond) //TODO: make configurable?
+	go client.logProgress(client.stopChannel)
 
-			res, err := stream.Recv()
-			if errors.Is(err, io.EOF) {
-				fmt.Println("clean stop, done")
-				break
-			}
-			code := status.Code(err)
-			if code != codes.OK {
-				fmt.Printf("receive non-OK code: %s: %s\n", code.String(), err.Error())
-				break
-			}
+	// wait for progress to finish
+	stopSignal := <-client.stopChannel
 
-			switch p := res.Payload.(type) {
-			case *CaptureResponse_Message:
-				fmt.Printf("received message (#%d): %s: %s\n", counter, p.Message.Type.String(), p.Message.Message)
-				switch p.Message.Type {
-				case MessageType_CAPTURE_STOPPED:
-					log.Infof("Received capture stop signal")
-					break
-				case MessageType_START_CAPTURE_FAILED:
-					log.Infof("Received MessageType_START_CAPTURE_FAILED signal") //TODO
-					break
-				case MessageType_INSTANCE_UNAVAILABLE:
-					log.Infof("Received MessageType_INSTANCE_UNAVAILABLE signal") //TODO
-					break
-					//TODO: Other MessageTypes?
-				}
-			case *CaptureResponse_Packet:
-				fmt.Printf("received packet  (#%d): %d bytes\n", counter, len(p.Packet.Data))
-				written, err := client.packetOut.Write(p.Packet.Data)
-				if err != nil {
-					log.Errorf("copy operation stopped: %s", err.Error())
-				}
-				log.Infof("captured %s", bytefmt.ByteSize(uint64(written)))
-			}
+	if stopSignal == Stop_client {
+		log.Debug("stopping capture by sending stop request")
+		stop := &CaptureRequest{
+			Operation: &CaptureRequest_Stop{},
 		}
-
-		client.signalChannel <- os.Interrupt //fixme: working but dirty solution to stop cli after the capture was stopped by api or agent
-		copyWg.Done()
-	}(client.packetOut, stream)
-
-	stopProgress := make(chan bool)
-	go progress(client.packetOut, stopProgress)
-
-	log.Debug("registering signal handler for SIGINT")
-	client.signalChannel = make(chan os.Signal, 1)
-	signal.Notify(client.signalChannel, os.Interrupt)
-
-	log.Debug("waiting for SIGINT to be sent")
-	<-client.signalChannel //TODO: what if capture fails before we get here
-	//TODO: timed captures?
-
-	log.Debug("received SIGINT, stopping progress")
-	stopProgress <- true
-
-	log.Debug("stopping capture by sending stop request")
-	stop := &CaptureRequest{
-		Operation: &CaptureRequest_Stop{},
+		err = stream.Send(stop)
+		if err != nil {
+			return err
+		}
 	}
-	err = stream.Send(stop)
 
 	log.Debug("waiting for copy operation to stop")
 	copyWg.Wait()
@@ -181,38 +139,84 @@ func (client *Client) HandleRequest() {
 	log.Debug("syncing file to disk")
 	err = client.packetOut.Sync()
 	if err != nil {
-		return
+		return err
 	}
 
 	log.Debug("closing file")
 	err = client.packetOut.Close()
 	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (client *Client) handleStream(stream API_CaptureClient, copyWg *sync.WaitGroup) {
+	counter := 0
+
+	for {
+		counter++
+		time.Sleep(200 * time.Millisecond) //TODO: make configurable?
+
+		res, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			fmt.Println("clean stop, done")
+			client.stopChannel <- Stop_api
+			break
+		}
+		code := status.Code(err)
+		if code != codes.OK {
+			fmt.Printf("receive non-OK code: %s: %s\n", code.String(), err.Error())
+			client.stopChannel <- Stop_api
+			break
+		}
+
+		switch p := res.Payload.(type) {
+		case *CaptureResponse_Message:
+			fmt.Printf("received message (#%d): %s: %s\n", counter, p.Message.Type.String(), p.Message.Message)
+			switch p.Message.Type {
+			case MessageType_CAPTURE_STOPPED:
+				log.Infof("Received capture stop signal")
+				break
+				client.stopChannel <- Stop_api
+			case MessageType_START_CAPTURE_FAILED:
+				log.Infof("Received MessageType_START_CAPTURE_FAILED signal") //TODO
+				break
+			case MessageType_INSTANCE_UNAVAILABLE:
+				log.Infof("Received MessageType_INSTANCE_UNAVAILABLE signal") //TODO
+				break
+				//TODO: Other MessageTypes?
+			}
+		case *CaptureResponse_Packet:
+			fmt.Printf("received packet  (#%d): %d bytes\n", counter, len(p.Packet.Data))
+			written, err := client.packetOut.Write(p.Packet.Data)
+			if err != nil {
+				log.Errorf("copy operation stopped: %s", err.Error())
+			}
+			log.Infof("captured %s", bytefmt.ByteSize(uint64(written)))
+		}
+	}
+	copyWg.Done()
+}
+
+func (client *Client) logProgress(stop <-chan StopSignal) {
+	if client.packetOut == os.Stdout {
+		//writing progress information could interfere with packet output when both are written to stdout
 		return
 	}
 
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func progress(file *os.File, stop <-chan bool) {
 	ticker := time.Tick(time.Second)
 	for {
 		select {
 		case <-ticker:
-			info, err := file.Stat()
+			info, err := client.packetOut.Stat()
 			if err != nil {
-				panic(err.Error())
+				log.Debug("pcap output file already closed: ", err.Error())
+				return
 			}
-
 			fmt.Printf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size())))
 		case <-stop:
 			return
 		}
 	}
-}
-
-// silentClose ignores errors returned when closing the io.Closer.
-func silentClose(closer io.Closer) {
-	_ = closer.Close()
 }

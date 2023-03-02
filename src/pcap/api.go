@@ -160,7 +160,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	}
 	if resolveErr != nil {
 		//TODO: Handle other errors
-		return errorf(codes.Unknown, err.Error())
+		return errorf(codes.Unknown, resolveErr.Error())
 	}
 
 	streamPreparer := &streamPrep{}
