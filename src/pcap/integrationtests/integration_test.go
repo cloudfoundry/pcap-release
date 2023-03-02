@@ -30,8 +30,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var lis net.Listener
-
 var apiClient pcap.APIClient
 
 var MaxConcurrentCaptures = 2
@@ -98,8 +96,7 @@ var _ = Describe("IntegrationTests", func() {
 
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180}
-			port := apiPort
-			apiClient, apiServer, api = createAPI(port, targets, apiBuffConf, agentTLSConf, apiID)
+			apiClient, apiServer, api = createAPI(apiPort, targets, apiBuffConf, agentTLSConf, apiID)
 			apiPort++
 
 			stop = &pcap.CaptureRequest{
@@ -300,8 +297,7 @@ var _ = Describe("IntegrationTests", func() {
 
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 90}
-			port := apiPort
-			apiClient, apiServer, _ = createAPI(port, targets, apiBuffConf, agentTLSConf, apiID)
+			apiClient, apiServer, _ = createAPI(apiPort, targets, apiBuffConf, agentTLSConf, apiID)
 			apiPort++
 
 			stop = &pcap.CaptureRequest{
@@ -354,8 +350,7 @@ var _ = Describe("IntegrationTests", func() {
 			targets = append(targets, agentTarget2)
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 7, UpperLimit: 6, LowerLimit: 4}
-			port := apiPort
-			apiClient, apiServer, _ = createAPI(port, targets, apiBuffConf, agentTLSConf, apiID)
+			apiClient, apiServer, _ = createAPI(apiPort, targets, apiBuffConf, agentTLSConf, apiID)
 			apiPort++
 
 			stop = &pcap.CaptureRequest{
@@ -427,9 +422,8 @@ var _ = Describe("IntegrationTests", func() {
 				},
 			}
 
-			port := apiPort
 			apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}
-			apiClient, apiServer, _ = createAPI(port, targets, apiBuffConf, agentTLSConf, agentID1)
+			apiClient, apiServer, _ = createAPI(apiPort, targets, apiBuffConf, agentTLSConf, agentID1)
 			apiPort++
 
 			stop = &pcap.CaptureRequest{
@@ -653,7 +647,7 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 
 	agent := pcap.NewAgent(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, id)
 
-	lis, err = net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	Expect(err).NotTo(HaveOccurred())
 	tcpAddr, ok := lis.Addr().(*net.TCPAddr)
 	Expect(ok).To(BeTrue())
@@ -689,7 +683,7 @@ func createAPI(port int, targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, 
 	Expect(err).NotTo(HaveOccurred())
 	api.RegisterResolver(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
-	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	Expect(err).NotTo(HaveOccurred())
 	GinkgoWriter.Printf("create api with listener  %s\n", lis.Addr())
 
