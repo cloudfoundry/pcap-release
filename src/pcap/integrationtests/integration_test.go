@@ -34,11 +34,9 @@ var lis net.Listener
 
 var apiClient pcap.APIClient
 
-var apiPort = 8080
-
 var MaxConcurrentCaptures = 2
 
-var port = 8082
+var port = 8090
 
 func boshRequest(bosh *pcap.BoshCapture, options *pcap.CaptureOptions) *pcap.CaptureRequest {
 	return &pcap.CaptureRequest{
@@ -89,6 +87,7 @@ var _ = Describe("IntegrationTests", func() {
 	var agent1 *pcap.Agent
 
 	Describe("Starting a capture", func() {
+		var apiPort = 8080
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
@@ -99,7 +98,9 @@ var _ = Describe("IntegrationTests", func() {
 
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180}
-			apiClient, apiServer, api = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
+			port := apiPort
+			apiClient, apiServer, api = createAPI(port, targets, apiBuffConf, agentTLSConf, apiID)
+			apiPort++
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -290,6 +291,7 @@ var _ = Describe("IntegrationTests", func() {
 		})
 	})
 	Describe("Staring a capture with one agent and one api", func() {
+		var apiPort = 8080
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 
@@ -298,7 +300,9 @@ var _ = Describe("IntegrationTests", func() {
 
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 90}
-			apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
+			port := apiPort
+			apiClient, apiServer, _ = createAPI(port, targets, apiBuffConf, agentTLSConf, apiID)
+			apiPort++
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -339,6 +343,7 @@ var _ = Describe("IntegrationTests", func() {
 	})
 
 	Describe("Staring a capture with an API with a smaller buffer", func() {
+		var apiPort = 8080
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 
@@ -349,7 +354,9 @@ var _ = Describe("IntegrationTests", func() {
 			targets = append(targets, agentTarget2)
 			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
 			apiBuffConf := pcap.BufferConf{Size: 7, UpperLimit: 6, LowerLimit: 4}
-			apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
+			port := apiPort
+			apiClient, apiServer, _ = createAPI(port, targets, apiBuffConf, agentTLSConf, apiID)
+			apiPort++
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -390,6 +397,7 @@ var _ = Describe("IntegrationTests", func() {
 	})
 
 	Describe("Starting a capture use mTLS", func() {
+		var apiPort = 8080
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
 			var target pcap.AgentEndpoint
@@ -418,8 +426,11 @@ var _ = Describe("IntegrationTests", func() {
 					},
 				},
 			}
+
+			port := apiPort
 			apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}
-			apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, agentID1)
+			apiClient, apiServer, _ = createAPI(port, targets, apiBuffConf, agentTLSConf, agentID1)
+			apiPort++
 
 			stop = &pcap.CaptureRequest{
 				Operation: &pcap.CaptureRequest_Stop{},
@@ -672,14 +683,15 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	return server, target, agent
 }
 
-func createAPI(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig pcap.AgentMTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API) {
+func createAPI(port int, targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig pcap.AgentMTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API) {
 	var server *grpc.Server
 	api, err := pcap.NewAPI(bufConf, mTLSConfig, id, MaxConcurrentCaptures)
 	Expect(err).NotTo(HaveOccurred())
 	api.RegisterResolver(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
 
-	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", apiPort))
+	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
 	Expect(err).NotTo(HaveOccurred())
+	GinkgoWriter.Printf("create api with listener  %s\n", lis.Addr())
 
 	server = grpc.NewServer()
 	pcap.RegisterAPIServer(server, api)
