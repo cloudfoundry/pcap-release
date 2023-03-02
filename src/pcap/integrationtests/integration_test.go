@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+
 	gopcap "github.com/google/gopacket/pcap"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -475,7 +476,7 @@ var _ = Describe("IntegrationTests", func() {
 	})
 })
 
-// readAndExpectCleanEnd reads up to 1000 capture responses and expects an OK termination code
+// readAndExpectCleanEnd reads up to 1000 capture responses and expects an OK termination code.
 func readAndExpectCleanEnd(stream pcap.API_CaptureClient) []*pcap.CaptureResponse {
 	code, messages, err := recvCapture(10_000, stream)
 	Expect(err).ToNot(HaveOccurred(), "Receiving the remaining messages")

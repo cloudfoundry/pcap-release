@@ -2,13 +2,13 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
@@ -21,7 +21,6 @@ import (
 var zapConfig zap.Config
 
 func init() {
-
 	zapConfig = zap.Config{
 		Level:             zap.NewAtomicLevelAt(zap.InfoLevel),
 		DisableCaller:     true,
@@ -43,8 +42,6 @@ func init() {
 		ErrorOutputPaths: []string{"stderr"},
 	}
 	zap.ReplaceGlobals(zap.Must(zapConfig.Build()))
-
-	zap.NewProductionEncoderConfig()
 }
 
 type CommonConfig struct {
@@ -69,24 +66,26 @@ type genericStreamReceiver interface {
 	Recv() (*pcap.CaptureResponse, error)
 }
 
+// ReadN reads a number of messages from stream
+// TODO: Remove this when we have a proper CLI
 func ReadN(n int, stream genericStreamReceiver) {
 	for i := 0; i < n; i++ {
 		res, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
-			fmt.Println("clean stop, done")
+			zap.S().Infof("clean stop, done")
 			return
 		}
 		code := status.Code(err)
 		if code != codes.OK {
-			fmt.Printf("receive non-OK code: %s: %s\n", code.String(), err.Error())
+			zap.S().Infof("receive non-OK code: %s: %s\n", code.String(), err.Error())
 			return
 		}
 
 		switch p := res.Payload.(type) {
 		case *pcap.CaptureResponse_Message:
-			fmt.Printf("received message (%d/%d): %s: %s\n", i+1, n, p.Message.Type.String(), p.Message.Message)
+			zap.S().Infof("received message (%d/%d): %s: %s\n", i+1, n, p.Message.Type.String(), p.Message.Message)
 		case *pcap.CaptureResponse_Packet:
-			fmt.Printf("received packet  (%d/%d): %d bytes\n", i+1, n, len(p.Packet.Data))
+			zap.S().Infof("received packet  (%d/%d): %d bytes\n", i+1, n, len(p.Packet.Data))
 		}
 	}
 }
@@ -94,7 +93,7 @@ func ReadN(n int, stream genericStreamReceiver) {
 // WaitForSignal to tell the agent to stop processing any streams. Will first tell the agent
 // to end any running streams, wait for them to terminate and gracefully stop the gRPC server
 // afterwards. Currently listens for SIGUSR1 and SIGINT, SIGQUIT and SIGTERM.
-func WaitForSignal(log *zap.Logger, any pcap.Stoppable, server *grpc.Server) {
+func WaitForSignal(log *zap.Logger, stoppable pcap.Stoppable, server *grpc.Server) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	for {
@@ -102,10 +101,10 @@ func WaitForSignal(log *zap.Logger, any pcap.Stoppable, server *grpc.Server) {
 		switch sig {
 		case syscall.SIGUSR1, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM:
 			log.Info("received signal, stopping agent", zap.String("signal", sig.String()))
-			any.Stop()
+			stoppable.Stop()
 
 			log.Info("waiting for stop")
-			any.Wait()
+			stoppable.Wait()
 
 			log.Info("shutting down server")
 			server.GracefulStop()

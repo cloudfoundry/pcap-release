@@ -12,11 +12,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
+
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -38,16 +38,17 @@ func main() {
 
 	statusRes, err := api.Status(ctx, &pcap.StatusRequest{})
 	if err != nil {
-		log.Fatal("unable to get api status", zap.Error(err))
+		log.Panic("unable to get api status", zap.Error(err))
 	}
-	fmt.Println("status:")
-	fmt.Printf("  healthy: %v\n", statusRes.Healthy)
-	fmt.Printf("  compLvl: %d\n", statusRes.CompatibilityLevel)
-	fmt.Printf("  message: %s\n", statusRes.Message)
+	// This whole client is temporary, so leaving the sugared zap logger here.
+	log.Info("status:")
+	log.Sugar().Infof("  healthy: %v\n", statusRes.Healthy)
+	log.Sugar().Infof("  compLvl: %d\n", statusRes.CompatibilityLevel)
+	log.Sugar().Infof("  message: %s\n", statusRes.Message)
 
 	stream, err := api.Capture(ctx)
 	if err != nil {
-		log.Fatal("error during capturing", zap.Error(err))
+		log.Panic("error during capturing", zap.Error(err))
 	}
 
 	request := &pcap.CaptureRequest{
@@ -64,7 +65,7 @@ func main() {
 				Options: &pcap.CaptureOptions{
 					Device:  "en0",
 					Filter:  "",
-					SnapLen: 65000,
+					SnapLen: 65000, //nolint:gomnd // default value used for testing
 				},
 			},
 		},
@@ -72,13 +73,13 @@ func main() {
 
 	err = stream.Send(request)
 	if err != nil {
-		log.Fatal("unable to start capture", zap.Error(err))
+		log.Panic("unable to start capture", zap.Error(err))
 	}
 
 	// keep receiving some data long enough to start a manual drain
 	for i := 0; i < 10000; i++ {
-		cmd.ReadN(1000, stream)
-		time.Sleep(200 * time.Millisecond)
+		cmd.ReadN(1000, stream)            //nolint:gomnd // default value used for testing
+		time.Sleep(200 * time.Millisecond) //nolint:gomnd // default value used for testing
 	}
 
 	stop := &pcap.CaptureRequest{
@@ -87,8 +88,8 @@ func main() {
 
 	err = stream.Send(stop)
 	if err != nil {
-		log.Fatal("unable to stop capture", zap.Error(err))
+		log.Panic("unable to stop capture", zap.Error(err))
 	}
 
-	cmd.ReadN(10_000, stream)
+	cmd.ReadN(10_000, stream) //nolint:gomnd // default value used for testing
 }

@@ -7,17 +7,18 @@ import (
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
+
 	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v3"
 )
 
 var DefaultAPIConfig = APIConfig{
 	CommonConfig: cmd.CommonConfig{
-		Listen: pcap.Listen{Port: 8080},
+		Listen: pcap.Listen{Port: 8080}, //nolint:gomnd // default port
 		Buffer: pcap.BufferConf{
-			Size:       100,
-			UpperLimit: 95,
-			LowerLimit: 60,
+			Size:       100, //nolint:gomnd // default size
+			UpperLimit: 95,  //nolint:gomnd // default size
+			LowerLimit: 60,  //nolint:gomnd // default size
 		},
 		LogLevel: "debug",
 		ID:       "test-api",
@@ -25,9 +26,9 @@ var DefaultAPIConfig = APIConfig{
 	Agents: &pcap.AgentMTLS{
 		MTLS: nil,
 	},
-	DrainTimeout:       10 * time.Second,
-	ConcurrentCaptures: 5,
-	ManualEndpoints:    pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}},
+	DrainTimeout:       10 * time.Second,                                                                                               //nolint:gomnd // default value
+	ConcurrentCaptures: 5,                                                                                                              //nolint:gomnd // default value
+	ManualEndpoints:    pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}, //nolint:gomnd // default value
 }
 
 type APIConfig struct {

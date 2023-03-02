@@ -6,16 +6,17 @@ import (
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
+
 	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v3"
 )
 
 var DefaultConfig = Config{cmd.CommonConfig{
-	Listen: pcap.Listen{Port: 8083},
+	Listen: pcap.Listen{Port: 8083}, //nolint:gomnd // default value used for testing
 	Buffer: pcap.BufferConf{
-		Size:       100,
-		UpperLimit: 95,
-		LowerLimit: 60,
+		Size:       100, //nolint:gomnd // default value used for testing
+		UpperLimit: 95,  //nolint:gomnd // default value used for testing
+		LowerLimit: 60,  //nolint:gomnd // default value used for testing
 	},
 	LogLevel: "debug",
 	ID:       "test-agent",

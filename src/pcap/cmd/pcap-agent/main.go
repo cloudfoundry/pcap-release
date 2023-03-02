@@ -12,6 +12,7 @@ import (
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
+
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -25,7 +26,7 @@ func main() {
 	switch len(os.Args) {
 	case 1:
 		config = DefaultConfig
-	case 2:
+	case 2: //nolint:gomnd // two arguments mean parse the config.
 		config, err = parseConfig(os.Args[1])
 	default:
 		err = fmt.Errorf("invalid number of arguments, expected 1 or 2 but got %d", len(os.Args))

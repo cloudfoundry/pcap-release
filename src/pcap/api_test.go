@@ -146,7 +146,7 @@ func (m *mockRequestReceiver) Recv() (*CaptureRequest, error) {
 	return m.req, m.err
 }
 
-func (m *mockRequestReceiver) Send(res *CaptureResponse) error {
+func (m *mockRequestReceiver) Send(_ *CaptureResponse) error {
 	return nil
 }
 

@@ -142,11 +142,11 @@ sequenceDiagram
         diego-cell1 ->> nats: pcap.register (pcap-agent-[instance1], diego-ip:61404)
         nats ->> pcap-api: pcap.register (pcap-agent-[instance1], diego-ip:61404)
         note right of pcap-api: Store/update agent<br>endpoint: pcap-agent-[instance1], diego-ip:61404
-        pcap-api --> pcap-api: 
+        pcap-api --> pcap-api: <br/>
         diego-cell2 ->> nats: pcap.register (pcap-agent-[instance2], diego-ip:61294)
         nats ->> pcap-api: pcap.register (pcap-agent-[instance2], diego-ip:61294)
         note right of pcap-api: Store/update agent<br>endpoint: pcap-agent-[instance2], diego-ip:61294
-        pcap-api --> pcap-api: 
+        pcap-api --> pcap-api: <br/>
     end
     note over diego-cell1: An app instance1 becomes unhealthy
     note over diego-cell2: An app instance2 unhealthy
@@ -558,7 +558,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
@@ -669,7 +669,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
@@ -706,7 +706,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
@@ -814,7 +814,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api ->>+ pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 120k)
@@ -844,7 +844,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api ->>+ pcap-agent1: Capture pcap(eth0, "hosts 1.2.3.4", 120k)
@@ -876,7 +876,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, [1])
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api -->+ pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 120k) [invalid mTLS Cert]
@@ -904,7 +904,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         note over pcap-agent1: pcap-agent1 already has<br/>ongoing captures
@@ -1039,7 +1039,7 @@ sequenceDiagram
         end
     end
     note right of pcap-api: Drain
-    pcap-api ->> pcap-api: 
+    pcap-api ->> pcap-api: <br/>
     par
         pcap-api ->> pcap-agent1: Stop
         pcap-api ->> pcap-agent2: Stop
