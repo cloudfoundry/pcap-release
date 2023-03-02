@@ -33,6 +33,7 @@ message Packet {
 message Message {
   MessageType type = 1;
   string message = 2;
+  string origin = 3;
 }
 
 // MessageType represents the underlying issue for easy assertion of the
@@ -41,11 +42,11 @@ message Message {
 enum MessageType {
   // One of the requested instances does not exist but there is at least one
   // instance to capture from. MUST be sent as soon as possible.
-  INSTANCE_NOT_FOUND = 0;
+  UNKNOWN = 0;
   // One instance failed during capturing but there are still instances left to
   // capture from. The detailed message should contain information about the
   // stopped party.
-  INSTANCE_DISCONNECTED = 1;
+  INSTANCE_UNAVAILABLE = 1;
   // Starting the capture request has failed because the request could not be
   // fulfilled (e.g. no matching instances, pcap feature not enabled).
   START_CAPTURE_FAILED = 2;
@@ -58,6 +59,12 @@ enum MessageType {
   // Some limit has been reached, e.g. number of concurrent requests, time,
   // bytes, etc.; Message details identifies, which limit has been reached.
   LIMIT_REACHED = 5;
+  // A single agent or the overall capture has stopped gracefully.
+  // The detailed message should contain information about the stopped party.
+  CAPTURE_STOPPED =6;
+  // An error happened while attempting communication with PCAP components,
+  // independent of the client.
+  CONNECTION_ERROR=7;
 }
 
 message StatusResponse {
@@ -72,51 +79,47 @@ message StatusRequest {}
 
 service API {
   rpc Status(StatusRequest) returns (StatusResponse);
-  // CaptureBosh starts capturing packets on bosh VMs. The capture can be
-  // stopped by closing the client-side send channel. The Api MUST listen for
-  // that close and MUST stop sending packets as soon as possible but SHOULD
-  // send packets that it still receives from the agents.
-  rpc CaptureBosh (stream BoshRequest) returns (stream CaptureResponse);
-  // CaptureCloudFoundry starts capturing packets on a cloud foundry app. The
-  // capture can be stopped by closing the client-side send channel. The Api
-  // MUST listen for that close and MUST stop sending packets as soon as
-  // possible but SHOULD send packets that it still receives from the agents.
-  rpc CaptureCloudfoundry (stream CloudfoundryRequest) returns (stream CaptureResponse);
+  // Capture starts capturing packets on either BOSH or CF VMs. The capture can be
+  // stopped by closing the client-side send channel, or explicitly sending a Stop command.
+  // The Api MUST listen for that close and the stop command and MUST stop sending packets
+  // as soon as possible but SHOULD send packets that it still receives from the agents.
+  rpc Capture(stream CaptureRequest) returns (stream CaptureResponse);
 }
 
-message BoshRequest {
-  oneof payload {
-    StartBoshCapture start = 1;
-    StopBoshCapture stop = 2;
+message CaptureRequest {
+  oneof operation {
+    StartCapture start = 1;
+    StopCapture stop = 2;
   }
 }
 
-message StartBoshCapture {
-  CaptureOptions capture = 1;
-  string token = 2;
-  string deployment = 3;
-  repeated string groups = 4;
-  repeated string instances = 5;
-}
+message StopCapture {}
 
-message StopBoshCapture {}
-
-message CloudfoundryRequest {
-  oneof payload {
-    StartCloudfoundryCapture start = 1;
-    StopCloudfoundryCapture stop = 2;
+message Capture {
+  oneof capture {
+    BoshCapture bosh = 1;
+    CloudfoundryCapture cf = 2;
   }
 }
 
-message StartCloudfoundryCapture {
-  CaptureOptions capture = 1;
-  string token = 2;
-  string appId = 3;
-  optional string appType = 4;
-  repeated string indices = 5;
+message StartCapture {
+  Capture capture = 1;
+  CaptureOptions options = 2;
 }
 
-message StopCloudfoundryCapture {}
+message BoshCapture {
+  string token = 1;
+  string deployment = 2;
+  repeated string groups = 3;
+  repeated string instances = 4;
+}
+
+message CloudfoundryCapture {
+  string token = 1;
+  string appId = 2;
+  optional string appType = 3;
+  repeated int32 indices = 4;
+}
 
 service Agent {
   // Status returns the current status of the agent. It indicates whether the agent is ready to

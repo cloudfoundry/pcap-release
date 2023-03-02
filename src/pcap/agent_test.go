@@ -3,28 +3,21 @@ package pcap
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/gopacket"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 var (
-	errTestEnded        = fmt.Errorf("test ended")
-	errContextCancelled = fmt.Errorf("context error")
-	errDiscardedMsg     = fmt.Errorf("discarding packets")
-	bufSize             = 5
-	bufUpperLimit       = 4
-	bufLowerLimit       = 3
+	bufSize       = 5
+	bufUpperLimit = 4
+	bufLowerLimit = 3
+	agentOrigin   = "pcap-agent-router/1234ab"
 )
 
 type mockStreamReceiver struct {
@@ -171,102 +164,6 @@ func TestReadPackets(t *testing.T) {
 	}
 }
 
-type mockPacketSender struct {
-	err                  error
-	resCounter           int
-	sentRes              int
-	stopAfterErrorOccurs bool
-}
-
-func (m *mockPacketSender) Send(res *CaptureResponse) error {
-	message, isMsg := res.Payload.(*CaptureResponse_Message)
-	m.resCounter++
-
-	if m.stopAfterErrorOccurs && isMsg && message.Message.Type == MessageType_CONGESTED {
-		return fmt.Errorf("%w", errDiscardedMsg)
-	}
-
-	if !m.stopAfterErrorOccurs && m.sentRes == m.resCounter {
-		return errTestEnded
-	}
-
-	return m.err
-}
-
-func TestForwardToStream(t *testing.T) {
-	tests := []struct {
-		name        string
-		resToBeSent int
-		stream      responseSender
-		response    *CaptureResponse
-		expectedErr error
-	}{
-		{
-			name:        "error during sending of packets",
-			stream:      &mockPacketSender{err: io.EOF, stopAfterErrorOccurs: true},
-			resToBeSent: 2,
-			response:    newPacketResponse([]byte("ABC")),
-			expectedErr: io.EOF,
-		},
-		{
-			name:        "buffer is filled with PacketResponse, one packet discarded",
-			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
-			resToBeSent: bufUpperLimit + 2,
-			response:    newPacketResponse([]byte("ABC")),
-			expectedErr: errTestEnded,
-		},
-		{
-			name:        "buffer is filled with MessageResponse, no packets discarded",
-			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
-			resToBeSent: bufUpperLimit + 1,
-			response:    newMessageResponse(MessageType_INSTANCE_NOT_FOUND, "invalid id"),
-			expectedErr: errTestEnded,
-		},
-		{
-			name:        "buffer is filled with PacketResponse, discarding packets",
-			stream:      &mockPacketSender{err: nil, stopAfterErrorOccurs: true},
-			resToBeSent: bufUpperLimit + 1,
-			response:    newPacketResponse([]byte("ABC")),
-			expectedErr: errDiscardedMsg,
-		},
-		{
-			name:        "happy path",
-			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit - 1},
-			resToBeSent: bufUpperLimit - 1,
-			response:    newPacketResponse([]byte("ABC")),
-			expectedErr: errTestEnded,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
-			src := make(chan *CaptureResponse, bufSize)
-			defer close(src)
-			go func() {
-				for i := 0; i < test.resToBeSent; i++ {
-					src <- test.response
-				}
-			}()
-
-			wg := &sync.WaitGroup{}
-			wg.Add(1)
-
-			forwardToStream(cancel, src, test.stream, BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, wg)
-
-			<-ctx.Done()
-
-			err := Cause(ctx)
-			if err == nil {
-				t.Errorf("Expected error to finish test")
-			}
-			if !errors.Is(err, test.expectedErr) {
-				t.Errorf("forwardToStream() expectedErr = %v, error = %v", test.expectedErr, err)
-			}
-		})
-	}
-}
-
 func TestValidateAgentStartRequest(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -355,10 +252,7 @@ func TestAgentDraining(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := NewAgent(nil, BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
+			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit}, agentOrigin)
 			if tt.expectedDone {
 				a.Stop()
 			}
@@ -391,10 +285,7 @@ func TestAgentStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := NewAgent(nil, BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
+			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit}, agentOrigin)
 			if tt.agentDraining {
 				a.Stop()
 			}
@@ -468,17 +359,14 @@ func TestAgentCapture(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			a, err := NewAgent(nil, BufferConf{bufSize, bufUpperLimit, bufLowerLimit})
-			if err != nil {
-				t.Errorf("Unexpected error %v", err)
-			}
+			a := NewAgent(BufferConf{bufSize, bufUpperLimit, bufLowerLimit}, agentOrigin)
 
 			if !test.agentRunning {
 				a.Stop()
 				time.Sleep(1 * time.Second)
 			}
 
-			err = a.Capture(&test.stream)
+			err := a.Capture(&test.stream)
 			if (err != nil) != test.wantErr {
 				t.Errorf("Capture() error = %v, wantErr %v", err, test.wantErr)
 			}
@@ -487,56 +375,6 @@ func TestAgentCapture(t *testing.T) {
 			if test.wantErr && code != test.wantStatusCode {
 				t.Errorf("Capture() statusCode = %v, wantStatusCode = %v", code, test.wantStatusCode)
 			}
-		})
-	}
-}
-
-func TestSetVcapId(t *testing.T) {
-	tests := []struct {
-		name   string
-		md     metadata.MD
-		vcapID string
-	}{
-		{
-			name: "Request without metadata",
-			md:   nil,
-		},
-
-		{
-			name: "Metadata without vcap request id",
-			md:   metadata.MD{},
-		},
-		{
-			name:   "Metadata with vcap request id",
-			md:     metadata.MD{HeaderVcapID: []string{"123"}},
-			vcapID: "123",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := metadata.NewIncomingContext(context.Background(), tt.md)
-
-			observedZapCore, observedLogs := observer.New(zap.InfoLevel)
-			log := zap.New(observedZapCore)
-
-			log = setVcapID(ctx, log)
-
-			// ensure that at least one log has been observed
-			log.Info("test")
-
-			if observedLogs == nil || observedLogs.Len() == 0 {
-				t.Fatal("No logs are written")
-			}
-
-			entry := observedLogs.All()[observedLogs.Len()-1]
-
-			for _, logField := range entry.Context {
-				if logField.Key == LogKeyVcapID && (tt.vcapID == "" || logField.String == tt.vcapID) {
-					return
-				}
-			}
-
-			t.Errorf("missing field %s or field has wrong value", LogKeyVcapID)
 		})
 	}
 }

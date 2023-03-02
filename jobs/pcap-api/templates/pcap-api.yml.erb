@@ -2,9 +2,12 @@
 config = {
   "listen" => p("pcap-api.listen"),
   "log_level" => p("pcap-api.log_level"),
+  "id" => p("pcap-api.id"),
   "enable_server_tls" => p("pcap-api.enable_server_tls"),
-  "cert" => "/var/vcap/jobs/pcap-api/config/pcap-api.crt",
+  "tls" => {
+  "certificate"=> "/var/vcap/jobs/pcap-api/config/pcap-api.crt",
   "key" => "/var/vcap/jobs/pcap-api/config/pcap-api.key",
+  },
   "cf_api" => p("pcap-api.cf_api"),
   "bosh_director_api" => p("pcap-api.bosh_director_api"),
   "bosh_director_ca" => "/var/vcap/jobs/pcap-api/config/pcap-api-bosh.ca",

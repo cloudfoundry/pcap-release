@@ -19,7 +19,7 @@ jobs:
               image_resource:
                 type: docker-image
                 source:
-                  repository: bosh/main-bosh-docker
+                  repository: bosh/integration
                   tag: latest
               inputs:
                 - { name: git }
@@ -37,7 +37,7 @@ jobs:
               image_resource:
                 type: docker-image
                 source:
-                  repository: bosh/main-bosh-docker
+                  repository: bosh/integration
                   tag: latest
               inputs:
                 - { name: git }
@@ -56,7 +56,7 @@ jobs:
             channel: "#pcap-release"
             username: ci-bot
             icon_url: "((slack.icon))"
-            text: "((slack.fail_url)) pcap-releae : unit-tests job failed"
+            text: "((slack.fail_url)) pcap-release : unit-tests job failed"
 
   - name: unit-tests-pr
     public: true
@@ -75,7 +75,7 @@ jobs:
               image_resource:
                 type: docker-image
                 source:
-                  repository: bosh/main-bosh-docker
+                  repository: bosh/integration
                   tag: latest
               inputs:
                 - { name: git-pull-requests }
@@ -93,7 +93,7 @@ jobs:
               image_resource:
                 type: docker-image
                 source:
-                  repository: bosh/main-bosh-docker
+                  repository: bosh/integration
                   tag: latest
               inputs:
                 - { name: git-pull-requests }

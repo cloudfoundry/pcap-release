@@ -1,13 +1,10 @@
-// pcap-agent-cli is a simple client to manually test the pcap-agent and confirm
+// pcap-api-cli is a simple client to manually test the pcap-api and confirm
 // it's operating as expected.
 //
 // NOT MEANT FOR PRODUCTION USE!
 //
-// It will connect to port 8083 on the loopback
-// interface and request a capture from the `en0` device. The first 10 packets are
-// read and each packet causes a print to the console. After ten packets have been
-// read a message to stop the capture is sent and any remaining packets (but at most
-// 10.000) are read.
+// It will connect to port 8080 on the loopback
+// interface and interactively guide through creating a CF or BOSH request.
 //
 // Any messages that occur while performing the test are also printed to the console
 // and any errors cause the cli to exit.
@@ -28,51 +25,68 @@ import (
 func main() {
 	log := zap.L()
 
-	cc, err := grpc.Dial("localhost:8083", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.Dial("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal("unable to establish connection", zap.Error(err))
 	}
-
-	agentClient := pcap.NewAgentClient(cc)
 
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	statusRes, err := agentClient.Status(ctx, &pcap.StatusRequest{})
+	api := pcap.NewAPIClient(cc)
+
+	statusRes, err := api.Status(ctx, &pcap.StatusRequest{})
 	if err != nil {
-		log.Panic("unable to get agent status", zap.Error(err))
+		log.Panic("unable to get api status", zap.Error(err))
 	}
+	// This whole client is temporary, so leaving the sugared zap logger here.
 	log.Info("status:")
 	log.Sugar().Infof("  healthy: %v\n", statusRes.Healthy)
 	log.Sugar().Infof("  compLvl: %d\n", statusRes.CompatibilityLevel)
 	log.Sugar().Infof("  message: %s\n", statusRes.Message)
 
-	stream, err := agentClient.Capture(ctx)
+	stream, err := api.Capture(ctx)
 	if err != nil {
 		log.Panic("error during capturing", zap.Error(err))
 	}
 
-	err = stream.Send(&pcap.AgentRequest{
-		Payload: &pcap.AgentRequest_Start{
-			Start: &pcap.StartAgentCapture{
-				Capture: &pcap.CaptureOptions{
+	request := &pcap.CaptureRequest{
+		Operation: &pcap.CaptureRequest_Start{
+			Start: &pcap.StartCapture{
+				Capture: &pcap.Capture{
+					Capture: &pcap.Capture_Bosh{
+						Bosh: &pcap.BoshCapture{
+							Token:      "123",
+							Deployment: "cf",
+							Groups:     []string{"router"}},
+					},
+				},
+				Options: &pcap.CaptureOptions{
 					Device:  "en0",
 					Filter:  "",
 					SnapLen: 65000, //nolint:gomnd // default value used for testing
 				},
 			},
 		},
-	})
+	}
+
+	err = stream.Send(request)
 	if err != nil {
 		log.Panic("unable to start capture", zap.Error(err))
 	}
 
-	cmd.ReadN(10, stream) //nolint:gomnd // default value used for testing
+	// keep receiving some data long enough to start a manual drain
+	for i := 0; i < 10000; i++ {
+		cmd.ReadN(1000, stream)            //nolint:gomnd // default value used for testing
+		time.Sleep(200 * time.Millisecond) //nolint:gomnd // default value used for testing
+	}
 
-	err = stream.Send(&pcap.AgentRequest{
-		Payload: &pcap.AgentRequest_Stop{},
-	})
+	stop := &pcap.CaptureRequest{
+		Operation: &pcap.CaptureRequest_Stop{},
+	}
+
+	err = stream.Send(stop)
 	if err != nil {
 		log.Panic("unable to stop capture", zap.Error(err))
 	}

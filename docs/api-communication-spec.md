@@ -2,38 +2,39 @@
 
 **Table of Content**
 <!-- TOC -->
-- [PCAP Release API Documentation](#pcap-release-api-documentation)
-  - [CF Case Overview](#cf-case-overview)
-    - [Target Identification via Cloud Controller (Option)](#target-identification-via-cloud-controller-option)
-    - [Target Registration via NATS (Option)](#target-registration-via-nats-option)
-  - [BOSH Case Overview](#bosh-case-overview)
-  - [Interactions](#interactions)
-    - [pcap-cli -\> pcap-api](#pcap-cli---pcap-api)
-    - [pcap-cli -\> BOSH Director UAA](#pcap-cli---bosh-director-uaa)
-    - [pcap-api](#pcap-api)
-    - [NATS -\> pcap-api (option)](#nats---pcap-api-option)
-    - [pcap-agent -\> pcap-api](#pcap-agent---pcap-api)
-    - [pcap-agent -\> NATS (Option)](#pcap-agent---nats-option)
-    - [pcap-api -\> pcap-cli](#pcap-api---pcap-cli)
-  - [Data Structures](#data-structures)
-    - [Capture Request](#capture-request)
-      - [Common Fields for `pcap-agent`](#common-fields-for-pcap-agent)
-      - [CF App Start Capture Request](#cf-app-start-capture-request)
-      - [BOSH Start Capture Request](#bosh-start-capture-request)
-      - [Stop Capture Request](#stop-capture-request)
-    - [Message](#message)
-      - [Enum `MessageType`](#enum-messagetype)
-    - [Status](#status)
-      - [Enum `Health`](#enum-health)
-    - [PCAP Data](#pcap-data)
-    - [Capture Response](#capture-response)
-  - [Use Cases](#use-cases)
-    - [Initialization](#initialization)
-    - [Regular Request with Clean Shutdown](#regular-request-with-clean-shutdown)
-    - [Authentication Failures](#authentication-failures)
-    - [Unexpected Disconnects](#unexpected-disconnects)
-    - [Invalid Requests](#invalid-requests)
-    - [Resource Limits](#resource-limits)
+* [PCAP Release API Documentation](#pcap-release-api-documentation)
+  * [CF Case Overview](#cf-case-overview)
+    * [Target Identification via Cloud Controller (Option)](#target-identification-via-cloud-controller--option-)
+    * [Target Registration via NATS (Option)](#target-registration-via-nats--option-)
+  * [BOSH Case Overview](#bosh-case-overview)
+  * [Interactions](#interactions)
+    * [pcap-cli -> pcap-api](#pcap-cli----pcap-api)
+    * [pcap-bosh-cli -> BOSH Director UAA](#pcap-bosh-cli----bosh-director-uaa)
+    * [pcap-cf-cli](#pcap-cf-cli)
+    * [pcap-api](#pcap-api)
+    * [NATS -> pcap-api (option)](#nats----pcap-api--option-)
+    * [pcap-agent -> pcap-api](#pcap-agent----pcap-api)
+    * [Diego route registrar -> NATS (Option)](#diego-route-registrar----nats--option-)
+    * [pcap-api -> pcap-cli](#pcap-api----pcap-cli)
+  * [Data Structures](#data-structures)
+    * [Capture Request](#capture-request)
+      * [Common Fields for `pcap-agent`](#common-fields-for-pcap-agent)
+      * [CF App Start Capture Request](#cf-app-start-capture-request)
+      * [BOSH Start Capture Request](#bosh-start-capture-request)
+      * [Stop Capture Request](#stop-capture-request)
+    * [Message](#message)
+      * [Enum `MessageType`](#enum-messagetype)
+    * [Status](#status)
+    * [PCAP Data](#pcap-data)
+    * [Capture Response](#capture-response)
+  * [Use Cases](#use-cases)
+    * [Initialization](#initialization)
+    * [Regular Request with Clean Shutdown](#regular-request-with-clean-shutdown)
+    * [Authentication and Authorization Failures](#authentication-and-authorization-failures)
+    * [Unexpected Disconnects](#unexpected-disconnects)
+    * [Invalid Requests](#invalid-requests)
+    * [Resource Limits](#resource-limits)
+    * [Draining during regular request](#draining-during-regular-request)
 <!-- TOC -->
 
 This document contains the API specification for the PCAP release.
@@ -141,11 +142,11 @@ sequenceDiagram
         diego-cell1 ->> nats: pcap.register (pcap-agent-[instance1], diego-ip:61404)
         nats ->> pcap-api: pcap.register (pcap-agent-[instance1], diego-ip:61404)
         note right of pcap-api: Store/update agent<br>endpoint: pcap-agent-[instance1], diego-ip:61404
-        pcap-api --> pcap-api: 
+        pcap-api --> pcap-api: <br/>
         diego-cell2 ->> nats: pcap.register (pcap-agent-[instance2], diego-ip:61294)
         nats ->> pcap-api: pcap.register (pcap-agent-[instance2], diego-ip:61294)
         note right of pcap-api: Store/update agent<br>endpoint: pcap-agent-[instance2], diego-ip:61294
-        pcap-api --> pcap-api: 
+        pcap-api --> pcap-api: <br/>
     end
     note over diego-cell1: An app instance1 becomes unhealthy
     note over diego-cell2: An app instance2 unhealthy
@@ -308,7 +309,6 @@ The following attributes are part of all capture requests and define the details
 | `application_id` | `string`   | yes       |         | The ID of the target application.                                                                                                                            |
 | `type`           | `string`   | no        | `web`   | An app can have processes of different types, `web` being the default. This allows targeting processes of a specific type for this app.                      |
 | `instance_ids`   | `[]int`    | no        | `[]`    | List of instance indexes of the application. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_guids`.    |
-| `instance_guids` | `[]string` | no        | `[]`    | List of instance IDs for finer-grained targeting. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_ids`. |
 
 Example request, serialized as JSON:
 
@@ -330,11 +330,10 @@ Example request, serialized as JSON:
 
 | Parameter        | Type       | Required? | Default | Description                                                                                                                                                  |
 |------------------|------------|-----------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|                  | `Common`   | yes       |         | All [common fields](#common-fields-for-pcap-agent) are included in a CF capture request                                                                      |
+|                  | `Common`   | yes       |         | All [common fields](#common-fields-for-pcap-agent) are included in a Bosh capture request                                                                    |
 | `token`          | `string`   | yes       |         | The BOSH UAA token for the user sending the capture request.                                                                                                 |
 | `deployment`     | `string`   | yes       |         | The name of the target BOSH deployment.                                                                                                                      |
 | `groups`         | `[]string` | yes       |         | A list of instance groups from which to capture. **Must contain at least one instance group**.                                                               |
-| `instance_ids`   | `[]int`    | no        | `[]`    | List of instance indexes of the application. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_guids`.    |
 | `instance_guids` | `[]string` | no        | `[]`    | List of instance IDs for finer-grained targeting. An empty list indicates that **all instances** should be captured. Mutually exclusive with `instance_ids`. |
 
 Example request, serialized as JSON:
@@ -365,20 +364,20 @@ The stop capture request just indicates that the capture on the current stream i
 | Parameter      | Type               | Required? | Description                                                                                                                                          |
 |----------------|--------------------|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `message_type` | `enum MessageType` | yes       | The type of message sent. This allows for logic based on the message type                                                                            |
-| `origin`       | `string`           | yes       | The sender of this message, e.g. `pcap-api-[group/guid]`, `pcap-agent-[instance_id]`                                                                 |
+| `origin`       | `string`           | yes       | The sender of this message, e.g. `pcap-api-[bosh VM guid]`, `pcap-agent-[group/guid]` (bosh case) or `pcap-agent-[instance_id]` (CF case)            |
 | `message`      | `string`           | no        | The detailed message, human readable, explaining the reason for this message. Optional but recommended, as it could be shown on the CLI to the user. |
 
 Examples for origin:
 ```
 # bosh, originating from the pcap-api:
-pcap-api-router/d55baeba-f645-4219-8b49-2b4654a17165
+pcap-api-c45baeba-f645-4219-8b49-2b4654a17165
 
 # bosh, originating from the pcap-agent
 pcap-agent-router/d55baeba-f645-4219-8b49-2b4654a17165
 
 
 # cf, orginating from the pcap-api
-pcap-api-f9281cda-1234-bbcd-ef12-1337cafe0048
+pcap-api-c45baeba-f645-4219-8b49-2b4654a17165
 
 # cf, originating from the pcap-agent
 pcap-agent-f9281cda-1234-bbcd-ef12-1337cafe0048
@@ -389,7 +388,7 @@ Example message:
 ```json
 {
   "message_type": "Message_CAPTURE_STOPPED",
-  "origin": "pcap-api-router/d55baeba-f645-4219-8b49-2b4654a17165",
+  "origin": "pcap-api-c45baeba-f645-4219-8b49-2b4654a17165",
   "message": "Capturing stopped on agent pcap-agent-router/d55baeba-f645-4219-8b49-2b4654a17165"
 }
 ```
@@ -404,41 +403,40 @@ When a Native Termination Status is listed, the `pcap-agent` is expected to send
 
 Information received from pcap-agent as native termination status code MUST be converted to a `Message` with appropriate `MessageType`, and passed on to the pcap-cli.
 
-| Value                   | Native Termination Status | Origin                   | Description                                                                                                                                                       |
-|-------------------------|---------------------------|--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `INSTANCE_NOT_FOUND`    |                           | `pcap-api`               | One of the requested instances does not exist but there is at least one instance to capture from. MUST be sent as soon as possible.                               |
-| `INSTANCE_DISCONNECTED` | `ABORTED`                 | `pcap-api`               | One instance failed during capturing but there are still instances left to capture from. The detailed message should contain information about the stopped party. |
-| `START_CAPTURE_FAILED`  | `FAILED_PRECONDITION`     | `pcap-api`               | Starting the capture request has failed because the request could not be fulfilled (e.g. no matching instances, pcap feature not enabled, no capture running)     |
-| `INVALID_REQUEST`       | `INVALID_ARGUMENT`        | `pcap-api`, `pcap-agent` | The request could not be fulfilled, e.g. because the app or BOSH deployment with the requested name do not exist.                                                 |
-| `CONGESTED`             |                           | `pcap-api`, `pcap-agent` | Some participant on the path is congested to the point of discarding data. The detailed message should contain the congested party.                               |
-| `CAPTURE_STOPPED`       | `OK`                      | `pcap-api`, `pcap-agent` | A single agent or the overall capture has stopped gracefully. The detailed message should contain information about the stopped party.                            |
-| `LIMIT_REACHED`         | `RESOURCE_EXHAUSTED`      | `pcap-api`, `pcap-agent` | Some limit has been reached, e.g. number of concurrent requests, time, bytes, etc.; Message details identifies, which limit has been reached.                     |
-|                         | `UNAUTHENTICATED`         | `pcap-api`               | The token sent by the client is rejected (e.g. invalid, timed out, etc.). Detail for the rejection in the message.                                                |                                                                                                     |
-| `CONNECTION_ERROR`      |                           | `pcap-api`               | An error happened while attempting communication with PCAP components, independent of the client.                                                                 |
-|                         | `ABORTED`                 | `pcap-api`               | The capture initially started but while capturing all agents failed and no data is left to forward.                                                               |
+| Value                  | Native Termination Status | Origin                   | Description                                                                                                                                                                                                                                                                                                   |
+|------------------------|---------------------------|--------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `INSTANCE_UNAVAILABLE` | `UNAVAILABLE`             | `pcap-api`, `pcap-agent` | One of the requested instances does not exist but there is at least one instance to capture from. MUST be sent as soon as possible.<br/>OR: One instance failed during capturing but there are still instances left to capture from. The detailed message should contain information about the stopped party. |
+|                        | `FAILED_PRECONDITION`     | `pcap-api`               | Starting the capture request has failed because the request could not be fulfilled (e.g. no matching instances, pcap feature not enabled, no capture running)                                                                                                                                                 |
+| `INVALID_REQUEST`      | `INVALID_ARGUMENT`        | `pcap-api`, `pcap-agent` | The request could not be fulfilled, e.g. because the app or BOSH deployment with the requested name do not exist.                                                                                                                                                                                             |
+| `CONGESTED`            |                           | `pcap-api`, `pcap-agent` | Some participant on the path is congested to the point of discarding data. The detailed message should contain the congested party.                                                                                                                                                                           |
+| `CAPTURE_STOPPED`      | `OK`                      | `pcap-api`, `pcap-agent` | A single agent or the overall capture has stopped gracefully. The detailed message should contain information about the stopped party.                                                                                                                                                                        |
+| `LIMIT_REACHED`        | `RESOURCE_EXHAUSTED`      | `pcap-api`, `pcap-agent` | Some limit has been reached, e.g. number of concurrent requests, time, bytes, etc.; Message details identifies, which limit has been reached.                                                                                                                                                                 |
+|                        | `UNAUTHENTICATED`         | `pcap-api`               | The token sent by the client is rejected (e.g. invalid, timed out, etc.). Detail for the rejection in the message.                                                                                                                                                                                            |                                                                                                     |
+| `CONNECTION_ERROR`     |                           | `pcap-api`               | An error happened while attempting communication with PCAP components, independent of the client.                                                                                                                                                                                                             |
+|                        | `ABORTED`                 | `pcap-api`               | The capture initially started but while capturing all agents failed and no data is left to forward.                                                                                                                                                                                                           |
 
 If the cause of the error is not clear (e.g. because it could be multiple things) and processing can not continue `UNKNOWN` should be used as the native termination status.
 
 ### Status
 
-The status is provided by `pcap-agent` and `pcap-api`. It SHALL be used by the connecting party to ensure that communication happens with the appropriate endpoint and that version numbers are compatible. A request MAY be denied if the version is deemed incompatible.
+The status is provided by `pcap-agent` and `pcap-api`. It SHALL be used by the connecting party to ensure that communication happens with the appropriate endpoint and that two parties are compatible. The calling party has to ensure that the compatibility level of the called party is equal or larger and refuse request if it isn't.
 
-Version information is particularly important to stop communication with outdated (and potentially vulnerable) `pcap-agent`s.
+Compatibility level is particularly important to stop communication with outdated (and potentially vulnerable) `pcap-agent`s.
 
-| Parameter | Type          | Required? | Description                                                                                                                                      |
-|-----------|---------------|-----------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| `health`  | `enum Health` | yes       | The health state of the agent in question                                                                                                        |
-| `version` | `string`      | yes       | Semantic version number of the component. Can be used to ensure communication with compatible versions, and cut-off of unsupported old versions. |
-| `status`  | `string`      | yes       | A human readable status message.                                                                                                                 |
-| `cf`      | `boolean`     | no        | Supports CF requests (only for pcap-api)                                                                                                         |                                                                                               
-| `bosh`    | `boolean`     | no        | Supports BOSH requests (only for pcap-api)                                                                                                       |                                                                                                
+| Parameter            | Type      | Required? | Description                                                                                                                                             |
+|----------------------|-----------|-----------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `healthy`            | `boolean` | yes       | The health state of the agent in question                                                                                                               |
+| `compatibilityLevel` | `integer` | yes       | The compatibility level. Once there is a change (like a security issue) that requires both parties to be updated this value MUST be incremented by one. |
+| `message`            | `string`  | yes       | A human readable status message.                                                                                                                        |
+| `cf`                 | `boolean` | no        | Supports CF requests (only for pcap-api)                                                                                                                |                                                                                               
+| `bosh`               | `boolean` | no        | Supports BOSH requests (only for pcap-api)                                                                                                              |                                                                                                
 
 Examples:
 ```json
 {
-  "health": "UP",
-  "version": "0.1.0",
-  "status": "Up with CF and BOSH endpoints",
+  "healthy": true,
+  "compatibilityLevel": 1,
+  "message": "Up with CF and BOSH endpoints",
   "cf": true,
   "bosh": true
 }
@@ -447,19 +445,11 @@ Examples:
 Example for an agent status
 ```json
 {
-  "health": "UP",
-  "version": "0.1.0",
-  "status": "Up, on BOSH instance router/d55baeba-f645-4219-8b49-2b4654a17165" 
+  "healthy": true,
+  "compatibilityLevel": 1,
+  "message": "Up, on BOSH instance router/d55baeba-f645-4219-8b49-2b4654a17165" 
 }
 ```
-
-#### Enum `Health`
-
-| Value      | Description                                                                                                                                  |
-|------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| `UP`       | Everything is nominal.                                                                                                                       |
-| `DRAINING` | This instance is currently being shut down and is draining its remaining connections.                                                        |
-| `DOWN`     | Communication to some of the components is interrupted, e.g. BOSH Director, UAA, Cloud Controller, pcap-api (in the case of the pcap-agent)? |
 
 ### PCAP Data
 
@@ -568,7 +558,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
@@ -652,7 +642,7 @@ sequenceDiagram
         end
     end
     pcap-agent1 --X pcap-api: Connection terminated
-    pcap-api ->> pcap-cli: Message: INSTANCE_DISCONNECTED (pcap-agent1)
+    pcap-api ->> pcap-cli: Message: INSTANCE_UNAVAILABLE (pcap-agent1)
     note over pcap-cli, pcap-api: Client requests a graceful stop
     pcap-cli ->> pcap-api: Stop
     par
@@ -679,7 +669,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
@@ -716,7 +706,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
@@ -824,7 +814,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api ->>+ pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 120k)
@@ -854,7 +844,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api ->>+ pcap-agent1: Capture pcap(eth0, "hosts 1.2.3.4", 120k)
@@ -886,7 +876,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, [1])
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         pcap-api -->+ pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 120k) [invalid mTLS Cert]
@@ -914,7 +904,7 @@ sequenceDiagram
         cloud-controller ->> pcap-api: Instances (AppID, Instances)
     else Target agent registry via NATS
         note right of pcap-api: Look up targets in agent registry
-        pcap-api ->> pcap-api: 
+        pcap-api ->> pcap-api: <br/>
     end
     par
         note over pcap-agent1: pcap-agent1 already has<br/>ongoing captures
@@ -1020,6 +1010,43 @@ sequenceDiagram
     pcap-agent1 ->> pcap-api: OK (pcap-agent1)
     pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent1)
     pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent2)
+    end
+
+    pcap-api ->>- pcap-cli: OK
+```
+
+### Draining during regular request
+Draining of pcap-api leads to a graceful shutdown of all components:
+
+BOSH Case:
+
+```mermaid
+sequenceDiagram
+    pcap-cli ->>+ pcap-api: Token, Capture Request {<br/>BOSH (Deployment, Groups, Instances)<br/>pcap ("eth0", "host 1.2.3.4", 65k) }
+    pcap-api ->> bosh-uaa: Token Keys?
+    bosh-uaa ->> pcap-api: Token Keys
+    note over pcap-api, bosh-uaa: Token and scope verification    
+    pcap-api ->> bosh-director: Instances (Deployment)?
+    bosh-director ->> pcap-api: Instances (Deployment)
+    par
+        pcap-api ->> pcap-agent1: Capture pcap(eth0, "host 1.2.3.4", 65k)
+        pcap-api ->> pcap-agent2: Capture pcap(eth0, "host 1.2.3.4", 65k)
+        loop
+            pcap-agent1 ->> pcap-api: pcap data
+            pcap-api ->> pcap-cli: pcap data
+            pcap-agent2 ->> pcap-api: pcap data
+            pcap-api ->> pcap-cli: pcap data
+        end
+    end
+    note right of pcap-api: Drain
+    pcap-api ->> pcap-api: <br/>
+    par
+        pcap-api ->> pcap-agent1: Stop
+        pcap-api ->> pcap-agent2: Stop
+        pcap-agent2 ->> pcap-api: OK (pcap-agent2 stopped)
+        pcap-agent1 ->> pcap-api: OK (pcap-agent1 stopped)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent1)
+        pcap-api ->> pcap-cli: Message: CAPTURE_STOPPED (pcap-agent2)
     end
 
     pcap-api ->>- pcap-cli: OK

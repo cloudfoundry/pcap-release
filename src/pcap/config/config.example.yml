@@ -1,0 +1,56 @@
+agent:
+  log_level: debug
+  buffer:
+    size: 100
+    upper: 95
+    lower: 90
+  listen:
+    port: 9494
+    tls: # omitempty -> nil == tls off
+      certificate: agent-cert.pem
+      private_key: agent-cert.key
+      ca: pcap-ca.pem
+
+api:
+  log_level: debug
+  buffer:
+    size: 100
+    upper: 95
+    lower: 90
+  listen:
+    port: 8080
+    tls: # omitempty -> nil == tls off
+      certificate: api-cert.pem
+      private_key: api-cert.key
+      ca: pcap-ca.pem
+
+  agents:
+    port: 9494
+    mtls:
+      common_name: pcap-agent.service.cf.internal
+      skip_verify: false
+
+      certificate: api-cert.pem
+      private_key: api-cert.key
+      ca: pcap-ca.pem
+
+  cf: # -> *pcap.CfHandlerConfig `yaml:omitempty`
+    cc_url: https://...
+    mtls:
+      common_name: cloud-controller.service.cf.internal
+      skip_verify: false
+
+      certificate: cc-client-cert.pem
+      private_key: cc-client-key.key
+      ca: cc-ca.pem
+  bosh: # -> *pcap.BoshHandler `yaml:omitempty`
+    director_url: https://
+    token_scope: bosh.admin
+    mtls:
+      common_name: bosh.service.cf.internal
+      skip_verify: false
+
+      certificate: bosh-client-cert.pem
+      private_key: bosh-client-key.key
+      ca: bosh-ca.pem
+
