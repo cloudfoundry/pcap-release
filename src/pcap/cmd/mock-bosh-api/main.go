@@ -100,7 +100,7 @@ concurrent_captures: 5
 		log.Fatal(err)
 		return
 	}
-	fmt.Printf("Wrote api config to %v\n", file)
+	log.Infof("Wrote api config to %v\n", file)
 }
 func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 	token, err := GetValidToken(jwtAPIurl)
