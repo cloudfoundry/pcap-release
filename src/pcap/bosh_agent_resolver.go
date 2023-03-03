@@ -19,11 +19,11 @@ type BoshAgentResolver struct {
 	environment bosh.Environment
 	client      *http.Client
 	uaaURLS     []string
-	agentMTLS   AgentMTLS
+	agentPort   int
 }
 
-func NewBoshAgentResolver(environment bosh.Environment, agentMTLS AgentMTLS) *BoshAgentResolver {
-	resolver := &BoshAgentResolver{environment: environment, agentMTLS: agentMTLS}
+func NewBoshAgentResolver(environment bosh.Environment, agentPort int) *BoshAgentResolver {
+	resolver := &BoshAgentResolver{environment: environment, agentPort: agentPort} // TODO: get agent port from where?
 	//TODO: include Setup() here?
 	return resolver
 }
@@ -62,7 +62,7 @@ func (boshAgentResolver *BoshAgentResolver) resolve(request *EndpointRequest, lo
 	var endpoints []AgentEndpoint
 	for _, instance := range instances {
 		identifier := strings.Join([]string{instance.Job, instance.Id}, "/")
-		endpoints = append(endpoints, AgentEndpoint{IP: instance.Ips[0], Port: boshAgentResolver.agentMTLS.DefaultPort, Identifier: identifier}) //TODO: defaultport ok here?
+		endpoints = append(endpoints, AgentEndpoint{IP: instance.Ips[0], Port: boshAgentResolver.agentPort, Identifier: identifier}) //TODO: defaultport ok here?
 	}
 
 	if len(endpoints) == 0 {

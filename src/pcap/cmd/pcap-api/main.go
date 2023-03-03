@@ -50,7 +50,7 @@ func main() {
 
 	// set up a BoshAgentResolver for each bosh environment
 	for _, env := range config.BoshEnvironments {
-		resolver := pcap.NewBoshAgentResolver(env, *config.Agents)
+		resolver := pcap.NewBoshAgentResolver(env, 8083) // FIXME
 		err = resolver.Setup()
 		if err != nil {
 			log.Warn(err.Error()) //TODO: we only want to warn if a resolver is nonfunctional. Is this the correct way to do this?

@@ -6,19 +6,19 @@ import (
 	"go.uber.org/zap"
 )
 
-type CloudfoundryHandler struct {
+type CloudfoundryAgentResolver struct {
 	Config ManualEndpoints
 }
 
-func (cf *CloudfoundryHandler) name() string {
+func (cf *CloudfoundryAgentResolver) name() string {
 	return "cf"
 }
 
-func (cf *CloudfoundryHandler) canResolve(request *Capture) bool {
+func (cf *CloudfoundryAgentResolver) canResolve(request *EndpointRequest) bool {
 	return request.GetCf() != nil
 }
 
-func (cf *CloudfoundryHandler) resolve(request *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
+func (cf *CloudfoundryAgentResolver) resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
 	log = log.With(zap.String("handler", cf.name()))
 	log.Info("Handling request")
 
@@ -31,18 +31,18 @@ func (cf *CloudfoundryHandler) resolve(request *Capture, log *zap.Logger) ([]Age
 	return []AgentEndpoint{}, nil
 }
 
-func (cf *CloudfoundryHandler) validate(capture *Capture) error {
-	request := capture.GetCf()
+func (cf *CloudfoundryAgentResolver) validate(request *EndpointRequest) error {
+	cfRequest := request.GetCf()
 
-	if request == nil {
+	if cfRequest == nil {
 		return fmt.Errorf("invalid message: bosh: %w", errNilField)
 	}
 
-	if request.Token == "" {
+	if cfRequest.Token == "" {
 		return fmt.Errorf("invalid message: token: %w", errEmptyField)
 	}
 
-	if request.AppId == "" {
+	if cfRequest.AppId == "" {
 		return fmt.Errorf("invalid message: application_id: %w", errEmptyField)
 	}
 

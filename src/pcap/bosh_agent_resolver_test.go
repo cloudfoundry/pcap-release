@@ -21,13 +21,13 @@ import (
 func NewAgentResolverWithMockBoshAPI(responses map[string]string) *BoshAgentResolver {
 	jwtapi, _ := test.MockjwtAPI()
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
-	return &BoshAgentResolver{
-		environment: bosh.Environment{
-			Alias: "bosh",
-			Url:   boshAPI.URL,
-		},
-		uaaURLS: []string{jwtapi.URL},
+	environment := bosh.Environment{
+		Alias: "bosh",
+		Url:   boshAPI.URL,
 	}
+	boshAgentResolver := NewBoshAgentResolver(environment, 8083)
+	boshAgentResolver.uaaURLS = []string{jwtapi.URL}
+	return boshAgentResolver
 }
 
 func GetValidToken(uaaURL string) string {
@@ -145,12 +145,12 @@ func TestResolve(t *testing.T) {
 	expectedAgentEndpoints := []AgentEndpoint{
 		{
 			IP:         "192.168.0.1",
-			Port:       8080, // from AgentMTLS{DefaultPort: 8080}
+			Port:       8083,
 			Identifier: "ha_proxy_z1/Testagent1",
 		},
 		{
 			IP:         "192.168.0.2",
-			Port:       8080,
+			Port:       8083,
 			Identifier: "ha_proxy_z1/Testagent2",
 		},
 	}
@@ -235,7 +235,7 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 		},
 	}
 
-	boshAgentResolver := NewBoshAgentResolver(bosh.Environment{}, AgentMTLS{DefaultPort: 8080})
+	boshAgentResolver := NewBoshAgentResolver(bosh.Environment{}, 8083)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -295,7 +295,7 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 		},
 	}
 
-	boshAgentResolver := NewBoshAgentResolver(bosh.Environment{}, AgentMTLS{DefaultPort: 8080})
+	boshAgentResolver := NewBoshAgentResolver(bosh.Environment{}, 8083)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

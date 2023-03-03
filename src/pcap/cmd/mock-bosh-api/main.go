@@ -63,8 +63,10 @@ buffer:
   size: 100
   upperLimit: 95
   lowerLimit: 90
-listen:
-  port: 8080
+common_config:
+  id: "testapi"
+  listen:
+    port: 8080
 agents:
   port: 8083
 bosh_environments:

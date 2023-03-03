@@ -32,10 +32,10 @@ var DefaultAPIConfig = APIConfig{
 }
 
 type APIConfig struct {
-	cmd.CommonConfig
-	Agents             *pcap.AgentMTLS `yaml:"agents"`
-	ConcurrentCaptures int             `yaml:"concurrent_captures"`
-	DrainTimeout       time.Duration   `yaml:"drain_timeout"`
+	cmd.CommonConfig   `yaml:"common_config"` // fixme:
+	Agents             *pcap.AgentMTLS        `yaml:"agents"`
+	ConcurrentCaptures int                    `yaml:"concurrent_captures"`
+	DrainTimeout       time.Duration          `yaml:"drain_timeout"`
 
 	BoshEnvironments []bosh.Environment `yaml:"bosh_environments"`
 	// TODO: Add CF specific config fragments

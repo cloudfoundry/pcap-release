@@ -52,7 +52,7 @@ func TestValidateCfCaptureRequest(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cf := &CloudfoundryHandler{}
+			cf := &CloudfoundryAgentResolver{}
 
 			testCapture := &EndpointRequest{Capture: &Capture_Cf{test.req}}
 
