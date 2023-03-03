@@ -143,7 +143,7 @@ func verifyJWTTokenMock(jku string) (string, string) {
 
 		RegisteredClaims: jwt.RegisteredClaims{
 			// A usual scenario is to set the expiration time relative to the current time
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    jku,

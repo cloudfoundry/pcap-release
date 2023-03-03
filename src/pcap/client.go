@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -19,7 +22,8 @@ import (
 type Client struct {
 	endpointRequest *EndpointRequest
 	captureOptions  *CaptureOptions
-	packetOut       *os.File
+	packetFile      *os.File
+	packetWriter    *pcapgo.Writer
 	messageOut      *os.File
 	apiURL          string
 	ctx             context.Context
@@ -35,6 +39,7 @@ const (
 )
 
 func NewClient(request *EndpointRequest, captureOptions *CaptureOptions, outputFile string, apiURL string, stopChannel chan StopSignal) (*Client, error) {
+	var err error
 	client := &Client{
 		endpointRequest: request,
 		captureOptions:  captureOptions,
@@ -44,10 +49,10 @@ func NewClient(request *EndpointRequest, captureOptions *CaptureOptions, outputF
 	}
 
 	if len(outputFile) == 0 {
-		client.packetOut = os.Stdout
+		client.packetFile = os.Stdout
 	} else {
 		if _, err := os.Stat(outputFile); os.IsNotExist(err) {
-			client.packetOut, err = os.Create(outputFile)
+			client.packetFile, err = os.Create(outputFile)
 			if err != nil {
 				return nil, fmt.Errorf("could not create file %v: %v ", outputFile, err.Error())
 			}
@@ -55,8 +60,13 @@ func NewClient(request *EndpointRequest, captureOptions *CaptureOptions, outputF
 			return nil, fmt.Errorf("output file %s already exists", outputFile)
 		}
 	}
+	client.packetWriter = pcapgo.NewWriter(client.packetFile)
+	err = client.packetWriter.WriteFileHeader(captureOptions.SnapLen, layers.LinkTypeEthernet)
+	if err != nil {
+		return nil, err
+	}
 
-	err := client.connectToAPI()
+	err = client.connectToAPI()
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +116,10 @@ func (client *Client) HandleRequest() error {
 		},
 	}
 
-	stream, err := client.Capture(client.ctx) //TODO: errorhandling
+	var stream, err = client.Capture(client.ctx)
+	if err != nil {
+		return err
+	}
 
 	err = stream.Send(request)
 	if err != nil {
@@ -137,13 +150,13 @@ func (client *Client) HandleRequest() error {
 	copyWg.Wait()
 
 	log.Debug("syncing file to disk")
-	err = client.packetOut.Sync()
+	err = client.packetFile.Sync()
 	if err != nil {
 		return err
 	}
 
 	log.Debug("closing file")
-	err = client.packetOut.Close()
+	err = client.packetFile.Close()
 	if err != nil {
 		return err
 	}
@@ -177,8 +190,8 @@ func (client *Client) handleStream(stream API_CaptureClient, copyWg *sync.WaitGr
 			switch p.Message.Type {
 			case MessageType_CAPTURE_STOPPED:
 				log.Infof("Received capture stop signal")
-				break
 				client.stopChannel <- Stop_api
+				break
 			case MessageType_START_CAPTURE_FAILED:
 				log.Infof("Received MessageType_START_CAPTURE_FAILED signal") //TODO
 				break
@@ -188,19 +201,32 @@ func (client *Client) handleStream(stream API_CaptureClient, copyWg *sync.WaitGr
 				//TODO: Other MessageTypes?
 			}
 		case *CaptureResponse_Packet:
-			fmt.Printf("received packet  (#%d): %d bytes\n", counter, len(p.Packet.Data))
-			written, err := client.packetOut.Write(p.Packet.Data)
+			packetLength := len(p.Packet.Data)
+			fmt.Printf("received packet  (#%d): %d bytes\n", counter, packetLength)
+
+			packet := gopacket.NewPacket(p.Packet.Data, layers.LinkTypeEthernet, gopacket.Default)
+			if packet.ErrorLayer() != nil && packet.ErrorLayer().Error() != nil {
+				panic(packet.ErrorLayer().Error().Error()) //TODO: logging
+			}
+			//TODO: workaround, see CFN-2950
+			captureInfo := gopacket.CaptureInfo{
+				Timestamp:      time.Now(),
+				CaptureLength:  packetLength,
+				Length:         packetLength,
+				InterfaceIndex: 0,
+				AncillaryData:  nil,
+			}
+			err = client.packetWriter.WritePacket(captureInfo, packet.Data())
 			if err != nil {
 				log.Errorf("copy operation stopped: %s", err.Error())
 			}
-			log.Infof("captured %s", bytefmt.ByteSize(uint64(written)))
 		}
 	}
 	copyWg.Done()
 }
 
 func (client *Client) logProgress(stop <-chan StopSignal) {
-	if client.packetOut == os.Stdout {
+	if client.packetFile == os.Stdout {
 		//writing progress information could interfere with packet output when both are written to stdout
 		return
 	}
@@ -209,7 +235,7 @@ func (client *Client) logProgress(stop <-chan StopSignal) {
 	for {
 		select {
 		case <-ticker:
-			info, err := client.packetOut.Stat()
+			info, err := client.packetFile.Stat()
 			if err != nil {
 				log.Debug("pcap output file already closed: ", err.Error())
 				return

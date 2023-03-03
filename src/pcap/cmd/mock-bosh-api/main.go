@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test"
+	"github.com/jessevdk/go-flags"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"io/fs"
 	"net/http"
@@ -15,18 +17,35 @@ import (
 	"time"
 )
 
+type options struct {
+	APIConfigFile     string `short:"a" long:"apiconfigfile" required:"true"`
+	BoshCLIConfigFile string `short:"b" long:"boshcliconfigfile" required:"true"`
+}
+
+var opts options
+
+func init() {
+	_, err := flags.ParseArgs(&opts, os.Args[1:])
+	if err != nil {
+		return
+	}
+
+	log.SetLevel(log.DebugLevel)
+}
+
 func main() {
 	jwtapi, _ := test.MockjwtAPI()
 	responses := prepareMockBoshDirectorResponse()
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
 	defer boshAPI.Close()
 
-	fmt.Printf("jwtapi listening on %v\n", jwtapi.URL)
-	fmt.Printf("boshapi listening on %v\n", boshAPI.URL)
+	log.Infof("jwtapi listening on %v\n", jwtapi.URL)
+	log.Infof("boshapi listening on %v\n", boshAPI.URL)
+
+	updateAPIConfig(opts.APIConfigFile, boshAPI.URL)
+	updateBoshCLIConfig(opts.BoshCLIConfigFile, boshAPI.URL, jwtapi.URL)
 
 	for {
-		updateAPIConfig("/Users/I554076/repos/pcap-release/src/pcap/test/api-test-config.yml", boshAPI.URL)
-		updateBoshCLIConfig("/Users/I554076/repos/pcap-release/src/pcap/test/bosh_config_temp", boshAPI.URL, jwtapi.URL)
 		time.Sleep(1 * time.Minute)
 	}
 }
@@ -78,7 +97,7 @@ concurrent_captures: 5
 
 	err := os.WriteFile(file, []byte(config), fs.ModePerm)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 		return
 	}
 	fmt.Printf("Wrote api config to %v\n", file)
@@ -86,7 +105,7 @@ concurrent_captures: 5
 func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 	token, err := GetValidToken(jwtAPIurl)
 	if err != nil {
-		fmt.Errorf("could not generate valid token %v", err.Error())
+		log.Fatalf("could not generate valid token %v", err.Error())
 	}
 
 	config := fmt.Sprintf(`environments:
@@ -136,11 +155,11 @@ func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 
 	err = os.WriteFile(file, []byte(config), fs.ModePerm)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 		return
 	}
-	fmt.Printf("Wrote bosh CLI config to %v\n", file)
-	fmt.Printf("Generated Token %v\n", token)
+	log.Infof("Wrote bosh CLI config to %v\n", file)
+	log.Infof("Generated Token %v\n", token)
 }
 
 func GetValidToken(uaaURL string) (string, error) {
@@ -174,5 +193,11 @@ func GetValidToken(uaaURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	err = req.Body.Close()
+	if err != nil {
+		return "", err
+	}
+
 	return newTokens.AccessToken, nil
 }
