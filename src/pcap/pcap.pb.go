@@ -609,11 +609,11 @@ type EndpointRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Types that are assignable to Capture:
+	// Types that are assignable to Request:
 	//
-	//	*Capture_Bosh
-	//	*Capture_Cf
-	Capture isCapture_Capture `protobuf_oneof:"capture"`
+	//	*EndpointRequest_Bosh
+	//	*EndpointRequest_Cf
+	Request isEndpointRequest_Request `protobuf_oneof:"request"`
 }
 
 func (x *EndpointRequest) Reset() {
@@ -648,49 +648,49 @@ func (*EndpointRequest) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{8}
 }
 
-func (m *EndpointRequest) GetCapture() isCapture_Capture {
+func (m *EndpointRequest) GetRequest() isEndpointRequest_Request {
 	if m != nil {
-		return m.Capture
+		return m.Request
 	}
 	return nil
 }
 
-func (x *EndpointRequest) GetBosh() *BoshQuery {
-	if x, ok := x.GetCapture().(*Capture_Bosh); ok {
+func (x *EndpointRequest) GetBosh() *BoshRequest {
+	if x, ok := x.GetRequest().(*EndpointRequest_Bosh); ok {
 		return x.Bosh
 	}
 	return nil
 }
 
-func (x *EndpointRequest) GetCf() *CloudfoundryQuery {
-	if x, ok := x.GetCapture().(*Capture_Cf); ok {
+func (x *EndpointRequest) GetCf() *CloudfoundryRequest {
+	if x, ok := x.GetRequest().(*EndpointRequest_Cf); ok {
 		return x.Cf
 	}
 	return nil
 }
 
-type isCapture_Capture interface {
-	isCapture_Capture()
+type isEndpointRequest_Request interface {
+	isEndpointRequest_Request()
 }
 
-type Capture_Bosh struct {
-	Bosh *BoshQuery `protobuf:"bytes,1,opt,name=bosh,proto3,oneof"`
+type EndpointRequest_Bosh struct {
+	Bosh *BoshRequest `protobuf:"bytes,1,opt,name=bosh,proto3,oneof"`
 }
 
-type Capture_Cf struct {
-	Cf *CloudfoundryQuery `protobuf:"bytes,2,opt,name=cf,proto3,oneof"`
+type EndpointRequest_Cf struct {
+	Cf *CloudfoundryRequest `protobuf:"bytes,2,opt,name=cf,proto3,oneof"`
 }
 
-func (*Capture_Bosh) isCapture_Capture() {}
+func (*EndpointRequest_Bosh) isEndpointRequest_Request() {}
 
-func (*Capture_Cf) isCapture_Capture() {}
+func (*EndpointRequest_Cf) isEndpointRequest_Request() {}
 
 type StartCapture struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Capture *EndpointRequest `protobuf:"bytes,1,opt,name=capture,proto3" json:"capture,omitempty"`
+	Request *EndpointRequest `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
 	Options *CaptureOptions  `protobuf:"bytes,2,opt,name=options,proto3" json:"options,omitempty"`
 }
 
@@ -726,9 +726,9 @@ func (*StartCapture) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *StartCapture) GetCapture() *EndpointRequest {
+func (x *StartCapture) GetRequest() *EndpointRequest {
 	if x != nil {
-		return x.Capture
+		return x.Request
 	}
 	return nil
 }
@@ -740,7 +740,7 @@ func (x *StartCapture) GetOptions() *CaptureOptions {
 	return nil
 }
 
-type BoshQuery struct {
+type BoshRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -751,8 +751,8 @@ type BoshQuery struct {
 	Instances  []string `protobuf:"bytes,4,rep,name=instances,proto3" json:"instances,omitempty"`
 }
 
-func (x *BoshQuery) Reset() {
-	*x = BoshQuery{}
+func (x *BoshRequest) Reset() {
+	*x = BoshRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_pcap_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -760,13 +760,13 @@ func (x *BoshQuery) Reset() {
 	}
 }
 
-func (x *BoshQuery) String() string {
+func (x *BoshRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*BoshQuery) ProtoMessage() {}
+func (*BoshRequest) ProtoMessage() {}
 
-func (x *BoshQuery) ProtoReflect() protoreflect.Message {
+func (x *BoshRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_pcap_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -778,40 +778,40 @@ func (x *BoshQuery) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use BoshQuery.ProtoReflect.Descriptor instead.
-func (*BoshQuery) Descriptor() ([]byte, []int) {
+// Deprecated: Use BoshRequest.ProtoReflect.Descriptor instead.
+func (*BoshRequest) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *BoshQuery) GetToken() string {
+func (x *BoshRequest) GetToken() string {
 	if x != nil {
 		return x.Token
 	}
 	return ""
 }
 
-func (x *BoshQuery) GetDeployment() string {
+func (x *BoshRequest) GetDeployment() string {
 	if x != nil {
 		return x.Deployment
 	}
 	return ""
 }
 
-func (x *BoshQuery) GetGroups() []string {
+func (x *BoshRequest) GetGroups() []string {
 	if x != nil {
 		return x.Groups
 	}
 	return nil
 }
 
-func (x *BoshQuery) GetInstances() []string {
+func (x *BoshRequest) GetInstances() []string {
 	if x != nil {
 		return x.Instances
 	}
 	return nil
 }
 
-type CloudfoundryQuery struct {
+type CloudfoundryRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -822,8 +822,8 @@ type CloudfoundryQuery struct {
 	Indices []int32 `protobuf:"varint,4,rep,packed,name=indices,proto3" json:"indices,omitempty"`
 }
 
-func (x *CloudfoundryQuery) Reset() {
-	*x = CloudfoundryQuery{}
+func (x *CloudfoundryRequest) Reset() {
+	*x = CloudfoundryRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_pcap_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -831,13 +831,13 @@ func (x *CloudfoundryQuery) Reset() {
 	}
 }
 
-func (x *CloudfoundryQuery) String() string {
+func (x *CloudfoundryRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CloudfoundryQuery) ProtoMessage() {}
+func (*CloudfoundryRequest) ProtoMessage() {}
 
-func (x *CloudfoundryQuery) ProtoReflect() protoreflect.Message {
+func (x *CloudfoundryRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_pcap_proto_msgTypes[11]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -849,33 +849,33 @@ func (x *CloudfoundryQuery) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CloudfoundryQuery.ProtoReflect.Descriptor instead.
-func (*CloudfoundryQuery) Descriptor() ([]byte, []int) {
+// Deprecated: Use CloudfoundryRequest.ProtoReflect.Descriptor instead.
+func (*CloudfoundryRequest) Descriptor() ([]byte, []int) {
 	return file_pcap_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *CloudfoundryQuery) GetToken() string {
+func (x *CloudfoundryRequest) GetToken() string {
 	if x != nil {
 		return x.Token
 	}
 	return ""
 }
 
-func (x *CloudfoundryQuery) GetAppId() string {
+func (x *CloudfoundryRequest) GetAppId() string {
 	if x != nil {
 		return x.AppId
 	}
 	return ""
 }
 
-func (x *CloudfoundryQuery) GetAppType() string {
+func (x *CloudfoundryRequest) GetAppType() string {
 	if x != nil && x.AppType != nil {
 		return *x.AppType
 	}
 	return ""
 }
 
-func (x *CloudfoundryQuery) GetIndices() []int32 {
+func (x *CloudfoundryRequest) GetIndices() []int32 {
 	if x != nil {
 		return x.Indices
 	}
@@ -1098,21 +1098,22 @@ var file_pcap_proto_rawDesc = []byte{
 	0x01, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x70, 0x63, 0x61, 0x70, 0x2e, 0x53, 0x74, 0x6f, 0x70, 0x43,
 	0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x48, 0x00, 0x52, 0x04, 0x73, 0x74, 0x6f, 0x70, 0x42, 0x0b,
 	0x0a, 0x09, 0x6f, 0x70, 0x65, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x0d, 0x0a, 0x0b, 0x53,
-	0x74, 0x6f, 0x70, 0x43, 0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x22, 0x6a, 0x0a, 0x07, 0x43, 0x61,
-	0x70, 0x74, 0x75, 0x72, 0x65, 0x12, 0x27, 0x0a, 0x04, 0x62, 0x6f, 0x73, 0x68, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x70, 0x63, 0x61, 0x70, 0x2e, 0x42, 0x6f, 0x73, 0x68, 0x43,
-	0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x48, 0x00, 0x52, 0x04, 0x62, 0x6f, 0x73, 0x68, 0x12, 0x2b,
-	0x0a, 0x02, 0x63, 0x66, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x70, 0x63, 0x61,
-	0x70, 0x2e, 0x43, 0x6c, 0x6f, 0x75, 0x64, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x72, 0x79, 0x43, 0x61,
-	0x70, 0x74, 0x75, 0x72, 0x65, 0x48, 0x00, 0x52, 0x02, 0x63, 0x66, 0x42, 0x09, 0x0a, 0x07, 0x63,
-	0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x22, 0x67, 0x0a, 0x0c, 0x53, 0x74, 0x61, 0x72, 0x74, 0x43,
-	0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x12, 0x27, 0x0a, 0x07, 0x63, 0x61, 0x70, 0x74, 0x75, 0x72,
-	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x70, 0x63, 0x61, 0x70, 0x2e, 0x43,
-	0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x52, 0x07, 0x63, 0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x12,
+	0x74, 0x6f, 0x70, 0x43, 0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x22, 0x72, 0x0a, 0x0f, 0x45, 0x6e,
+	0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x27, 0x0a,
+	0x04, 0x62, 0x6f, 0x73, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x70, 0x63,
+	0x61, 0x70, 0x2e, 0x42, 0x6f, 0x73, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x48, 0x00,
+	0x52, 0x04, 0x62, 0x6f, 0x73, 0x68, 0x12, 0x2b, 0x0a, 0x02, 0x63, 0x66, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x19, 0x2e, 0x70, 0x63, 0x61, 0x70, 0x2e, 0x43, 0x6c, 0x6f, 0x75, 0x64, 0x66,
+	0x6f, 0x75, 0x6e, 0x64, 0x72, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x48, 0x00, 0x52,
+	0x02, 0x63, 0x66, 0x42, 0x09, 0x0a, 0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x6f,
+	0x0a, 0x0c, 0x53, 0x74, 0x61, 0x72, 0x74, 0x43, 0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x12, 0x2f,
+	0x0a, 0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x15, 0x2e, 0x70, 0x63, 0x61, 0x70, 0x2e, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x52, 0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
 	0x2e, 0x0a, 0x07, 0x6f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b,
 	0x32, 0x14, 0x2e, 0x70, 0x63, 0x61, 0x70, 0x2e, 0x43, 0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x4f,
 	0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x07, 0x6f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x22,
-	0x79, 0x0a, 0x0b, 0x42, 0x6f, 0x73, 0x68, 0x43, 0x61, 0x70, 0x74, 0x75, 0x72, 0x65, 0x12, 0x14,
+	0x79, 0x0a, 0x0b, 0x42, 0x6f, 0x73, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x14,
 	0x0a, 0x05, 0x74, 0x6f, 0x6b, 0x65, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x74,
 	0x6f, 0x6b, 0x65, 0x6e, 0x12, 0x1e, 0x0a, 0x0a, 0x64, 0x65, 0x70, 0x6c, 0x6f, 0x79, 0x6d, 0x65,
 	0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x64, 0x65, 0x70, 0x6c, 0x6f, 0x79,
@@ -1120,8 +1121,8 @@ var file_pcap_proto_rawDesc = []byte{
 	0x20, 0x03, 0x28, 0x09, 0x52, 0x06, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x73, 0x12, 0x1c, 0x0a, 0x09,
 	0x69, 0x6e, 0x73, 0x74, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52,
 	0x09, 0x69, 0x6e, 0x73, 0x74, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x22, 0x86, 0x01, 0x0a, 0x13, 0x43,
-	0x6c, 0x6f, 0x75, 0x64, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x72, 0x79, 0x43, 0x61, 0x70, 0x74, 0x75,
-	0x72, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x74, 0x6f, 0x6b, 0x65, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x6c, 0x6f, 0x75, 0x64, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x72, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x74, 0x6f, 0x6b, 0x65, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x09, 0x52, 0x05, 0x74, 0x6f, 0x6b, 0x65, 0x6e, 0x12, 0x14, 0x0a, 0x05, 0x61, 0x70, 0x70, 0x49,
 	0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x61, 0x70, 0x70, 0x49, 0x64, 0x12, 0x1d,
 	0x0a, 0x07, 0x61, 0x70, 0x70, 0x54, 0x79, 0x70, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x48,
@@ -1189,22 +1190,22 @@ func file_pcap_proto_rawDescGZIP() []byte {
 var file_pcap_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_pcap_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_pcap_proto_goTypes = []interface{}{
-	(MessageType)(0),          // 0: pcap.MessageType
-	(*CaptureOptions)(nil),    // 1: pcap.CaptureOptions
-	(*CaptureResponse)(nil),   // 2: pcap.CaptureResponse
-	(*Packet)(nil),            // 3: pcap.Packet
-	(*Message)(nil),           // 4: pcap.Message
-	(*StatusResponse)(nil),    // 5: pcap.StatusResponse
-	(*StatusRequest)(nil),     // 6: pcap.StatusRequest
-	(*CaptureRequest)(nil),    // 7: pcap.CaptureRequest
-	(*StopCapture)(nil),       // 8: pcap.StopCapture
-	(*EndpointRequest)(nil),   // 9: pcap.EndpointRequest
-	(*StartCapture)(nil),      // 10: pcap.StartCapture
-	(*BoshQuery)(nil),         // 11: pcap.BoshQuery
-	(*CloudfoundryQuery)(nil), // 12: pcap.CloudfoundryQuery
-	(*AgentRequest)(nil),      // 13: pcap.AgentRequest
-	(*StartAgentCapture)(nil), // 14: pcap.StartAgentCapture
-	(*StopAgentCapture)(nil),  // 15: pcap.StopAgentCapture
+	(MessageType)(0),            // 0: pcap.MessageType
+	(*CaptureOptions)(nil),      // 1: pcap.CaptureOptions
+	(*CaptureResponse)(nil),     // 2: pcap.CaptureResponse
+	(*Packet)(nil),              // 3: pcap.Packet
+	(*Message)(nil),             // 4: pcap.Message
+	(*StatusResponse)(nil),      // 5: pcap.StatusResponse
+	(*StatusRequest)(nil),       // 6: pcap.StatusRequest
+	(*CaptureRequest)(nil),      // 7: pcap.CaptureRequest
+	(*StopCapture)(nil),         // 8: pcap.StopCapture
+	(*EndpointRequest)(nil),     // 9: pcap.EndpointRequest
+	(*StartCapture)(nil),        // 10: pcap.StartCapture
+	(*BoshRequest)(nil),         // 11: pcap.BoshRequest
+	(*CloudfoundryRequest)(nil), // 12: pcap.CloudfoundryRequest
+	(*AgentRequest)(nil),        // 13: pcap.AgentRequest
+	(*StartAgentCapture)(nil),   // 14: pcap.StartAgentCapture
+	(*StopAgentCapture)(nil),    // 15: pcap.StopAgentCapture
 }
 var file_pcap_proto_depIdxs = []int32{
 	3,  // 0: pcap.CaptureResponse.packet:type_name -> pcap.Packet
@@ -1212,21 +1213,21 @@ var file_pcap_proto_depIdxs = []int32{
 	0,  // 2: pcap.Message.type:type_name -> pcap.MessageType
 	10, // 3: pcap.CaptureRequest.start:type_name -> pcap.StartCapture
 	8,  // 4: pcap.CaptureRequest.stop:type_name -> pcap.StopCapture
-	11, // 5: pcap.EndpointRequest.bosh:type_name -> pcap.BoshQuery
-	12, // 6: pcap.EndpointRequest.cf:type_name -> pcap.CloudfoundryQuery
-	9,  // 7: pcap.StartCapture.capture:type_name -> pcap.EndpointRequest
+	11, // 5: pcap.EndpointRequest.bosh:type_name -> pcap.BoshRequest
+	12, // 6: pcap.EndpointRequest.cf:type_name -> pcap.CloudfoundryRequest
+	9,  // 7: pcap.StartCapture.request:type_name -> pcap.EndpointRequest
 	1,  // 8: pcap.StartCapture.options:type_name -> pcap.CaptureOptions
 	14, // 9: pcap.AgentRequest.start:type_name -> pcap.StartAgentCapture
 	15, // 10: pcap.AgentRequest.stop:type_name -> pcap.StopAgentCapture
 	1,  // 11: pcap.StartAgentCapture.capture:type_name -> pcap.CaptureOptions
 	6,  // 12: pcap.API.Status:input_type -> pcap.StatusRequest
-	7,  // 13: pcap.API.EndpointRequest:input_type -> pcap.CaptureRequest
+	7,  // 13: pcap.API.Capture:input_type -> pcap.CaptureRequest
 	6,  // 14: pcap.Agent.Status:input_type -> pcap.StatusRequest
-	13, // 15: pcap.Agent.EndpointRequest:input_type -> pcap.AgentRequest
+	13, // 15: pcap.Agent.Capture:input_type -> pcap.AgentRequest
 	5,  // 16: pcap.API.Status:output_type -> pcap.StatusResponse
-	2,  // 17: pcap.API.EndpointRequest:output_type -> pcap.CaptureResponse
+	2,  // 17: pcap.API.Capture:output_type -> pcap.CaptureResponse
 	5,  // 18: pcap.Agent.Status:output_type -> pcap.StatusResponse
-	2,  // 19: pcap.Agent.EndpointRequest:output_type -> pcap.CaptureResponse
+	2,  // 19: pcap.Agent.Capture:output_type -> pcap.CaptureResponse
 	16, // [16:20] is the sub-list for method output_type
 	12, // [12:16] is the sub-list for method input_type
 	12, // [12:12] is the sub-list for extension type_name
@@ -1361,7 +1362,7 @@ func file_pcap_proto_init() {
 			}
 		}
 		file_pcap_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BoshQuery); i {
+			switch v := v.(*BoshRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1373,7 +1374,7 @@ func file_pcap_proto_init() {
 			}
 		}
 		file_pcap_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CloudfoundryQuery); i {
+			switch v := v.(*CloudfoundryRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1431,8 +1432,8 @@ func file_pcap_proto_init() {
 		(*CaptureRequest_Stop)(nil),
 	}
 	file_pcap_proto_msgTypes[8].OneofWrappers = []interface{}{
-		(*Capture_Bosh)(nil),
-		(*Capture_Cf)(nil),
+		(*EndpointRequest_Bosh)(nil),
+		(*EndpointRequest_Cf)(nil),
 	}
 	file_pcap_proto_msgTypes[11].OneofWrappers = []interface{}{}
 	file_pcap_proto_msgTypes[12].OneofWrappers = []interface{}{

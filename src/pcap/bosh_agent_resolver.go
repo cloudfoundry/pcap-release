@@ -18,7 +18,7 @@ import (
 type BoshAgentResolver struct {
 	environment bosh.Environment
 	client      *http.Client
-	uaaURLS     []string
+	uaaURLs     []string
 	agentPort   int
 }
 
@@ -138,16 +138,16 @@ func (boshAgentResolver *BoshAgentResolver) Setup() error { //TODO: make private
 		return fmt.Errorf("Could not parse BOSH Director API response: %s", err)
 	}
 
-	boshAgentResolver.uaaURLS = apiResponse.UserAuthentication.Options.Urls
+	boshAgentResolver.uaaURLs = apiResponse.UserAuthentication.Options.Urls
 
-	log.Infof("Connected to BOSH Director '%s' (%s), version %s on %s. UAA URLs: %v", apiResponse.Name, apiResponse.Uuid, apiResponse.Version, apiResponse.Cpi, boshAgentResolver.uaaURLS)
+	log.Infof("Connected to BOSH Director '%s' (%s), version %s on %s. UAA URLs: %v", apiResponse.Name, apiResponse.Uuid, apiResponse.Version, apiResponse.Cpi, boshAgentResolver.uaaURLs)
 
 	return nil
 }
 
 func (boshAgentResolver *BoshAgentResolver) authenticate(authToken string) error {
 
-	allowed, err := VerifyJwt(authToken, "bosh.admin", boshAgentResolver.uaaURLS)
+	allowed, err := VerifyJwt(authToken, "bosh.admin", boshAgentResolver.uaaURLs)
 	if err != nil {
 		return fmt.Errorf("could not verify token %s (%s)", authToken, err)
 	}

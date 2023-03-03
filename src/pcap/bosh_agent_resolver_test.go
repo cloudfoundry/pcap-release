@@ -26,7 +26,7 @@ func NewAgentResolverWithMockBoshAPI(responses map[string]string) *BoshAgentReso
 		Url:   boshAPI.URL,
 	}
 	boshAgentResolver := NewBoshAgentResolver(environment, 8083)
-	boshAgentResolver.uaaURLS = []string{jwtapi.URL}
+	boshAgentResolver.uaaURLs = []string{jwtapi.URL}
 	return boshAgentResolver
 }
 
@@ -74,7 +74,7 @@ func TestAuthenticate(t *testing.T) {
 	}{
 		{
 			name:        "valid token",
-			token:       GetValidToken(bar.uaaURLS[0]),
+			token:       GetValidToken(bar.uaaURLs[0]),
 			wantErr:     false,
 			expectedErr: nil,
 		},
@@ -83,7 +83,7 @@ func TestAuthenticate(t *testing.T) {
 			token:       "eyJhbGciOiJSUzI1NiIsImprdSI6Imh0dHBzOi8vMTAuMC4zLjExOjg0NDMvdG9rZW5fa2V5cyIsImtpZCI6InVhYS1qd3Qta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJqdGkiOiIwZWNmODIxYjVmYzI0YTBmODczOWM5MmJkOGY2YzYyMi1yIiwic3ViIjoiMDY4ZmEwODItMDdkNy00NjRjLWE1MWEtZmFkMzdiNGQ2MDViIiwiaWF0IjoxNjc3NTM0Mjg3LCJleHAiOjE2Nzc2MjA2ODcsImNpZCI6ImJvc2hfY2xpIiwiY2xpZW50X2lkIjoiYm9zaF9jbGkiLCJpc3MiOiJodHRwczovLzEwLjAuMy4xMTo4NDQzL29hdXRoL3Rva2VuIiwiemlkIjoidWFhIiwiYXVkIjpbIm9wZW5pZCIsImJvc2hfY2xpIiwiYm9zaCJdLCJncmFudGVkX3Njb3BlcyI6WyJvcGVuaWQiLCJib3NoLmFkbWluIl0sImFtciI6WyJwd2QiXSwiYXV0aF90aW1lIjoxNjc3NTM0Mjg3LCJncmFudF90eXBlIjoicGFzc3dvcmQiLCJ1c2VyX25hbWUiOiJoLmk1NTQwNzYuOTFiNjc1Iiwib3JpZ2luIjoidWFhIiwidXNlcl9pZCI6IjA2OGZhMDgyLTA3ZDctNDY0Yy1hNTFhLWZhZDM3YjRkNjA1YiIsInJldl9zaWciOiJjMGRkMTY0MSJ9.o7t1HSihRZNrHKeCynj5K8xM5EixOMr33F37N7i2Zy-I2d8T9LLXCbY9nczQboSG2UtDFu-ztr7xMFwpsCYzVgGItWPBMY62tk4GVir1zFYEDChFXF6vaL3Lv9Y1L9AOwtT6Nr47jYY5XxkLmVgjfXb2wDx7lL8OG0BvVmKrQDtZuUlYhyXQNDkhBHQlXh5TqK07LgPzOoWgoVcNGNlpjj3hOnHNAq-gexNqJHtIBJ-0AdcadyE3wrKWCxeuQGkEnnMG3M2ByVoFd6_V2UnizxCnIpaoVOLJqywUyxOecmALLg4c9M6Bymkv5oR_CgbMGcVTxocwGgDYXVZ20TpbOg",
 			wantErr:     true,
 			expectedErr: nil, //TODO: custom error comparison currently not implemented, see wrap.go:53
-			//expectedErr: fmt.Errorf("could not verify token eyJhbGciOiJSUzI1NiIsImprdSI6Imh0dHBzOi8vMTAuMC4zLjExOjg0NDMvdG9rZW5fa2V5cyIsImtpZCI6InVhYS1qd3Qta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJqdGkiOiIwZWNmODIxYjVmYzI0YTBmODczOWM5MmJkOGY2YzYyMi1yIiwic3ViIjoiMDY4ZmEwODItMDdkNy00NjRjLWE1MWEtZmFkMzdiNGQ2MDViIiwiaWF0IjoxNjc3NTM0Mjg3LCJleHAiOjE2Nzc2MjA2ODcsImNpZCI6ImJvc2hfY2xpIiwiY2xpZW50X2lkIjoiYm9zaF9jbGkiLCJpc3MiOiJodHRwczovLzEwLjAuMy4xMTo4NDQzL29hdXRoL3Rva2VuIiwiemlkIjoidWFhIiwiYXVkIjpbIm9wZW5pZCIsImJvc2hfY2xpIiwiYm9zaCJdLCJncmFudGVkX3Njb3BlcyI6WyJvcGVuaWQiLCJib3NoLmFkbWluIl0sImFtciI6WyJwd2QiXSwiYXV0aF90aW1lIjoxNjc3NTM0Mjg3LCJncmFudF90eXBlIjoicGFzc3dvcmQiLCJ1c2VyX25hbWUiOiJoLmk1NTQwNzYuOTFiNjc1Iiwib3JpZ2luIjoidWFhIiwidXNlcl9pZCI6IjA2OGZhMDgyLTA3ZDctNDY0Yy1hNTFhLWZhZDM3YjRkNjA1YiIsInJldl9zaWciOiJjMGRkMTY0MSJ9.o7t1HSihRZNrHKeCynj5K8xM5EixOMr33F37N7i2Zy-I2d8T9LLXCbY9nczQboSG2UtDFu-ztr7xMFwpsCYzVgGItWPBMY62tk4GVir1zFYEDChFXF6vaL3Lv9Y1L9AOwtT6Nr47jYY5XxkLmVgjfXb2wDx7lL8OG0BvVmKrQDtZuUlYhyXQNDkhBHQlXh5TqK07LgPzOoWgoVcNGNlpjj3hOnHNAq-gexNqJHtIBJ-0AdcadyE3wrKWCxeuQGkEnnMG3M2ByVoFd6_V2UnizxCnIpaoVOLJqywUyxOecmALLg4c9M6Bymkv5oR_CgbMGcVTxocwGgDYXVZ20TpbOg (header 'jku' https://10.0.3.11:8443/token_keys did not match any UAA base URLs reported by the BOSH Director: [%v])", bar.uaaURLS[0]),
+			//expectedErr: fmt.Errorf("could not verify token eyJhbGciOiJSUzI1NiIsImprdSI6Imh0dHBzOi8vMTAuMC4zLjExOjg0NDMvdG9rZW5fa2V5cyIsImtpZCI6InVhYS1qd3Qta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJqdGkiOiIwZWNmODIxYjVmYzI0YTBmODczOWM5MmJkOGY2YzYyMi1yIiwic3ViIjoiMDY4ZmEwODItMDdkNy00NjRjLWE1MWEtZmFkMzdiNGQ2MDViIiwiaWF0IjoxNjc3NTM0Mjg3LCJleHAiOjE2Nzc2MjA2ODcsImNpZCI6ImJvc2hfY2xpIiwiY2xpZW50X2lkIjoiYm9zaF9jbGkiLCJpc3MiOiJodHRwczovLzEwLjAuMy4xMTo4NDQzL29hdXRoL3Rva2VuIiwiemlkIjoidWFhIiwiYXVkIjpbIm9wZW5pZCIsImJvc2hfY2xpIiwiYm9zaCJdLCJncmFudGVkX3Njb3BlcyI6WyJvcGVuaWQiLCJib3NoLmFkbWluIl0sImFtciI6WyJwd2QiXSwiYXV0aF90aW1lIjoxNjc3NTM0Mjg3LCJncmFudF90eXBlIjoicGFzc3dvcmQiLCJ1c2VyX25hbWUiOiJoLmk1NTQwNzYuOTFiNjc1Iiwib3JpZ2luIjoidWFhIiwidXNlcl9pZCI6IjA2OGZhMDgyLTA3ZDctNDY0Yy1hNTFhLWZhZDM3YjRkNjA1YiIsInJldl9zaWciOiJjMGRkMTY0MSJ9.o7t1HSihRZNrHKeCynj5K8xM5EixOMr33F37N7i2Zy-I2d8T9LLXCbY9nczQboSG2UtDFu-ztr7xMFwpsCYzVgGItWPBMY62tk4GVir1zFYEDChFXF6vaL3Lv9Y1L9AOwtT6Nr47jYY5XxkLmVgjfXb2wDx7lL8OG0BvVmKrQDtZuUlYhyXQNDkhBHQlXh5TqK07LgPzOoWgoVcNGNlpjj3hOnHNAq-gexNqJHtIBJ-0AdcadyE3wrKWCxeuQGkEnnMG3M2ByVoFd6_V2UnizxCnIpaoVOLJqywUyxOecmALLg4c9M6Bymkv5oR_CgbMGcVTxocwGgDYXVZ20TpbOg (header 'jku' https://10.0.3.11:8443/token_keys did not match any UAA base URLs reported by the BOSH Director: [%v])", bar.uaaURLs[0]),
 		},
 		{
 			name:        "invalid token - not a token",
@@ -104,27 +104,6 @@ func TestAuthenticate(t *testing.T) {
 				t.Errorf("expectedErr = %v,\n\t\t\t\t\t\t\t   actualErr = %v", test.expectedErr, err)
 			}
 		})
-	}
-}
-func TestAuthenticate_Success(t *testing.T) {
-	bar := NewAgentResolverWithMockBoshAPI(nil)
-
-	//bar.Setup()
-	//token := "eyJhbGciOiJSUzI1NiIsImprdSI6Imh0dHBzOi8vMTAuMC4zLjExOjg0NDMvdG9rZW5fa2V5cyIsImtpZCI6InVhYS1qd3Qta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJqdGkiOiI4MWNjYWU0MmFjMjA0MWUxOTJiOGVmMWYwOWFmZGEyOSIsInN1YiI6IjA2OGZhMDgyLTA3ZDctNDY0Yy1hNTFhLWZhZDM3YjRkNjA1YiIsInNjb3BlIjpbIm9wZW5pZCIsImJvc2guYWRtaW4iXSwiY2xpZW50X2lkIjoiYm9zaF9jbGkiLCJjaWQiOiJib3NoX2NsaSIsImF6cCI6ImJvc2hfY2xpIiwiZ3JhbnRfdHlwZSI6InBhc3N3b3JkIiwidXNlcl9pZCI6IjA2OGZhMDgyLTA3ZDctNDY0Yy1hNTFhLWZhZDM3YjRkNjA1YiIsIm9yaWdpbiI6InVhYSIsInVzZXJfbmFtZSI6ImguaTU1NDA3Ni45MWI2NzUiLCJlbWFpbCI6ImguaTU1NDA3Ni45MWI2NzVAMTAuMC4zLjExOjg0NDMiLCJhdXRoX3RpbWUiOjE2Nzc1MzQyODcsInJldl9zaWciOiJjMGRkMTY0MSIsImlhdCI6MTY3NzU3ODg2NCwiZXhwIjoxNjc3NTc4OTg0LCJpc3MiOiJodHRwczovLzEwLjAuMy4xMTo4NDQzL29hdXRoL3Rva2VuIiwiemlkIjoidWFhIiwiYXVkIjpbImJvc2hfY2xpIiwiYm9zaCIsIm9wZW5pZCJdfQ.dyJs_gutnORg2UGSf191NBDQu5tHN8AwoldZwZtAN7FkiHK8XXr_uzs-EYzhJ0f0TsngrjSPUypdJAKsWToAY3q2KXFhTi5s5nN6_s7jkKbNrezhddEnrzYqFZiyGGNY0N01marAgY2DefdMrLdSekVCHP-0DntS8yL7XpyildqXvlvMcTZRvO5PL81xr_QuXOimgO7C0yQtc04YvmzD1N5CE06hjAcC3O9hyduDIysEKINiSyxcJJeVDfaQpm5vxlOXf-Q-yKiN9nPBSctgukiT4Fozm8jpCa2yidcZwkzLTbYaXAMgjgv__-jID664aRwXrgSpc8300YZa6fLefQ"
-	token := GetValidToken(bar.uaaURLS[0])
-	err := bar.authenticate(token)
-	if err != nil {
-		t.Errorf("received unexpected error = %v", err)
-	}
-}
-
-func TestAuthenticate_InvalidToken(t *testing.T) {
-	boshAgentResolver := NewAgentResolverWithMockBoshAPI(nil)
-	// TODO: token with invalid jku
-	invalidToken := "eyJhbGciOiJSUzI1NiIsImprdSI6Imh0dHBzOi8vMTAuMC4zLjExOjg0NDMvdG9rZW5fa2V5cyIsImtpZCI6InVhYS1qd3Qta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJqdGkiOiIwZWNmODIxYjVmYzI0YTBmODczOWM5MmJkOGY2YzYyMi1yIiwic3ViIjoiMDY4ZmEwODItMDdkNy00NjRjLWE1MWEtZmFkMzdiNGQ2MDViIiwiaWF0IjoxNjc3NTM0Mjg3LCJleHAiOjE2Nzc2MjA2ODcsImNpZCI6ImJvc2hfY2xpIiwiY2xpZW50X2lkIjoiYm9zaF9jbGkiLCJpc3MiOiJodHRwczovLzEwLjAuMy4xMTo4NDQzL29hdXRoL3Rva2VuIiwiemlkIjoidWFhIiwiYXVkIjpbIm9wZW5pZCIsImJvc2hfY2xpIiwiYm9zaCJdLCJncmFudGVkX3Njb3BlcyI6WyJvcGVuaWQiLCJib3NoLmFkbWluIl0sImFtciI6WyJwd2QiXSwiYXV0aF90aW1lIjoxNjc3NTM0Mjg3LCJncmFudF90eXBlIjoicGFzc3dvcmQiLCJ1c2VyX25hbWUiOiJoLmk1NTQwNzYuOTFiNjc1Iiwib3JpZ2luIjoidWFhIiwidXNlcl9pZCI6IjA2OGZhMDgyLTA3ZDctNDY0Yy1hNTFhLWZhZDM3YjRkNjA1YiIsInJldl9zaWciOiJjMGRkMTY0MSJ9.o7t1HSihRZNrHKeCynj5K8xM5EixOMr33F37N7i2Zy-I2d8T9LLXCbY9nczQboSG2UtDFu-ztr7xMFwpsCYzVgGItWPBMY62tk4GVir1zFYEDChFXF6vaL3Lv9Y1L9AOwtT6Nr47jYY5XxkLmVgjfXb2wDx7lL8OG0BvVmKrQDtZuUlYhyXQNDkhBHQlXh5TqK07LgPzOoWgoVcNGNlpjj3hOnHNAq-gexNqJHtIBJ-0AdcadyE3wrKWCxeuQGkEnnMG3M2ByVoFd6_V2UnizxCnIpaoVOLJqywUyxOecmALLg4c9M6Bymkv5oR_CgbMGcVTxocwGgDYXVZ20TpbOg"
-	err := boshAgentResolver.authenticate(invalidToken)
-	if err == nil {
-		t.Error("expected token verification error")
 	}
 }
 
@@ -191,8 +170,8 @@ func TestResolve(t *testing.T) {
 	}
 
 	request := &EndpointRequest{
-		Capture: &Capture_Bosh{Bosh: &BoshQuery{
-			Token:      GetValidToken(boshAgentResolver.uaaURLS[0]),
+		Request: &EndpointRequest_Bosh{Bosh: &BoshRequest{
+			Token:      GetValidToken(boshAgentResolver.uaaURLs[0]),
 			Deployment: deploymentName,
 			Groups:     []string{"test-instance-group"},
 			Instances:  nil,
@@ -218,8 +197,8 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 		{
 			name: "BoshRequest",
 			req: &EndpointRequest{
-				Capture: &Capture_Bosh{
-					Bosh: &BoshQuery{},
+				Request: &EndpointRequest_Bosh{
+					Bosh: &BoshRequest{},
 				},
 			},
 			expectedResult: true,
@@ -227,8 +206,8 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 		{
 			name: "CFRequest",
 			req: &EndpointRequest{
-				Capture: &Capture_Cf{
-					Cf: &CloudfoundryQuery{},
+				Request: &EndpointRequest_Cf{
+					Cf: &CloudfoundryRequest{},
 				},
 			},
 			expectedResult: false,
@@ -252,7 +231,7 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 func TestValidateBoshEndpointRequest(t *testing.T) {
 	tests := []struct {
 		name        string
-		req         *BoshQuery
+		req         *BoshRequest
 		wantErr     bool
 		expectedErr error
 	}{
@@ -264,32 +243,32 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 		},
 		{
 			name:        "Bosh metadata is empty",
-			req:         &BoshQuery{},
+			req:         &BoshRequest{},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 
 		{
 			name:        "Bosh metadata Token is not present",
-			req:         &BoshQuery{Deployment: "cf", Groups: []string{"router"}},
+			req:         &BoshRequest{Deployment: "cf", Groups: []string{"router"}},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 		{
 			name:        "Bosh metadata Deployment field is not present",
-			req:         &BoshQuery{Token: "123d24", Groups: []string{"router"}},
+			req:         &BoshRequest{Token: "123d24", Groups: []string{"router"}},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 		{
 			name:        "Bosh metadata Groups field is not present",
-			req:         &BoshQuery{Token: "123d24", Deployment: "cf"},
+			req:         &BoshRequest{Token: "123d24", Deployment: "cf"},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 		{
 			name:        "Valid request",
-			req:         &BoshQuery{Token: "123d24", Deployment: "cf", Groups: []string{"router"}},
+			req:         &BoshRequest{Token: "123d24", Deployment: "cf", Groups: []string{"router"}},
 			wantErr:     false,
 			expectedErr: nil,
 		},
@@ -299,7 +278,7 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testEndpointRequest := &EndpointRequest{Capture: &Capture_Bosh{test.req}}
+			testEndpointRequest := &EndpointRequest{Request: &EndpointRequest_Bosh{test.req}}
 
 			err := boshAgentResolver.validate(testEndpointRequest)
 			if (err != nil) != test.wantErr {

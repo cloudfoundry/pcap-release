@@ -95,26 +95,26 @@ message CaptureRequest {
 
 message StopCapture {}
 
-message Capture {
-  oneof capture {
-    BoshCapture bosh = 1;
-    CloudfoundryCapture cf = 2;
+message EndpointRequest {
+  oneof request {
+    BoshRequest bosh = 1;
+    CloudfoundryRequest cf = 2;
   }
 }
 
 message StartCapture {
-  Capture capture = 1;
+  EndpointRequest request = 1;
   CaptureOptions options = 2;
 }
 
-message BoshCapture {
+message BoshRequest {
   string token = 1;
   string deployment = 2;
   repeated string groups = 3;
   repeated string instances = 4;
 }
 
-message CloudfoundryCapture {
+message CloudfoundryRequest {
   string token = 1;
   string appId = 2;
   optional string appType = 3;
