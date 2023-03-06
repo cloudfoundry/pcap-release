@@ -1,70 +1,91 @@
 package pcap
 
 import (
-	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 	"go.uber.org/zap"
-	"io"
-	"net/http"
-	"net/url"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 )
 
-func NewAgentResolverWithMockBoshAPI(responses map[string]string) *BoshAgentResolver {
+func NewAgentResolverWithMockBoshAPI(responses map[string]string) (*BoshAgentResolver, error) {
 	jwtapi, _ := test.MockjwtAPI()
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
 	environment := bosh.Environment{
 		Alias: "bosh",
 		Url:   boshAPI.URL,
 	}
-	boshAgentResolver := NewBoshAgentResolver(environment, 8083)
+	boshAgentResolver, err := NewBoshAgentResolver(environment, 8083)
+	if err != nil {
+		return nil, err
+	}
 	boshAgentResolver.uaaURLs = []string{jwtapi.URL}
-	return boshAgentResolver
+	return boshAgentResolver, nil
 }
 
-func GetValidToken(uaaURL string) string {
-	fullURL, err := url.Parse(fmt.Sprintf("%v/oauth/token", uaaURL))
-	if err != nil {
-		panic(err)
-	}
-	req := http.Request{
-		Method: http.MethodPost,
-		URL:    fullURL,
-		Header: http.Header{
-			"Accept":        {"application/json"},
-			"Content-Type":  {"application/x-www-form-urlencoded"},
-			"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("bosh_cli:")))}, // TODO: the client name is also written in the token
+func TestNewBoshAgentResolver(t *testing.T) {
+	jwtapi, _ := test.MockjwtAPI()
+	boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
+
+	tests := []struct {
+		name        string
+		environment bosh.Environment
+		wantErr     bool
+		expectedErr error
+		agentPort   int //TODO: will this be a parameter?
+	}{
+		{
+			name: "validEnvironment",
+			environment: bosh.Environment{
+				Alias: "validEnvironment",
+				Url:   boshAPI.URL,
+			},
+			wantErr:   false,
+			agentPort: 8083,
 		},
-		Body: io.NopCloser(bytes.NewReader([]byte(url.Values{
-			"grant_type": {"refresh_token"},
-		}.Encode()))),
-	}
-	res, err := http.DefaultClient.Do(&req)
-	if err != nil {
-		panic(err)
+		{
+			name:        "empty environment",
+			environment: bosh.Environment{},
+			wantErr:     true,
+			expectedErr: nil,
+			agentPort:   0,
+		},
+		//TODO: test for CaCert, unavailable Director API, unparseable Director API
 	}
 
-	var newTokens struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		TokenType    string `json:"token_type"`
+	for _, test := range tests {
+		boshAgentResolver, err := NewBoshAgentResolver(test.environment, test.agentPort)
+		if err != nil {
+			if (err != nil) != test.wantErr {
+				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
+			}
+			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
+				t.Errorf("expectedErr = %v,\n\t\t\t\t\t\t\t   actualErr = %v", test.expectedErr, err)
+			}
+			if boshAgentResolver == nil {
+				t.Error("boshAgentResolver is nil")
+			}
+		}
+
 	}
-	err = json.NewDecoder(res.Body).Decode(&newTokens)
-	if err != nil {
-		panic(err)
-	}
-	return newTokens.AccessToken
+
 }
+
 func TestAuthenticate(t *testing.T) {
-	bar := NewAgentResolverWithMockBoshAPI(nil)
+	bar, err := NewAgentResolverWithMockBoshAPI(nil)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	validToken, err := test.GetValidToken(bar.uaaURLs[0])
+	if err != nil {
+		t.Errorf("failed to get valid token")
+	}
 
 	tests := []struct {
 		name        string
@@ -74,7 +95,7 @@ func TestAuthenticate(t *testing.T) {
 	}{
 		{
 			name:        "valid token",
-			token:       GetValidToken(bar.uaaURLs[0]),
+			token:       validToken,
 			wantErr:     false,
 			expectedErr: nil,
 		},
@@ -96,7 +117,7 @@ func TestAuthenticate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := bar.authenticate(test.token)
+			err = bar.authenticate(test.token)
 			if (err != nil) != test.wantErr {
 				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
 			}
@@ -104,16 +125,6 @@ func TestAuthenticate(t *testing.T) {
 				t.Errorf("expectedErr = %v,\n\t\t\t\t\t\t\t   actualErr = %v", test.expectedErr, err)
 			}
 		})
-	}
-}
-
-func TestBoshAgentResolver_Setup(t *testing.T) {
-	//allvalid
-	//certinvalid
-	boshAgentResolver := NewAgentResolverWithMockBoshAPI(nil)
-	err := boshAgentResolver.Setup()
-	if err != nil {
-		t.Errorf("received unexpected error = %v", err)
 	}
 }
 
@@ -163,15 +174,19 @@ func TestResolve(t *testing.T) {
 		fmt.Sprintf("/deployments/%v/instances", deploymentName): string(instances),
 	}
 
-	boshAgentResolver := NewAgentResolverWithMockBoshAPI(responses)
-	err = boshAgentResolver.Setup()
+	boshAgentResolver, err := NewAgentResolverWithMockBoshAPI(responses)
 	if err != nil {
 		t.Errorf("received unexpected error = %v", err)
 	}
 
+	validToken, err := test.GetValidToken(boshAgentResolver.uaaURLs[0])
+	if err != nil {
+		t.Error(err)
+	}
+
 	request := &EndpointRequest{
 		Request: &EndpointRequest_Bosh{Bosh: &BoshRequest{
-			Token:      GetValidToken(boshAgentResolver.uaaURLs[0]),
+			Token:      validToken,
 			Deployment: deploymentName,
 			Groups:     []string{"test-instance-group"},
 			Instances:  nil,
@@ -214,7 +229,10 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 		},
 	}
 
-	boshAgentResolver := NewBoshAgentResolver(bosh.Environment{}, 8083)
+	boshAgentResolver, err := NewAgentResolverWithMockBoshAPI(nil) // NewBoshAgentResolver(bosh.Environment{}, 8083)
+	if err != nil {
+		t.Error(err)
+	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -274,7 +292,10 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 		},
 	}
 
-	boshAgentResolver := NewBoshAgentResolver(bosh.Environment{}, 8083)
+	boshAgentResolver, err := NewAgentResolverWithMockBoshAPI(nil) // NewBoshAgentResolver(bosh.Environment{}, 8083)
+	if err != nil {
+		t.Error(err)
+	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

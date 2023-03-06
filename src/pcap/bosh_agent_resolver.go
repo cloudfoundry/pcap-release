@@ -22,10 +22,10 @@ type BoshAgentResolver struct {
 	agentPort   int
 }
 
-func NewBoshAgentResolver(environment bosh.Environment, agentPort int) *BoshAgentResolver {
+func NewBoshAgentResolver(environment bosh.Environment, agentPort int) (*BoshAgentResolver, error) {
 	resolver := &BoshAgentResolver{environment: environment, agentPort: agentPort} // TODO: get agent port from where?
-	//TODO: include Setup() here?
-	return resolver
+	err := resolver.setup()
+	return resolver, err
 }
 
 func (boshAgentResolver *BoshAgentResolver) name() string {
@@ -94,7 +94,7 @@ func (boshAgentResolver *BoshAgentResolver) validate(endpointRequest *EndpointRe
 	return nil
 }
 
-func (boshAgentResolver *BoshAgentResolver) Setup() error { //TODO: make private?
+func (boshAgentResolver *BoshAgentResolver) setup() error {
 	log.Infof("Setting Up BoshAgentResolver for %s", boshAgentResolver.environment.Alias)
 
 	if boshAgentResolver.environment.CaCert == "" {

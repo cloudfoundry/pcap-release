@@ -1,13 +1,18 @@
 package test
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"text/template"
 	"time"
@@ -171,6 +176,46 @@ func verifyJWTTokenMock(jku string) (string, string) {
 	//fmt.Printf("%v %v", ss, err)
 
 	return string(publicPem), ss
+}
+
+func GetValidToken(uaaURL string) (string, error) {
+	fullURL, err := url.Parse(fmt.Sprintf("%v/oauth/token", uaaURL))
+	if err != nil {
+		return "", err
+	}
+	req := http.Request{
+		Method: http.MethodPost,
+		URL:    fullURL,
+		Header: http.Header{
+			"Accept":        {"application/json"},
+			"Content-Type":  {"application/x-www-form-urlencoded"},
+			"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("bosh_cli:")))}, // TODO: the client name is also written in the token
+		},
+		Body: io.NopCloser(bytes.NewReader([]byte(url.Values{
+			"grant_type": {"refresh_token"},
+		}.Encode()))),
+	}
+	res, err := http.DefaultClient.Do(&req)
+	if err != nil {
+		return "", err
+	}
+
+	var newTokens struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&newTokens)
+	if err != nil {
+		return "", err
+	}
+
+	err = req.Body.Close()
+	if err != nil {
+		return "", err
+	}
+
+	return newTokens.AccessToken, nil
 }
 
 //TODO: unused code (so far) - remove?

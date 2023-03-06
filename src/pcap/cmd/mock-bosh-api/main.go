@@ -1,18 +1,13 @@
 package main
 
 import (
-	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 	"github.com/jessevdk/go-flags"
 	log "github.com/sirupsen/logrus"
-	"io"
 	"io/fs"
-	"net/http"
-	"net/url"
 	"os"
 	"time"
 )
@@ -103,7 +98,7 @@ concurrent_captures: 5
 	log.Infof("Wrote api config to %v\n", file)
 }
 func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
-	token, err := GetValidToken(jwtAPIurl)
+	token, err := test.GetValidToken(jwtAPIurl)
 	if err != nil {
 		log.Fatalf("could not generate valid token %v", err.Error())
 	}
@@ -160,45 +155,4 @@ func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 	}
 	log.Infof("Wrote bosh CLI config to %v\n", file)
 	log.Infof("Generated Token %v\n", token)
-}
-
-// TODO: copied from bosh_agent_resolver_test.go
-func GetValidToken(uaaURL string) (string, error) {
-	fullURL, err := url.Parse(fmt.Sprintf("%v/oauth/token", uaaURL))
-	if err != nil {
-		return "", err
-	}
-	req := http.Request{
-		Method: http.MethodPost,
-		URL:    fullURL,
-		Header: http.Header{
-			"Accept":        {"application/json"},
-			"Content-Type":  {"application/x-www-form-urlencoded"},
-			"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("bosh_cli:")))}, // TODO: the client name is also written in the token
-		},
-		Body: io.NopCloser(bytes.NewReader([]byte(url.Values{
-			"grant_type": {"refresh_token"},
-		}.Encode()))),
-	}
-	res, err := http.DefaultClient.Do(&req)
-	if err != nil {
-		return "", err
-	}
-
-	var newTokens struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		TokenType    string `json:"token_type"`
-	}
-	err = json.NewDecoder(res.Body).Decode(&newTokens)
-	if err != nil {
-		return "", err
-	}
-
-	err = req.Body.Close()
-	if err != nil {
-		return "", err
-	}
-
-	return newTokens.AccessToken, nil
 }

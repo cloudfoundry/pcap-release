@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
+	"github.com/google/gopacket"
 	"io"
 	"sync"
 	"testing"
@@ -182,7 +183,7 @@ func TestStopCmd(t *testing.T) {
 		},
 		{
 			name:        "Invalid payload type",
-			recv:        &mockRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Capture: &EndpointRequest{Capture: &Capture_Bosh{Bosh: &BoshQuery{}}}}}}, err: nil},
+			recv:        &mockRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Request: &EndpointRequest{Request: &EndpointRequest_Bosh{Bosh: &BoshRequest{}}}}}}, err: nil},
 			expectedErr: errInvalidPayload,
 			wantErr:     true,
 		},
@@ -232,15 +233,15 @@ func TestMergeResponseChannels(t *testing.T) {
 	}{
 		{
 			name:       "each channel has one capture response",
-			crAgent1:   []*CaptureResponse{newPacketResponse([]byte("ABC"))},
-			crAgent2:   []*CaptureResponse{newPacketResponse([]byte("ABC"))},
+			crAgent1:   []*CaptureResponse{newPacketResponse([]byte("ABC"), gopacket.CaptureInfo{})},
+			crAgent2:   []*CaptureResponse{newPacketResponse([]byte("ABC"), gopacket.CaptureInfo{})},
 			wantOutLen: 2,
 		},
 
 		{
 			name:       "one channel is empty",
 			crAgent1:   []*CaptureResponse{},
-			crAgent2:   []*CaptureResponse{newPacketResponse([]byte("ABC"))},
+			crAgent2:   []*CaptureResponse{newPacketResponse([]byte("ABC"), gopacket.CaptureInfo{})},
 			wantOutLen: 1,
 		},
 
@@ -372,12 +373,12 @@ func TestAPIStatus(t *testing.T) {
 }
 
 func TestAPIRegisterHandler(t *testing.T) {
-	//TODO: use mockboshdirector
-	testBoshEnvironment := bosh.Environment{
-		Alias:        "",
-		CaCert:       "",
-		RefreshToken: "",
-		Url:          "",
+
+	boshAgentResolver := &BoshAgentResolver{
+		environment: bosh.Environment{},
+		client:      nil,
+		uaaURLs:     nil,
+		agentPort:   0,
 	}
 
 	tests := []struct {
@@ -388,7 +389,7 @@ func TestAPIRegisterHandler(t *testing.T) {
 	}{
 		{
 			name:              "Register bosh handler and check the handler with correct name",
-			resolver:          NewBoshAgentResolver(testBoshEnvironment, 8083),
+			resolver:          boshAgentResolver,
 			wantRegistered:    true,
 			wantedHandlerName: "bosh",
 		},
@@ -400,7 +401,7 @@ func TestAPIRegisterHandler(t *testing.T) {
 		},
 		{
 			name:              "Register bosh handler and check the handler with invalid name",
-			resolver:          NewBoshAgentResolver(testBoshEnvironment, 8083),
+			resolver:          boshAgentResolver,
 			wantRegistered:    false,
 			wantedHandlerName: "cf",
 		},
