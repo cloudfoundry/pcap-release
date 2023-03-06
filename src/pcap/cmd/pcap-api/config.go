@@ -32,7 +32,7 @@ var DefaultAPIConfig = APIConfig{
 }
 
 type APIConfig struct {
-	cmd.CommonConfig   `yaml:"common_config"` // fixme:
+	cmd.CommonConfig   `yaml:"common_config"` // fixme: workaround by a18e to be able to parse a config file again, may not be desired
 	Agents             *pcap.AgentMTLS        `yaml:"agents"`
 	ConcurrentCaptures int                    `yaml:"concurrent_captures"`
 	DrainTimeout       time.Duration          `yaml:"drain_timeout"`

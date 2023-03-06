@@ -162,6 +162,7 @@ func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 	log.Infof("Generated Token %v\n", token)
 }
 
+// TODO: copied from bosh_agent_resolver_test.go
 func GetValidToken(uaaURL string) (string, error) {
 	fullURL, err := url.Parse(fmt.Sprintf("%v/oauth/token", uaaURL))
 	if err != nil {

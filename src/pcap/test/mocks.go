@@ -16,7 +16,6 @@ import (
 )
 
 func MockjwtAPI() (*httptest.Server, string) {
-
 	type JwtAPIMock struct {
 		UAAUrl string
 	}

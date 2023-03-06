@@ -7,14 +7,18 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 	"io"
 	"math/big"
 	"net"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
@@ -34,17 +38,19 @@ var apiClient pcap.APIClient
 
 var MaxConcurrentCaptures = 2
 
-var port = 8110
+var port = 8110 // used for various server listen ports, automatically incremented
 
 var APIPort = 8080
 
+var targetDeployment string = "test-deployment"
+
 // boshRequest prepares the properly contained gRPC request for bosh with options.
-func boshRequest(bosh *pcap.BoshCapture, options *pcap.CaptureOptions) *pcap.CaptureRequest {
+func boshRequest(bosh *pcap.BoshRequest, options *pcap.CaptureOptions) *pcap.CaptureRequest {
 	return &pcap.CaptureRequest{
 		Operation: &pcap.CaptureRequest_Start{
 			Start: &pcap.StartCapture{
-				Capture: &pcap.Capture{
-					Capture: &pcap.Capture_Bosh{
+				Request: &pcap.EndpointRequest{
+					Request: &pcap.EndpointRequest_Bosh{
 						Bosh: bosh,
 					},
 				},
@@ -91,7 +97,7 @@ var _ = Describe("IntegrationTests", func() {
 	Describe("Starting a capture", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
-			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
+			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil) //fixme: The BoshAgentResolver can't support agent-specific Ports, as that information is not returned by the bosh director. We need to find another way to integration test multiple agents
 			targets = append(targets, agentTarget1)
 
 			agentServer2, agentTarget2, _ = createAgent(nextFreePort(), agentID2, nil)
@@ -168,7 +174,7 @@ var _ = Describe("IntegrationTests", func() {
 				stream, err := apiClient.Capture(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				request := boshRequest(&pcap.BoshCapture{
+				request := boshRequest(&pcap.BoshRequest{
 					Token:  "123",
 					Groups: []string{"router"},
 				}, defaultOptions)
@@ -449,7 +455,7 @@ var _ = Describe("IntegrationTests", func() {
 				ctx := context.Background()
 				stream, _ := apiClient.Capture(ctx)
 
-				request := boshRequest(&pcap.BoshCapture{
+				request := boshRequest(&pcap.BoshRequest{
 					Token:      "123",
 					Deployment: "cf",
 					Groups:     []string{"router"},
@@ -503,7 +509,7 @@ func createStreamAndStartCapture(defaultOptions *pcap.CaptureOptions) (pcap.API_
 		return nil, err
 	}
 
-	request := boshRequest(&pcap.BoshCapture{
+	request := boshRequest(&pcap.BoshRequest{
 		Token:      "123",
 		Deployment: "cf",
 		Groups:     []string{"router"},
@@ -659,7 +665,11 @@ func createAPI(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig
 	var server *grpc.Server
 	api, err := pcap.NewAPI(bufConf, mTLSConfig, id, MaxConcurrentCaptures)
 	Expect(err).NotTo(HaveOccurred())
-	api.RegisterResolver(&pcap.BoshHandler{Config: pcap.ManualEndpoints{Targets: targets}})
+
+	boshAgentResolver, err := SetupBoshAgentResolver(targetDeployment, targets)
+	Expect(err).NotTo(HaveOccurred())
+
+	api.RegisterResolver(boshAgentResolver)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", APIPort))
 	Expect(err).NotTo(HaveOccurred())
@@ -722,4 +732,46 @@ func containsMsgTypeWithOrigin(messages []*pcap.CaptureResponse, msgType pcap.Me
 	}
 
 	return false
+}
+
+func SetupBoshAgentResolver(targetDeployment string, targetEndpoints []pcap.AgentEndpoint) (*pcap.BoshAgentResolver, error) {
+	// convert targetEndpoints to BoshInstances
+	var boshInstances []bosh.Instance
+	for _, endpoint := range targetEndpoints {
+		parts := strings.Split(endpoint.Identifier, "/")
+		job, id := parts[0], parts[1]
+		instance := bosh.Instance{
+			AgentId:     endpoint.Identifier,
+			Cid:         "agent_id:a9c3cda6-9cd9-457f-aad4-143405bf69db;resource_group_name:rg-azure-cfn01",
+			Job:         job,
+			Index:       0,
+			Id:          id,
+			Az:          "z1",
+			Ips:         []string{endpoint.IP},
+			VmCreatedAt: time.Now().Add(-24 * time.Hour),
+			ExpectsVm:   true,
+		}
+		boshInstances = append(boshInstances, instance)
+	}
+
+	// convert BoshInstances to YAMl
+	instances, err := json.Marshal(boshInstances)
+	if err != nil {
+		return nil, err
+	}
+	responses := map[string]string{
+		fmt.Sprintf("/deployments/%v/instances", targetDeployment): string(instances),
+	}
+
+	// set up Mock Bosh-UAA & Director and finally the BoshAgentResolver
+	boshUaaAPI, _ := test.MockjwtAPI()
+	boshAPI := test.MockBoshDirectorAPI(responses, boshUaaAPI.URL)
+	environment := bosh.Environment{
+		Alias: "bosh",
+		Url:   boshAPI.URL,
+	}
+	boshAgentResolver := pcap.NewBoshAgentResolver(environment, port) //fixme: this is very wrong, will only work on the last agent, see line 100
+	boshAgentResolver.uaaURLs = []string{boshUaaAPI.URL}              //fixme: how can we work around this being private?
+
+	return boshAgentResolver, nil
 }

@@ -35,10 +35,10 @@ const (
 	// LogKeyVcapID sets on which field the vcap request id will be logged.
 	LogKeyVcapID = "vcap-id"
 	// LogKeyHandler sets the handler.
-	LogKeyHandler = "handler"
+	LogKeyHandler = "handler" // TODO: improve documentation of how this should be used
 
 	LogKeyTarget        = "target"
-	LogKeyResolver      = "resolver"
+	LogKeyResolver      = "resolver" // TODO: currently not used.
 	HeaderVcapID        = contextKeyVcapID("x-vcap-request-id")
 	maxDeviceNameLength = 16
 	maxFilterLength     = 5000

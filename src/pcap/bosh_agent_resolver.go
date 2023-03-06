@@ -37,9 +37,8 @@ func (boshAgentResolver *BoshAgentResolver) canResolve(request *EndpointRequest)
 }
 
 func (boshAgentResolver *BoshAgentResolver) resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
-	log = log.With(zap.String("resolver", boshAgentResolver.name()))
-	//log.Info("Resolving endpoints for bosh request")
-	// TODO: proper logging
+	log = log.With(zap.String(LogKeyHandler, boshAgentResolver.name()))
+	log.Info("Resolving endpoints for bosh request")
 
 	err := boshAgentResolver.validate(request)
 	if err != nil {
@@ -55,10 +54,10 @@ func (boshAgentResolver *BoshAgentResolver) resolve(request *EndpointRequest, lo
 
 	instances, _, err := boshAgentResolver.getInstances(boshRequest.Deployment, boshRequest.Token)
 	if err != nil {
-		// TODO e.g. invalid token
+		log.Error("failed to get instances from bosh-director", zap.String(LogKeyTarget, ""))
 		return nil, err
 	}
-	//log.Info("%v", i)
+
 	var endpoints []AgentEndpoint
 	for _, instance := range instances {
 		identifier := strings.Join([]string{instance.Job, instance.Id}, "/")
@@ -69,6 +68,7 @@ func (boshAgentResolver *BoshAgentResolver) resolve(request *EndpointRequest, lo
 		return nil, fmt.Errorf("no matching endpoints found")
 	}
 
+	log.Debug("received AgentEndpoints from Bosh Director", zap.Any("agent-endpoint", endpoints))
 	return endpoints, nil
 }
 
@@ -98,18 +98,18 @@ func (boshAgentResolver *BoshAgentResolver) Setup() error { //TODO: make private
 	log.Infof("Setting Up BoshAgentResolver for %s", boshAgentResolver.environment.Alias)
 
 	if boshAgentResolver.environment.CaCert == "" {
-		boshAgentResolver.client = http.DefaultClient // fixme required?
+		boshAgentResolver.client = http.DefaultClient
 	} else {
 		data, err := os.ReadFile(boshAgentResolver.environment.CaCert)
 		if err != nil {
-			return fmt.Errorf("Could not load BOSH Director CA from %s (%s)", boshAgentResolver.environment.CaCert, err)
+			return fmt.Errorf("could not load BOSH Director CA from %s (%s)", boshAgentResolver.environment.CaCert, err)
 		}
 
 		boshCA := x509.NewCertPool()
 		ok := boshCA.AppendCertsFromPEM(data)
 
 		if !ok {
-			return fmt.Errorf("Could not add BOSH Director CA from %s, adding to the cert pool failed.", boshAgentResolver.environment.CaCert)
+			return fmt.Errorf("could not add BOSH Director CA from %s, adding to the cert pool failed.", boshAgentResolver.environment.CaCert)
 		}
 
 		boshAgentResolver.client = &http.Client{
@@ -125,17 +125,17 @@ func (boshAgentResolver *BoshAgentResolver) Setup() error { //TODO: make private
 	response, err := boshAgentResolver.client.Get(boshAgentResolver.environment.Url + "/info")
 
 	if err != nil {
-		return fmt.Errorf("Could not fetch BOSH Director API from %s (%s)", boshAgentResolver.environment.Url, err)
+		return fmt.Errorf("could not fetch BOSH Director API from %s (%s)", boshAgentResolver.environment.Url, err)
 	}
 
 	var apiResponse *bosh.Info
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
-		return fmt.Errorf("Could not read BOSH Director API response: %s", err)
+		return fmt.Errorf("could not read BOSH Director API response: %s", err)
 	}
 	err = json.Unmarshal(data, &apiResponse)
 	if err != nil {
-		return fmt.Errorf("Could not parse BOSH Director API response: %s", err)
+		return fmt.Errorf("could not parse BOSH Director API response: %s", err)
 	}
 
 	boshAgentResolver.uaaURLs = apiResponse.UserAuthentication.Options.Urls
@@ -162,10 +162,10 @@ func (boshAgentResolver *BoshAgentResolver) authenticate(authToken string) error
 func (boshAgentResolver *BoshAgentResolver) getInstances(deployment string, authToken string) ([]bosh.Instance, int, error) {
 	log.Debugf("Checking at %s if deployment %s can be seen by token %s", boshAgentResolver.environment.Url, deployment, authToken)
 	instancesUrl, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", boshAgentResolver.environment.Url, deployment))
-
 	if err != nil {
 		return nil, 0, err
 	}
+
 	req := &http.Request{
 		Method: "GET",
 		URL:    instancesUrl,
@@ -176,7 +176,7 @@ func (boshAgentResolver *BoshAgentResolver) getInstances(deployment string, auth
 
 	res, err := boshAgentResolver.client.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("request to Bosh-director failed: %v", zap.Error(err))
 	}
 
 	defer res.Body.Close()

@@ -183,7 +183,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		return errorf(codes.InvalidArgument, "expected start message, got %v: %w", req.Operation, errUnexpectedMessage)
 	}
 
-	targets, resolveErr := api.resolveAgentEndpoints(opts.Start.Capture, log)
+	targets, resolveErr := api.resolveAgentEndpoints(opts.Start.Request, log)
 	if errors.Is(resolveErr, errValidationFailed) {
 		return errorf(codes.InvalidArgument, "capture targets not found: %w", err)
 	}

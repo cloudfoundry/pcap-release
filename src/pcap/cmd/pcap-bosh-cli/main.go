@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
@@ -46,15 +47,17 @@ type options struct {
 
 func init() {
 	var err error
-	defer func() {
-		if err != nil {
-			log.Fatalf("error: init: %s", err.Error())
-		}
-	}()
+
+	// TODO: do not use CommonConfig
+	var cliConfig Config
+	cliConfig = DefaultConfig
+	cliConfig.validate()
+
+	log.Debug("initializing pcap-bosh-cli", zap.Int64("compatibilityLevel", pcap.CompatibilityLevel))
 
 	_, err = flags.ParseArgs(&opts, os.Args[1:])
 	if err != nil {
-		return
+		log.Fatal("could not parse the provided arguments", zap.Error(err))
 	}
 
 	opts.BoshConfig = os.ExpandEnv(opts.BoshConfig)
@@ -62,7 +65,7 @@ func init() {
 	config = &bosh.Config{}
 	err = yaml.NewDecoder(configReader).Decode(config)
 	if err != nil {
-		return
+		log.Fatal("could not parse the provided bosh-config", zap.Error(err), zap.String("bosh-config-path", opts.BoshConfig))
 	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
@@ -72,27 +75,25 @@ func init() {
 		Transport: transport,
 	}
 
-	log.SetLevel(log.DebugLevel)
+	//log.SetLevel(log.DebugLevel) // TODO
 }
 
 func main() {
+	log := zap.L()
+	log.Info("done with init")
+
 	var err error
-	defer func() {
-		if err != nil {
-			log.Fatalf("error: %s", err.Error())
-		}
-	}()
 
 	token, err := updateTokens()
 	if err != nil {
-		log.Fatalf(err.Error()) // TODO
+		log.Fatal(err.Error()) // TODO
 	}
 
 	stopChannel := setupStopChannel()
 
 	endpointRequest := &pcap.EndpointRequest{
-		Capture: &pcap.Capture_Bosh{
-			Bosh: &pcap.BoshQuery{
+		Request: &pcap.EndpointRequest_Bosh{
+			Bosh: &pcap.BoshRequest{
 				Token:      token,
 				Deployment: opts.Deployment,
 				Groups:     opts.InstanceGroups,
@@ -108,13 +109,13 @@ func main() {
 
 	client, err := pcap.NewClient(endpointRequest, captureOptions, opts.File, opts.PcapAPIURL, stopChannel)
 	if err != nil {
-		log.Fatalf(err.Error()) // TODO
+		log.Fatal(err.Error()) // TODO
 		return
 	}
 
 	err = client.HandleRequest()
 	if err != nil {
-		log.Fatalf("encountered error during request handling: %s", err.Error()) //TODO
+		log.Fatal("encountered error during request handling: %s", zap.Error(err))
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -77,7 +79,7 @@ func (client *Client) connectToAPI() error {
 	var err error
 	client.cc, err = grpc.Dial(client.apiURL, grpc.WithTransportCredentials(insecure.NewCredentials())) // fixme: credentials
 	if err != nil {
-		return fmt.Errorf("Could not connect to pcap-api (%v)", client.apiURL)
+		return fmt.Errorf("could not connect to pcap-api (%v)", client.apiURL)
 	}
 
 	client.ctx = context.Background()
@@ -86,7 +88,7 @@ func (client *Client) connectToAPI() error {
 
 	statusResponse, err := client.Status(ctx, &StatusRequest{})
 	if err != nil {
-		return fmt.Errorf(err.Error())
+		return fmt.Errorf("could not fetch api status: %v", err.Error())
 	}
 
 	if !statusResponse.GetHealthy() {
@@ -110,7 +112,7 @@ func (client *Client) HandleRequest() error {
 	request := &CaptureRequest{
 		Operation: &CaptureRequest_Start{
 			Start: &StartCapture{
-				Capture: client.endpointRequest,
+				Request: client.endpointRequest,
 				Options: client.captureOptions,
 			},
 		},
@@ -165,6 +167,8 @@ func (client *Client) HandleRequest() error {
 }
 
 func (client *Client) handleStream(stream API_CaptureClient, copyWg *sync.WaitGroup) {
+	//fixme: using this zap-config results in no logs being written
+	log := zap.L().With(zap.String(LogKeyHandler, "handleStream"))
 	counter := 0
 
 	for {
@@ -173,40 +177,58 @@ func (client *Client) handleStream(stream API_CaptureClient, copyWg *sync.WaitGr
 
 		res, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
-			fmt.Println("clean stop, done")
+			log.Info("clean stop, done")
 			client.stopChannel <- Stop_api
 			break
 		}
 		code := status.Code(err)
 		if code != codes.OK {
-			fmt.Printf("receive non-OK code: %s: %s\n", code.String(), err.Error())
+			log.Error("receive non-OK code: %s: %s\n", zap.Any("code", code), zap.Error(err))
 			client.stopChannel <- Stop_api
 			break
 		}
 
 		switch p := res.Payload.(type) {
 		case *CaptureResponse_Message:
-			fmt.Printf("received message (#%d): %s: %s\n", counter, p.Message.Type.String(), p.Message.Message)
+			// TODO: extract to function
+			var logLevel zapcore.Level
+
 			switch p.Message.Type {
-			case MessageType_CAPTURE_STOPPED:
-				log.Infof("Received capture stop signal")
-				client.stopChannel <- Stop_api
-				break
-			case MessageType_START_CAPTURE_FAILED:
-				log.Infof("Received MessageType_START_CAPTURE_FAILED signal") //TODO
+			case MessageType_UNKNOWN:
+				logLevel = zapcore.WarnLevel
 				break
 			case MessageType_INSTANCE_UNAVAILABLE:
-				log.Infof("Received MessageType_INSTANCE_UNAVAILABLE signal") //TODO
+				logLevel = zapcore.WarnLevel
 				break
-				//TODO: Other MessageTypes?
+			case MessageType_START_CAPTURE_FAILED:
+				logLevel = zapcore.WarnLevel
+				break
+			case MessageType_INVALID_REQUEST:
+				logLevel = zapcore.ErrorLevel
+				break
+			case MessageType_CONGESTED:
+				logLevel = zapcore.WarnLevel
+				break
+			case MessageType_LIMIT_REACHED:
+				logLevel = zapcore.WarnLevel
+				break
+			case MessageType_CAPTURE_STOPPED:
+				logLevel = zapcore.InfoLevel
+				break
+			case MessageType_CONNECTION_ERROR:
+				logLevel = zapcore.ErrorLevel
+				break
 			}
+			log.Log(logLevel, "received message", zap.Int("counter", counter), zap.String("message-type", p.Message.Type.String()), zap.Any("message", p.Message.Message))
 		case *CaptureResponse_Packet:
+			// TODO: extract to function
 			packetLength := len(p.Packet.Data)
-			fmt.Printf("received packet  (#%d): %d bytes\n", counter, packetLength)
+
+			log.Info("received packet", zap.Int("counter", counter), zap.Int("bytes", packetLength))
 
 			packet := gopacket.NewPacket(p.Packet.Data, layers.LinkTypeEthernet, gopacket.Default)
 			if packet.ErrorLayer() != nil && packet.ErrorLayer().Error() != nil {
-				panic(packet.ErrorLayer().Error().Error()) //TODO: logging
+				log.Error("could not parse received packet", zap.Error(packet.ErrorLayer().Error()))
 			}
 			//TODO: workaround, see CFN-2950
 			captureInfo := gopacket.CaptureInfo{
@@ -218,7 +240,7 @@ func (client *Client) handleStream(stream API_CaptureClient, copyWg *sync.WaitGr
 			}
 			err = client.packetWriter.WritePacket(captureInfo, packet.Data())
 			if err != nil {
-				log.Errorf("copy operation stopped: %s", err.Error())
+				log.Error("writing packet to file failed", zap.Error(err))
 			}
 		}
 	}
@@ -228,6 +250,7 @@ func (client *Client) handleStream(stream API_CaptureClient, copyWg *sync.WaitGr
 func (client *Client) logProgress(stop <-chan StopSignal) {
 	if client.packetFile == os.Stdout {
 		//writing progress information could interfere with packet output when both are written to stdout
+		log.Debug("writing captures to stdout, skipping write-progress logs")
 		return
 	}
 
@@ -240,7 +263,7 @@ func (client *Client) logProgress(stop <-chan StopSignal) {
 				log.Debug("pcap output file already closed: ", err.Error())
 				return
 			}
-			fmt.Printf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size())))
+			log.Info(fmt.Sprintf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size()))))
 		case <-stop:
 			return
 		}
