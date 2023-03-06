@@ -234,13 +234,13 @@ func readPackets(ctx context.Context, cancel CancelCauseFunc, handle pcapHandle,
 				return
 			}
 
-			data, _, err := handle.ReadPacketData()
+			data, ci, err := handle.ReadPacketData()
 			if err != nil {
 				cancel(fmt.Errorf("read packet: %w", err))
 				return
 			}
 
-			out <- newPacketResponse(data)
+			out <- newPacketResponse(data, ci)
 		}
 	}()
 

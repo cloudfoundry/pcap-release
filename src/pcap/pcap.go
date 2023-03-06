@@ -10,6 +10,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/google/gopacket"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"net"
 	"os"
 	"strings"
@@ -77,11 +79,13 @@ func newMessageResponse(t MessageType, msg string, origin string) *CaptureRespon
 }
 
 // newPacketResponse wraps data into a CaptureResponse, which can be sent to the recipient.
-func newPacketResponse(data []byte) *CaptureResponse {
+func newPacketResponse(data []byte, captureInfo gopacket.CaptureInfo) *CaptureResponse {
 	return &CaptureResponse{
 		Payload: &CaptureResponse_Packet{
 			Packet: &Packet{
-				Data: data,
+				Data:      data,
+				Timestamp: timestamppb.New(captureInfo.Timestamp),
+				Length:    uint64(captureInfo.Length),
 			},
 		},
 	}

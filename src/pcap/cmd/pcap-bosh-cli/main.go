@@ -107,7 +107,7 @@ func main() {
 		SnapLen: 65_000, // TODO: get from config or parameters
 	}
 
-	client, err := pcap.NewClient(endpointRequest, captureOptions, opts.File, opts.PcapAPIURL, stopChannel)
+	client, err := pcap.NewClient(endpointRequest, captureOptions, opts.File, opts.PcapAPIURL, stopChannel, log)
 	if err != nil {
 		log.Fatal(err.Error()) // TODO
 		return

@@ -1,5 +1,6 @@
 syntax = "proto3";
 option go_package = "github.com/cloudfoundry/pcap-release/src/pcap";
+import "google/protobuf/timestamp.proto";
 
 package pcap;
 
@@ -18,10 +19,12 @@ message CaptureResponse {
   }
 }
 
-// Packet wraps the raw pcap data stream of one packet. More fields might be
+// Packet wraps the raw pcap data stream and some metadata (CaptureInfo: timestamp & length) of one packet. More fields might be
 // added as needed.
 message Packet {
   bytes data = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  uint64 length = 3;
 }
 
 // Message represents a control message used by the server to inform the client
