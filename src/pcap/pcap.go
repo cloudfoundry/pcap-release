@@ -85,7 +85,7 @@ func newPacketResponse(data []byte, captureInfo gopacket.CaptureInfo) *CaptureRe
 			Packet: &Packet{
 				Data:      data,
 				Timestamp: timestamppb.New(captureInfo.Timestamp),
-				Length:    uint64(captureInfo.Length),
+				Length:    int32(captureInfo.Length),
 			},
 		},
 	}

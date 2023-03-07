@@ -12,24 +12,24 @@ import (
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"io"
+	"net/url"
 	"os"
 	"sync"
 	"time"
 )
 
 type Client struct {
-	endpointRequest *EndpointRequest
-	captureOptions  *CaptureOptions
-	packetFile      *os.File
-	packetWriter    *pcapgo.Writer
-	messageOut      *os.File
-	apiURL          string
-	ctx             context.Context
-	stopChannel     chan StopSignal
-	logger          *zap.Logger
+	packetFile *os.File
+	//packetWriter *pcapgo.Writer
+	//messageOut   *os.File  // TODO: may be required later to set message output target
+	ctx            context.Context
+	stopChannel    chan StopSignal
+	logger         *zap.Logger // TODO: really necessary?
+	tlsCredentials credentials.TransportCredentials
 	aPIClient
 }
 
@@ -40,16 +40,13 @@ const (
 	Stop_api    StopSignal = 2
 )
 
-func NewClient(request *EndpointRequest, captureOptions *CaptureOptions, outputFile string, apiURL string, stopChannel chan StopSignal, logger *zap.Logger) (*Client, error) {
+func NewClient(outputFile string, apiURL string, stopChannel chan StopSignal, logger *zap.Logger) (*Client, error) {
 	var err error
 
 	client := &Client{
-		endpointRequest: request,
-		captureOptions:  captureOptions,
-		messageOut:      os.Stderr,
-		stopChannel:     stopChannel,
-		apiURL:          apiURL,
-		logger:          logger,
+		//messageOut:  os.Stderr,
+		stopChannel: stopChannel,
+		logger:      logger,
 	}
 
 	if len(outputFile) == 0 {
@@ -64,24 +61,37 @@ func NewClient(request *EndpointRequest, captureOptions *CaptureOptions, outputF
 			return nil, fmt.Errorf("output file %s already exists", outputFile)
 		}
 	}
-	client.packetWriter = pcapgo.NewWriter(client.packetFile)
-	err = client.packetWriter.WriteFileHeader(captureOptions.SnapLen, layers.LinkTypeEthernet)
-	if err != nil {
-		return nil, err
-	}
 
-	err = client.connectToAPI()
+	err = client.connectToAPI(apiURL)
 	if err != nil {
 		return nil, err
 	}
 
 	return client, nil
 }
-func (client *Client) connectToAPI() error {
-	var err error
-	client.cc, err = grpc.Dial(client.apiURL, grpc.WithTransportCredentials(insecure.NewCredentials())) // fixme: credentials
+func (client *Client) connectToAPI(apiURLstring string) error {
+	var (
+		err    error
+		creds  credentials.TransportCredentials
+		apiURL *url.URL
+	)
+
+	apiURL, err = url.Parse(apiURLstring)
 	if err != nil {
-		return fmt.Errorf("could not connect to pcap-api (%v)", client.apiURL)
+		return fmt.Errorf("could not parse api-url: %v", apiURLstring)
+	}
+	if apiURL.Scheme == "https" {
+		creds, err = LoadTLSCredentials("", "", nil, nil, nil)
+		if err != nil {
+			return fmt.Errorf("could not generate TLS credentials %w", err)
+		}
+	} else { // plain http
+		creds = insecure.NewCredentials()
+	}
+
+	client.cc, err = grpc.Dial(apiURL.Host, grpc.WithTransportCredentials(creds)) // fixme: credentials
+	if err != nil {
+		return fmt.Errorf("could not connect to pcap-api (%v)", apiURL)
 	}
 
 	client.ctx = context.Background()
@@ -96,43 +106,42 @@ func (client *Client) connectToAPI() error {
 	if !statusResponse.GetHealthy() {
 		return fmt.Errorf("api not up") // TODO
 	}
+	// TODO: check errorhandling if endpointRequestType (bosh/cf) is not supported by api
 
-	switch {
-	case client.endpointRequest.GetBosh() != nil:
-		if !statusResponse.GetBosh() {
-			return fmt.Errorf("api server does not support bosh")
-		}
-	case client.endpointRequest.GetCf() != nil:
-		panic("not yet implemented")
-	default:
-		return fmt.Errorf("unknown endpoint request type")
-	}
 	return nil
 }
 
-func (client *Client) HandleRequest() error {
-	request := &CaptureRequest{
-		Operation: &CaptureRequest_Start{
-			Start: &StartCapture{
-				Request: client.endpointRequest,
-				Options: client.captureOptions,
-			},
-		},
-	}
+func (client *Client) HandleRequest(endpointRequest *EndpointRequest, options *CaptureOptions) error {
 
-	var stream, err = client.Capture(client.ctx)
+	packetWriter := pcapgo.NewWriter(client.packetFile)
+	err := packetWriter.WriteFileHeader(options.SnapLen, layers.LinkTypeEthernet)
 	if err != nil {
 		return err
 	}
 
-	err = stream.Send(request)
+	captureRequest := &CaptureRequest{
+		Operation: &CaptureRequest_Start{
+			Start: &StartCapture{
+				Request: endpointRequest,
+				Options: options,
+			},
+		},
+	}
+
+	var stream API_CaptureClient
+	stream, err = client.Capture(client.ctx)
+	if err != nil {
+		return err
+	}
+
+	err = stream.Send(captureRequest)
 	if err != nil {
 		return err
 	}
 
 	copyWg := &sync.WaitGroup{}
 	copyWg.Add(1)
-	go client.handleStream(stream, copyWg)
+	go client.handleStream(stream, packetWriter, copyWg)
 
 	go client.logProgress(client.stopChannel)
 
@@ -168,11 +177,8 @@ func (client *Client) HandleRequest() error {
 	return nil
 }
 
-func (client *Client) handleStream(stream API_CaptureClient, copyWg *sync.WaitGroup) {
-	counter := 0
-
+func (client *Client) handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup) {
 	for {
-		counter++
 		time.Sleep(200 * time.Millisecond) //TODO: make configurable?
 
 		res, err := stream.Recv()
@@ -192,7 +198,7 @@ func (client *Client) handleStream(stream API_CaptureClient, copyWg *sync.WaitGr
 		case *CaptureResponse_Message:
 			client.writeMessage(p.Message)
 		case *CaptureResponse_Packet:
-			client.writePacket(p.Packet)
+			client.writePacket(p.Packet, packetWriter)
 		}
 	}
 	copyWg.Done()
@@ -204,33 +210,25 @@ func (client *Client) writeMessage(message *Message) {
 	switch message.Type {
 	case MessageType_UNKNOWN:
 		logLevel = zapcore.WarnLevel
-		break
 	case MessageType_INSTANCE_UNAVAILABLE:
 		logLevel = zapcore.WarnLevel
-		break
 	case MessageType_START_CAPTURE_FAILED:
 		logLevel = zapcore.WarnLevel
-		break
 	case MessageType_INVALID_REQUEST:
 		logLevel = zapcore.ErrorLevel
-		break
 	case MessageType_CONGESTED:
 		logLevel = zapcore.WarnLevel
-		break
 	case MessageType_LIMIT_REACHED:
 		logLevel = zapcore.WarnLevel
-		break
 	case MessageType_CAPTURE_STOPPED:
 		logLevel = zapcore.InfoLevel
-		break
 	case MessageType_CONNECTION_ERROR:
 		logLevel = zapcore.ErrorLevel
-		break
 	}
 	client.logger.Log(logLevel, "received message", zap.String("message-type", message.Type.String()), zap.Any("message", message.Message))
 }
 
-func (client *Client) writePacket(packet *Packet) {
+func (client *Client) writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 	captureInfo := gopacket.CaptureInfo{
 		Timestamp:      packet.Timestamp.AsTime(),
 		CaptureLength:  len(packet.Data),
@@ -238,7 +236,7 @@ func (client *Client) writePacket(packet *Packet) {
 		InterfaceIndex: 0,
 		AncillaryData:  nil,
 	}
-	err := client.packetWriter.WritePacket(captureInfo, packet.Data)
+	err := packetWriter.WritePacket(captureInfo, packet.Data)
 	if err != nil {
 		client.logger.Error("writing packet to file failed", zap.Error(err))
 	}

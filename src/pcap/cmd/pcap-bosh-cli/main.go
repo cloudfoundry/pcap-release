@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -14,15 +15,17 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/jessevdk/go-flags"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
-	config = &bosh.Config{}
-	opts   options
-	client *http.Client
+	config      = &bosh.Config{}
+	opts        options
+	client      *http.Client
+	environment bosh.Environment
 )
 
 type boshToken struct {
@@ -62,20 +65,49 @@ func init() {
 
 	opts.BoshConfig = os.ExpandEnv(opts.BoshConfig)
 	configReader, err := os.Open(opts.BoshConfig)
+	if err != nil {
+		log.Fatalf("could not open %v: %v", opts.BoshConfig, err.Error())
+	}
 	config = &bosh.Config{}
 	err = yaml.NewDecoder(configReader).Decode(config)
 	if err != nil {
 		log.Fatal("could not parse the provided bosh-config", zap.Error(err), zap.String("bosh-config-path", opts.BoshConfig))
 	}
 
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig.InsecureSkipVerify = true
+	// TODO: extract to method
 
-	client = &http.Client{
-		Transport: transport,
+	// go expects a schema for urls, so strings like "localhost:8080" are not (correctly) parsed by url.parse().
+	// We're adding a prefix if not already specified.
+	// We're defaulting to https
+	if !strings.HasPrefix(opts.PcapAPIURL, "http") {
+		opts.PcapAPIURL = "https://" + opts.PcapAPIURL
 	}
 
-	//log.SetLevel(log.DebugLevel) // TODO
+	environment, err = getEnvironment(opts.BoshEnvironment)
+	if err != nil {
+		log.Fatal("could not get environment config", zap.Error(err), zap.String("environment", opts.BoshEnvironment))
+	}
+
+	environmentURL, err := url.Parse(environment.Url)
+	if err != nil {
+		log.Fatalf("error parsing environment url: %v", environment.Url)
+	}
+	if environmentURL.Scheme == "https" {
+		boshCA := x509.NewCertPool()
+		ok := boshCA.AppendCertsFromPEM([]byte(environment.CaCert))
+		if !ok {
+			log.Fatalf("could not add BOSH Director CA from %v, adding to the cert pool failed.", opts.BoshConfig)
+		}
+
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSClientConfig.RootCAs = boshCA
+
+		client = &http.Client{
+			Transport: transport,
+		}
+	} else {
+		client = http.DefaultClient
+	}
 }
 
 func main() {
@@ -107,13 +139,13 @@ func main() {
 		SnapLen: 65_000, // TODO: get from config or parameters
 	}
 
-	client, err := pcap.NewClient(endpointRequest, captureOptions, opts.File, opts.PcapAPIURL, stopChannel, log)
+	client, err := pcap.NewClient(opts.File, opts.PcapAPIURL, stopChannel, log)
 	if err != nil {
 		log.Fatal(err.Error()) // TODO
 		return
 	}
 
-	err = client.HandleRequest()
+	err = client.HandleRequest(endpointRequest, captureOptions)
 	if err != nil {
 		log.Fatal("encountered error during request handling: %s", zap.Error(err))
 	}
@@ -136,8 +168,8 @@ func setupStopChannel() chan pcap.StopSignal {
 	return stopChannel
 }
 
-func updateTokens() (string, error) {
-	token, err := getToken(config, opts.BoshEnvironment)
+func updateTokens() (string, error) { //TODO: logging
+	token, err := newBoshToken(environment)
 	if err != nil {
 		return "", err
 	}
@@ -147,14 +179,9 @@ func updateTokens() (string, error) {
 		return "", err
 	}
 
-	for i, e := range config.Environments {
-		if e.Alias == opts.BoshEnvironment {
-			config.Environments[i].RefreshToken = token.refresh
-			config.Environments[i].AccessToken = token.access
-			config.Environments[i].AccessTokenType = token.scheme
-			break
-		}
-	}
+	environment.RefreshToken = token.refresh
+	environment.AccessToken = token.access
+	environment.AccessTokenType = token.scheme
 
 	configWriter, err := os.Create(opts.BoshConfig)
 	if err != nil {
@@ -169,17 +196,7 @@ func updateTokens() (string, error) {
 	return token.access, nil
 }
 
-func getToken(config *bosh.Config, boshEnv string) (*boshToken, error) {
-	for _, e := range config.Environments {
-		if e.Alias == boshEnv {
-			return newBoshToken(e)
-		}
-	}
-
-	return nil, fmt.Errorf("get token: environment '%s' not found", boshEnv)
-}
-
-func newBoshToken(e bosh.Environment) (*boshToken, error) {
+func newBoshToken(e bosh.Environment) (*boshToken, error) { //TODO: logging
 	director, err := url.Parse(e.Url)
 	if err != nil {
 		return nil, err
@@ -222,7 +239,7 @@ func newBoshToken(e bosh.Environment) (*boshToken, error) {
 	}, nil
 }
 
-func (t *boshToken) refreshAccess() error {
+func (t *boshToken) refreshAccess() error { //TODO: logging
 	req := http.Request{
 		Method: http.MethodPost,
 		URL: &url.URL{
@@ -260,4 +277,13 @@ func (t *boshToken) refreshAccess() error {
 	t.access = newTokens.AccessToken
 
 	return nil
+}
+
+func getEnvironment(alias string) (bosh.Environment, error) {
+	for _, environment := range config.Environments {
+		if environment.Alias == opts.BoshEnvironment {
+			return environment, nil
+		}
+	}
+	return bosh.Environment{}, fmt.Errorf("could not find environment %v", alias)
 }

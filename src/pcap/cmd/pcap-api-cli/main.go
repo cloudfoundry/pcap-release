@@ -54,9 +54,9 @@ func main() {
 	request := &pcap.CaptureRequest{
 		Operation: &pcap.CaptureRequest_Start{
 			Start: &pcap.StartCapture{
-				Capture: &pcap.EndpointRequest{
-					Capture: &pcap.Capture_Bosh{
-						Bosh: &pcap.BoshQuery{
+				Request: &pcap.EndpointRequest{
+					Request: &pcap.EndpointRequest_Bosh{
+						Bosh: &pcap.BoshRequest{
 							Token:      "123",
 							Deployment: "cf",
 							Groups:     []string{"router"}},

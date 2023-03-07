@@ -24,7 +24,7 @@ message CaptureResponse {
 message Packet {
   bytes data = 1;
   google.protobuf.Timestamp timestamp = 2;
-  uint64 length = 3;
+  int32 length = 3;
 }
 
 // Message represents a control message used by the server to inform the client
