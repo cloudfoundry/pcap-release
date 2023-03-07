@@ -236,7 +236,7 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := boshAgentResolver.canResolve(test.req)
+			result := boshAgentResolver.CanResolve(test.req)
 			if test.expectedResult != result {
 				t.Errorf("expectedResult = %v, result = %v", test.expectedResult, result)
 			}

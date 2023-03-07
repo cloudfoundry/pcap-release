@@ -10,16 +10,16 @@ type CloudfoundryAgentResolver struct {
 	Config ManualEndpoints
 }
 
-func (cf *CloudfoundryAgentResolver) name() string {
+func (cf *CloudfoundryAgentResolver) Name() string {
 	return "cf"
 }
 
-func (cf *CloudfoundryAgentResolver) canResolve(request *EndpointRequest) bool {
+func (cf *CloudfoundryAgentResolver) CanResolve(request *EndpointRequest) bool {
 	return request.GetCf() != nil
 }
 
 func (cf *CloudfoundryAgentResolver) resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
-	log = log.With(zap.String("handler", cf.name()))
+	log = log.With(zap.String("handler", cf.Name()))
 	log.Info("Handling request")
 
 	// TODO Validate & get targets from bosh

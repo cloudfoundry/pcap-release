@@ -25,19 +25,22 @@ type BoshAgentResolver struct {
 func NewBoshAgentResolver(environment bosh.Environment, agentPort int) (*BoshAgentResolver, error) {
 	resolver := &BoshAgentResolver{environment: environment, agentPort: agentPort} // TODO: get agent port from where?
 	err := resolver.setup()
+	if err != nil {
+		return nil, err
+	}
 	return resolver, err
 }
 
-func (boshAgentResolver *BoshAgentResolver) name() string {
-	return "bosh"
+func (boshAgentResolver *BoshAgentResolver) Name() string {
+	return fmt.Sprintf("bosh/%s", boshAgentResolver.environment.Alias)
 }
 
-func (boshAgentResolver *BoshAgentResolver) canResolve(request *EndpointRequest) bool {
+func (boshAgentResolver *BoshAgentResolver) CanResolve(request *EndpointRequest) bool {
 	return request.GetBosh() != nil
 }
 
 func (boshAgentResolver *BoshAgentResolver) resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
-	log = log.With(zap.String(LogKeyHandler, boshAgentResolver.name()))
+	log = log.With(zap.String(LogKeyHandler, boshAgentResolver.Name()))
 	log.Info("Resolving endpoints for bosh request")
 
 	err := boshAgentResolver.validate(request)

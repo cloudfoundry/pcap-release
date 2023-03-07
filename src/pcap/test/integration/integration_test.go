@@ -1,4 +1,4 @@
-package integrationtests
+package integration
 
 import (
 	"bytes"
@@ -7,18 +7,14 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
-	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 	"io"
 	"math/big"
 	"net"
 	"os"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
@@ -42,7 +38,7 @@ var port = 8110 // used for various server listen ports, automatically increment
 
 var APIPort = 8080
 
-var targetDeployment string = "test-deployment"
+var targetDeployment = "test-deployment"
 
 // boshRequest prepares the properly contained gRPC request for bosh with options.
 func boshRequest(bosh *pcap.BoshRequest, options *pcap.CaptureOptions) *pcap.CaptureRequest {
@@ -632,11 +628,11 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 
 	agent := pcap.NewAgent(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, id)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	Expect(err).NotTo(HaveOccurred())
-	tcpAddr, ok := lis.Addr().(*net.TCPAddr)
+	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
 	Expect(ok).To(BeTrue())
-	GinkgoWriter.Printf("create agent with listener  %s\n", lis.Addr())
+	GinkgoWriter.Printf("create agent with listener  %s\n", listener.Addr())
 
 	target := pcap.AgentEndpoint{IP: tcpAddr.IP.String(), Port: tcpAddr.Port, Identifier: id}
 	if tlsCreds != nil {
@@ -646,13 +642,13 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	}
 	pcap.RegisterAgentServer(server, agent)
 	go func() {
-		err = server.Serve(lis)
+		err = server.Serve(listener)
 		if err != nil {
 			return
 		}
 	}()
 
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.Dial(listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cc).ShouldNot(BeNil())
@@ -666,10 +662,8 @@ func createAPI(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig
 	api, err := pcap.NewAPI(bufConf, mTLSConfig, id, MaxConcurrentCaptures)
 	Expect(err).NotTo(HaveOccurred())
 
-	boshAgentResolver, err := SetupBoshAgentResolver(targetDeployment, targets)
-	Expect(err).NotTo(HaveOccurred())
-
-	api.RegisterResolver(boshAgentResolver)
+	resolver := NewLocalResolver(targets)
+	api.RegisterResolver(resolver)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", APIPort))
 	Expect(err).NotTo(HaveOccurred())
@@ -707,7 +701,6 @@ func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.Capt
 		}
 		messages = append(messages, message)
 		logCaptureResponse(GinkgoWriter, message)
-
 	}
 	GinkgoWriter.Printf("done")
 	return codes.OK, messages, nil
@@ -732,46 +725,4 @@ func containsMsgTypeWithOrigin(messages []*pcap.CaptureResponse, msgType pcap.Me
 	}
 
 	return false
-}
-
-func SetupBoshAgentResolver(targetDeployment string, targetEndpoints []pcap.AgentEndpoint) (*pcap.BoshAgentResolver, error) {
-	// convert targetEndpoints to BoshInstances
-	var boshInstances []bosh.Instance
-	for _, endpoint := range targetEndpoints {
-		parts := strings.Split(endpoint.Identifier, "/")
-		job, id := parts[0], parts[1]
-		instance := bosh.Instance{
-			AgentId:     endpoint.Identifier,
-			Cid:         "agent_id:a9c3cda6-9cd9-457f-aad4-143405bf69db;resource_group_name:rg-azure-cfn01",
-			Job:         job,
-			Index:       0,
-			Id:          id,
-			Az:          "z1",
-			Ips:         []string{endpoint.IP},
-			VmCreatedAt: time.Now().Add(-24 * time.Hour),
-			ExpectsVm:   true,
-		}
-		boshInstances = append(boshInstances, instance)
-	}
-
-	// convert BoshInstances to YAMl
-	instances, err := json.Marshal(boshInstances)
-	if err != nil {
-		return nil, err
-	}
-	responses := map[string]string{
-		fmt.Sprintf("/deployments/%v/instances", targetDeployment): string(instances),
-	}
-
-	// set up Mock Bosh-UAA & Director and finally the BoshAgentResolver
-	boshUaaAPI, _ := test.MockjwtAPI()
-	boshAPI := test.MockBoshDirectorAPI(responses, boshUaaAPI.URL)
-	environment := bosh.Environment{
-		Alias: "bosh",
-		Url:   boshAPI.URL,
-	}
-	boshAgentResolver := pcap.NewBoshAgentResolver(environment, port) //fixme: this is very wrong, will only work on the last agent, see line 100
-	boshAgentResolver.uaaURLs = []string{boshUaaAPI.URL}              //fixme: how can we work around this being private?
-
-	return boshAgentResolver, nil
 }

@@ -66,16 +66,16 @@ func (a AgentEndpoint) String() string {
 
 // AgentResolver defines resolver for different request types that ultimately lead to a selection of AgentEndpoints.
 type AgentResolver interface {
-	// name provides the name of the handler for outputs and internal mapping.
-	name() string
-	// canResolve determines if this handler is responsible for handling the Capture
-	canResolve(*EndpointRequest) bool
-	// resolve either resolves and returns the agents targeted by Capture or provides an error
-	resolve(*EndpointRequest, *zap.Logger) ([]AgentEndpoint, error)
+	// Name provides the name of the handler for outputs and internal mapping.
+	Name() string
+	// CanResolve determines if this handler is responsible for handling the Capture
+	CanResolve(*EndpointRequest) bool
+	// Resolve either resolves and returns the agents targeted by Capture or provides an error
+	Resolve(*EndpointRequest, *zap.Logger) ([]AgentEndpoint, error)
 }
 
 func (api *API) RegisterResolver(resolver AgentResolver) {
-	api.resolvers[resolver.name()] = resolver
+	api.resolvers[resolver.Name()] = resolver
 }
 
 // Status provides the current status information for the pcap-api service.
@@ -236,10 +236,10 @@ func loadTLSCredentials(agents AgentMTLS) (credentials.TransportCredentials, err
 // support this capture request. The responsible handler is then queried for the applicable pcap-agent endpoints corresponding to this capture request.
 func (api *API) resolveAgentEndpoints(capture *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
 	for name, resolver := range api.resolvers {
-		if resolver.canResolve(capture) {
+		if resolver.CanResolve(capture) {
 			log.Debug("resolving agent endpoints")
 
-			agents, err := resolver.resolve(capture, log)
+			agents, err := resolver.Resolve(capture, log)
 			if err != nil {
 				return nil, fmt.Errorf("error while handling %v via %s: %w", capture, name, err)
 			}
