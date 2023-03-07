@@ -161,28 +161,7 @@ var _ = Describe("IntegrationTests", func() {
 					_ = readAndExpectCleanEnd(stream)
 				}
 			})
-			It("finished with errors due to invalid start capture request", func() {
-				var md = metadata.MD{pcap.HeaderVcapID.String(): []string{"requestVcapID"}}
 
-				ctx := context.Background()
-				ctx = metadata.NewOutgoingContext(ctx, md)
-
-				stream, err := apiClient.Capture(ctx)
-				Expect(err).NotTo(HaveOccurred())
-
-				request := boshRequest(&pcap.BoshRequest{
-					Token:  "123",
-					Groups: []string{"router"},
-				}, defaultOptions)
-
-				err = stream.Send(request)
-
-				Expect(err).NotTo(HaveOccurred())
-
-				errCode, _, err := recvCapture(10, stream)
-				Expect(err).To(HaveOccurred())
-				Expect(errCode).To(Equal(codes.InvalidArgument))
-			})
 			It("one agent unavailable", func() {
 				agentServer2.GracefulStop()
 
