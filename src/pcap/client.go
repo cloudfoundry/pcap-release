@@ -8,6 +8,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
+	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
@@ -22,43 +23,26 @@ import (
 	"time"
 )
 
+const POLL_DELAY = 200 * time.Millisecond
+
 type Client struct {
 	packetFile *os.File
-	//packetWriter *pcapgo.Writer
 	//messageOut   *os.File  // TODO: may be required later to set message output target
-	ctx            context.Context
-	stopChannel    chan StopSignal
-	logger         *zap.Logger // TODO: really necessary?
 	tlsCredentials credentials.TransportCredentials
 	aPIClient
 }
 
-type StopSignal int32
-
-const (
-	Stop_client StopSignal = 1
-	Stop_api    StopSignal = 2
-)
-
-func NewClient(outputFile string, apiURL string, stopChannel chan StopSignal, logger *zap.Logger) (*Client, error) {
+func NewClient(outputFile string, apiURL *url.URL, logger *zap.Logger) (*Client, error) { // TODO: remove unused logger
 	var err error
 
-	client := &Client{
-		//messageOut:  os.Stderr,
-		stopChannel: stopChannel,
-		logger:      logger,
-	}
+	client := &Client{}
 
 	if len(outputFile) == 0 {
 		client.packetFile = os.Stdout
 	} else {
-		if _, err := os.Stat(outputFile); os.IsNotExist(err) {
-			client.packetFile, err = os.Create(outputFile)
-			if err != nil {
-				return nil, fmt.Errorf("could not create file %v: %v ", outputFile, err.Error())
-			}
-		} else {
-			return nil, fmt.Errorf("output file %s already exists", outputFile)
+		client.packetFile, err = tryCreateOutputFile(outputFile)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -69,17 +53,13 @@ func NewClient(outputFile string, apiURL string, stopChannel chan StopSignal, lo
 
 	return client, nil
 }
-func (client *Client) connectToAPI(apiURLstring string) error {
+
+func (c *Client) connectToAPI(apiURL *url.URL) error {
 	var (
-		err    error
-		creds  credentials.TransportCredentials
-		apiURL *url.URL
+		err   error
+		creds credentials.TransportCredentials
 	)
 
-	apiURL, err = url.Parse(apiURLstring)
-	if err != nil {
-		return fmt.Errorf("could not parse api-url: %v", apiURLstring)
-	}
 	if apiURL.Scheme == "https" {
 		creds, err = LoadTLSCredentials("", "", nil, nil, nil)
 		if err != nil {
@@ -89,16 +69,15 @@ func (client *Client) connectToAPI(apiURLstring string) error {
 		creds = insecure.NewCredentials()
 	}
 
-	client.cc, err = grpc.Dial(apiURL.Host, grpc.WithTransportCredentials(creds)) // fixme: credentials
+	c.cc, err = grpc.Dial(apiURL.Host, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return fmt.Errorf("could not connect to pcap-api (%v)", apiURL)
 	}
 
-	client.ctx = context.Background()
-	ctx, cancel := context.WithTimeout(client.ctx, time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	statusResponse, err := client.Status(ctx, &StatusRequest{})
+	statusResponse, err := c.Status(ctx, &StatusRequest{})
 	if err != nil {
 		return fmt.Errorf("could not fetch api status: %v", err.Error())
 	}
@@ -111,9 +90,9 @@ func (client *Client) connectToAPI(apiURLstring string) error {
 	return nil
 }
 
-func (client *Client) HandleRequest(endpointRequest *EndpointRequest, options *CaptureOptions) error {
-
-	packetWriter := pcapgo.NewWriter(client.packetFile)
+func (c *Client) HandleRequest(endpointRequest *EndpointRequest, options *CaptureOptions, ctx context.Context, cancel CancelCauseFunc) error {
+	// setup output/pcap-file
+	packetWriter := pcapgo.NewWriter(c.packetFile)
 	err := packetWriter.WriteFileHeader(options.SnapLen, layers.LinkTypeEthernet)
 	if err != nil {
 		return err
@@ -129,7 +108,7 @@ func (client *Client) HandleRequest(endpointRequest *EndpointRequest, options *C
 	}
 
 	var stream API_CaptureClient
-	stream, err = client.Capture(client.ctx)
+	stream, err = c.Capture(ctx)
 	if err != nil {
 		return err
 	}
@@ -141,35 +120,24 @@ func (client *Client) HandleRequest(endpointRequest *EndpointRequest, options *C
 
 	copyWg := &sync.WaitGroup{}
 	copyWg.Add(1)
-	go client.handleStream(stream, packetWriter, copyWg)
+	go handleStream(stream, packetWriter, copyWg, cancel)
 
-	go client.logProgress(client.stopChannel)
+	go c.logProgress(ctx)
 
 	// wait for progress to finish
-	stopSignal := <-client.stopChannel
+	<-ctx.Done()
 
-	if stopSignal == Stop_client {
-		client.logger.Debug("stopping capture by sending stop request")
-		stop := &CaptureRequest{
-			Operation: &CaptureRequest_Stop{},
-		}
-		err = stream.Send(stop)
-		if err != nil {
-			return err
-		}
-	}
-
-	client.logger.Debug("waiting for copy operation to stop")
+	log.Debug("waiting for copy operation to stop")
 	copyWg.Wait()
 
-	client.logger.Debug("syncing file to disk")
-	err = client.packetFile.Sync()
+	log.Debug("syncing file to disk")
+	err = c.packetFile.Sync()
 	if err != nil {
 		return err
 	}
 
-	client.logger.Debug("closing file")
-	err = client.packetFile.Close()
+	log.Debug("closing file")
+	err = c.packetFile.Close()
 	if err != nil {
 		return err
 	}
@@ -177,34 +145,34 @@ func (client *Client) HandleRequest(endpointRequest *EndpointRequest, options *C
 	return nil
 }
 
-func (client *Client) handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup) {
+func handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel CancelCauseFunc) {
 	for {
-		time.Sleep(200 * time.Millisecond) //TODO: make configurable?
+		time.Sleep(POLL_DELAY)
 
 		res, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
-			client.logger.Info("clean stop, done")
-			client.stopChannel <- Stop_api
+			zap.L().Info("clean stop, done") // TODO: fix logger
+			cancel(nil)
 			break
 		}
 		code := status.Code(err)
 		if code != codes.OK {
-			client.logger.Error("receive non-OK code: %s: %s\n", zap.Any("code", code), zap.Error(err))
-			client.stopChannel <- Stop_api
+			err = fmt.Errorf("receive non-OK code: %v: %v\n", zap.Any("code", code), zap.Error(err))
+			cancel(err)
 			break
 		}
 
 		switch p := res.Payload.(type) {
 		case *CaptureResponse_Message:
-			client.writeMessage(p.Message)
+			writeMessage(p.Message)
 		case *CaptureResponse_Packet:
-			client.writePacket(p.Packet, packetWriter)
+			writePacket(p.Packet, packetWriter)
 		}
 	}
 	copyWg.Done()
 }
 
-func (client *Client) writeMessage(message *Message) {
+func writeMessage(message *Message) {
 	var logLevel zapcore.Level
 
 	switch message.Type {
@@ -225,10 +193,11 @@ func (client *Client) writeMessage(message *Message) {
 	case MessageType_CONNECTION_ERROR:
 		logLevel = zapcore.ErrorLevel
 	}
-	client.logger.Log(logLevel, "received message", zap.String("message-type", message.Type.String()), zap.Any("message", message.Message))
+	log.Infof("%s - %v", message.String(), logLevel.String()) // TODO: duplicate logging
+	zap.L().Log(logLevel, "received message", zap.String("message-type", message.Type.String()), zap.Any("message", message.Message))
 }
 
-func (client *Client) writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
+func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 	captureInfo := gopacket.CaptureInfo{
 		Timestamp:      packet.Timestamp.AsTime(),
 		CaptureLength:  len(packet.Data),
@@ -238,31 +207,38 @@ func (client *Client) writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 	}
 	err := packetWriter.WritePacket(captureInfo, packet.Data)
 	if err != nil {
-		client.logger.Error("writing packet to file failed", zap.Error(err))
+		zap.L().Error("writing packet to file failed", zap.Error(err))
 	}
-	client.logger.Info("received packet", zap.Int("bytes", len(packet.Data)), zap.Time("capture-timestamp", packet.Timestamp.AsTime()))
+	zap.L().Info("received packet", zap.Int("bytes", len(packet.Data)), zap.Time("capture-timestamp", packet.Timestamp.AsTime()))
 }
 
 // TODO: still needed?
-func (client *Client) logProgress(stop <-chan StopSignal) {
-	if client.packetFile == os.Stdout {
+func (c *Client) logProgress(ctx context.Context) {
+	if c.packetFile == os.Stdout {
 		//writing progress information could interfere with packet output when both are written to stdout
-		client.logger.Debug("writing captures to stdout, skipping write-progress logs")
+		log.Debug("writing captures to stdout, skipping write-progress logs")
 		return
 	}
 
-	ticker := time.Tick(time.Second)
+	ticker := time.Tick(5 * time.Second)
 	for {
 		select {
 		case <-ticker:
-			info, err := client.packetFile.Stat()
+			info, err := c.packetFile.Stat()
 			if err != nil {
-				client.logger.Debug("pcap output file already closed: ", zap.Error(err))
+				log.Debug("pcap output file already closed: ", zap.Error(err))
 				return
 			}
-			client.logger.Info(fmt.Sprintf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size()))))
-		case <-stop:
+			log.Info(fmt.Sprintf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size()))))
+		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+func tryCreateOutputFile(outputFile string) (*os.File, error) {
+	if _, err := os.Stat(outputFile); os.IsNotExist(err) {
+		return os.Create(outputFile)
+	}
+	return nil, fmt.Errorf("output file %s already exists", outputFile)
 }

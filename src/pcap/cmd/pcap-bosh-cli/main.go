@@ -1,24 +1,30 @@
+//go:build !testing
+// +build !testing
+
 package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
+	"github.com/jessevdk/go-flags"
+	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
-
-	"github.com/jessevdk/go-flags"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -48,7 +54,7 @@ type options struct {
 	InstanceIds     []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"`
 }
 
-func init() {
+func tempInit() {
 	var err error
 
 	// TODO: do not use CommonConfig
@@ -75,14 +81,6 @@ func init() {
 	}
 
 	// TODO: extract to method
-
-	// go expects a schema for urls, so strings like "localhost:8080" are not (correctly) parsed by url.parse().
-	// We're adding a prefix if not already specified.
-	// We're defaulting to https
-	if !strings.HasPrefix(opts.PcapAPIURL, "http") {
-		opts.PcapAPIURL = "https://" + opts.PcapAPIURL
-	}
-
 	environment, err = getEnvironment(opts.BoshEnvironment)
 	if err != nil {
 		log.Fatal("could not get environment config", zap.Error(err), zap.String("environment", opts.BoshEnvironment))
@@ -111,17 +109,27 @@ func init() {
 }
 
 func main() {
+	// TODO Split up in multiple methods
+	tempInit()
+
+	apiURL, err := parseAPIURL(opts.PcapAPIURL)
+	if err != nil {
+		log.Fatal(err.Error()) // TODO
+	}
+
 	log := zap.L()
 	log.Info("done with init")
-
-	var err error
 
 	token, err := updateTokens()
 	if err != nil {
 		log.Fatal(err.Error()) // TODO
 	}
 
-	stopChannel := setupStopChannel()
+	client, err := pcap.NewClient(opts.File, apiURL, log)
+	if err != nil {
+		log.Fatal(err.Error()) // TODO
+		return
+	}
 
 	endpointRequest := &pcap.EndpointRequest{
 		Request: &pcap.EndpointRequest_Bosh{
@@ -139,33 +147,39 @@ func main() {
 		SnapLen: 65_000, // TODO: get from config or parameters
 	}
 
-	client, err := pcap.NewClient(opts.File, opts.PcapAPIURL, stopChannel, log)
-	if err != nil {
-		log.Fatal(err.Error()) // TODO
-		return
-	}
+	ctx := context.Background()
+	ctx, cancel := pcap.WithCancelCause(ctx)
+	setupContextCancel(cancel)
 
-	err = client.HandleRequest(endpointRequest, captureOptions)
+	err = client.HandleRequest(endpointRequest, captureOptions, ctx, cancel)
 	if err != nil {
 		log.Fatal("encountered error during request handling: %s", zap.Error(err))
 	}
+
+	err = pcap.Cause(ctx)
+	if err != nil {
+		if status.Code(err) == codes.OK {
+			log.Info("finished successfully")
+			return
+		}
+		log.Fatal("finished with error ", zap.Error(err))
+	}
 }
 
-func setupStopChannel() chan pcap.StopSignal {
+func setupContextCancel(cancel pcap.CancelCauseFunc) {
 	log.Debug("registering signal handler for SIGINT")
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
-
-	stopChannel := make(chan pcap.StopSignal)
 
 	go func() {
 		log.Debug("waiting for SIGINT to be sent")
 		<-sigChan
 
 		log.Debug("received SIGINT, stopping progress")
-		stopChannel <- pcap.Stop_client
+		//cancelCause := pcap.errorf() // TODO: make public so we can use the status to accept this as a successful exit
+		cancelCause := fmt.Errorf("client stop")
+		cancel(cancelCause)
 	}()
-	return stopChannel
 }
 
 func updateTokens() (string, error) { //TODO: logging
@@ -286,4 +300,18 @@ func getEnvironment(alias string) (bosh.Environment, error) {
 		}
 	}
 	return bosh.Environment{}, fmt.Errorf("could not find environment %v", alias)
+}
+
+func parseAPIURL(urlString string) (*url.URL, error) {
+	// check if urlString contains a scheme
+	re := regexp.MustCompile(`^(\w+://)`) //
+	if re.MatchString(urlString) {
+		if strings.HasPrefix(urlString, "http") { // http & https are the only supported protocols
+			return url.Parse(urlString)
+		}
+		return nil, fmt.Errorf("unsupported pcap-api scheme: %s", urlString)
+	}
+
+	// url has no scheme: we'll default to https
+	return &url.URL{Scheme: "https", Host: urlString}, nil
 }
