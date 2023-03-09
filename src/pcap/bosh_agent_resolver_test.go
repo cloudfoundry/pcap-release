@@ -58,22 +58,20 @@ func TestNewBoshAgentResolver(t *testing.T) {
 		//TODO: test for CaCert, unavailable Director API, unparseable Director API
 	}
 
-	for _, test := range tests {
-		boshAgentResolver, err := NewBoshAgentResolver(test.environment, test.agentPort)
+	for _, tt := range tests {
+		boshAgentResolver, err := NewBoshAgentResolver(tt.environment, tt.agentPort)
 		if err != nil {
-			if (err != nil) != test.wantErr {
-				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
 			}
-			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
-				t.Errorf("expectedErr = %v,\n\t\t\t\t\t\t\t   actualErr = %v", test.expectedErr, err)
+			if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
+				t.Errorf("expectedErr = %v, actualErr = %v", tt.expectedErr, err)
 			}
 			if boshAgentResolver == nil {
 				t.Error("boshAgentResolver is nil")
 			}
 		}
-
 	}
-
 }
 
 func TestAuthenticate(t *testing.T) {
@@ -115,14 +113,14 @@ func TestAuthenticate(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err = bar.authenticate(test.token)
-			if (err != nil) != test.wantErr {
-				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err = bar.authenticate(tt.token)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
 			}
-			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
-				t.Errorf("expectedErr = %v,\n\t\t\t\t\t\t\t   actualErr = %v", test.expectedErr, err)
+			if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
+				t.Errorf("expectedErr = %v,\n\t\t\t\t\t\t\t   actualErr = %v", tt.expectedErr, err)
 			}
 		})
 	}
@@ -148,9 +146,8 @@ func TestResolve(t *testing.T) {
 	var haproxyInstances []bosh.Instance
 
 	timeString := "2022-09-26T21:28:39Z"
-	timestamp, err := time.Parse(time.RFC3339, timeString)
+	timestamp, _ := time.Parse(time.RFC3339, timeString)
 	for _, endpoint := range expectedAgentEndpoints {
-
 		parts := strings.Split(endpoint.Identifier, "/")
 		job, id := parts[0], parts[1]
 
@@ -193,7 +190,7 @@ func TestResolve(t *testing.T) {
 		}},
 	}
 
-	agentEndpoints, err := boshAgentResolver.resolve(request, log)
+	agentEndpoints, err := boshAgentResolver.Resolve(request, log)
 	if err != nil {
 		t.Errorf("received unexpected error = %v", err)
 	}
@@ -234,11 +231,11 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 		t.Error(err)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			result := boshAgentResolver.CanResolve(test.req)
-			if test.expectedResult != result {
-				t.Errorf("expectedResult = %v, result = %v", test.expectedResult, result)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := boshAgentResolver.CanResolve(tt.req)
+			if tt.expectedResult != result {
+				t.Errorf("expectedResult = %v, result = %v", tt.expectedResult, result)
 			}
 		})
 	}
@@ -297,16 +294,16 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 		t.Error(err)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			testEndpointRequest := &EndpointRequest{Request: &EndpointRequest_Bosh{test.req}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testEndpointRequest := &EndpointRequest{Request: &EndpointRequest_Bosh{tt.req}}
 
-			err := boshAgentResolver.validate(testEndpointRequest)
-			if (err != nil) != test.wantErr {
-				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
+			err = boshAgentResolver.validate(testEndpointRequest)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
 			}
-			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
-				t.Errorf("expectedErr = %v, error = %v", test.expectedErr, err)
+			if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
+				t.Errorf("expectedErr = %v, error = %v", tt.expectedErr, err)
 			}
 		})
 	}

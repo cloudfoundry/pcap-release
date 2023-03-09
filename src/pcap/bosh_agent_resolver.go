@@ -39,7 +39,7 @@ func (boshAgentResolver *BoshAgentResolver) CanResolve(request *EndpointRequest)
 	return request.GetBosh() != nil
 }
 
-func (boshAgentResolver *BoshAgentResolver) resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
+func (boshAgentResolver *BoshAgentResolver) Resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
 	log = log.With(zap.String(LogKeyHandler, boshAgentResolver.Name()))
 	log.Info("Resolving endpoints for bosh request")
 
