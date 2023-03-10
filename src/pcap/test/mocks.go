@@ -37,12 +37,12 @@ func MockjwtAPI() (*httptest.Server, string) {
 	re := regexp.MustCompile(`\r?\n`)
 	publicPemKeyNoLineBreak := re.ReplaceAllString(publicPemKey, "\\n")
 
-	json := fmt.Sprintf(`{"keys":[{"kty": "RSA","e": "AQAB","use": "sig","kid": "uaa-jwt-key-1","alg": "RS256","value": "%v","n": ""}]}`, publicPemKeyNoLineBreak)
+	jsonString := fmt.Sprintf(`{"keys":[{"kty": "RSA","e": "AQAB","use": "sig","kid": "uaa-jwt-key-1","alg": "RS256","value": "%v","n": ""}]}`, publicPemKeyNoLineBreak)
 
 	mux.HandleFunc("/token_keys", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 
-		writer.Write([]byte(json))
+		writer.Write([]byte(jsonString))
 	})
 
 	mux.HandleFunc("/oauth/token", func(writer http.ResponseWriter, request *http.Request) {
@@ -56,7 +56,7 @@ func MockjwtAPI() (*httptest.Server, string) {
 }
 
 func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Server {
-	json := `{
+	jsonTemplate := `{
 		"name": "bosh-azure-cfn01",
 		"uuid": "f0ceb485-e188-4b9f-b3d5-fb2067aad3c2",
 		"version": "273.1.0 (00000000)",
@@ -80,7 +80,7 @@ func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Serv
 	}
 	var boshapi BoshApiMock
 
-	responseTemplate := template.Must(template.New("boshapi").Parse(json))
+	responseTemplate := template.Must(template.New("boshapi").Parse(jsonTemplate))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/info", func(writer http.ResponseWriter, request *http.Request) {
