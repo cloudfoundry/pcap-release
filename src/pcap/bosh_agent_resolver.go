@@ -125,10 +125,10 @@ func (boshAgentResolver *BoshAgentResolver) setup() error {
 	}
 
 	log.Info("Discovering BOSH Director endpoint...")
-	response, err := boshAgentResolver.client.Get(boshAgentResolver.environment.Url + "/info")
+	response, err := boshAgentResolver.client.Get(boshAgentResolver.environment.RawDirectorURL + "/info")
 
 	if err != nil {
-		return fmt.Errorf("could not fetch BOSH Director API from %s (%s)", boshAgentResolver.environment.Url, err)
+		return fmt.Errorf("could not fetch BOSH Director API from %s (%s)", boshAgentResolver.environment.RawDirectorURL, err)
 	}
 
 	var apiResponse *bosh.Info
@@ -163,8 +163,8 @@ func (boshAgentResolver *BoshAgentResolver) authenticate(authToken string) error
 }
 
 func (boshAgentResolver *BoshAgentResolver) getInstances(deployment string, authToken string) ([]bosh.Instance, int, error) {
-	log.Debugf("Checking at %s if deployment %s can be seen by token %s", boshAgentResolver.environment.Url, deployment, authToken)
-	instancesUrl, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", boshAgentResolver.environment.Url, deployment))
+	log.Debugf("Checking at %s if deployment %s can be seen by token %s", boshAgentResolver.environment.RawDirectorURL, deployment, authToken)
+	instancesUrl, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", boshAgentResolver.environment.RawDirectorURL, deployment))
 	if err != nil {
 		return nil, 0, err
 	}

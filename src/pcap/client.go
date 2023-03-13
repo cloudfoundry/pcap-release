@@ -32,7 +32,7 @@ type Client struct {
 	aPIClient
 }
 
-func NewClient(outputFile string, apiURL *url.URL, logger *zap.Logger) (*Client, error) { // TODO: remove unused logger
+func NewClient(outputFile string, logger *zap.Logger) (*Client, error) { // TODO: remove unused logger
 	var err error
 
 	client := &Client{}
@@ -46,15 +46,10 @@ func NewClient(outputFile string, apiURL *url.URL, logger *zap.Logger) (*Client,
 		}
 	}
 
-	err = client.connectToAPI(apiURL)
-	if err != nil {
-		return nil, err
-	}
-
 	return client, nil
 }
 
-func (c *Client) connectToAPI(apiURL *url.URL) error {
+func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 	var (
 		err   error
 		creds credentials.TransportCredentials

@@ -17,8 +17,8 @@ func NewAgentResolverWithMockBoshAPI(responses map[string]string) (*BoshAgentRes
 	jwtapi, _ := test.MockjwtAPI()
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
 	environment := bosh.Environment{
-		Alias: "bosh",
-		Url:   boshAPI.URL,
+		Alias:          "bosh",
+		RawDirectorURL: boshAPI.URL,
 	}
 	boshAgentResolver, err := NewBoshAgentResolver(environment, 8083)
 	if err != nil {
@@ -42,8 +42,8 @@ func TestNewBoshAgentResolver(t *testing.T) {
 		{
 			name: "validEnvironment",
 			environment: bosh.Environment{
-				Alias: "validEnvironment",
-				Url:   boshAPI.URL,
+				Alias:          "validEnvironment",
+				RawDirectorURL: boshAPI.URL,
 			},
 			wantErr:   false,
 			agentPort: 8083,
