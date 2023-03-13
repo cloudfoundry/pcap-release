@@ -10,8 +10,8 @@ import (
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 	"github.com/jessevdk/go-flags"
-	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
@@ -25,10 +25,12 @@ import (
 )
 
 var (
-	config      = &bosh.Config{}
-	opts        options
-	client      *http.Client
-	environment bosh.Environment
+	config         *bosh.Config
+	opts           options
+	client         *http.Client
+	environment    bosh.Environment
+	logger         *zap.Logger
+	atomicLogLevel zap.AtomicLevel
 )
 
 type boshToken struct {
@@ -49,49 +51,40 @@ type options struct {
 	Deployment      string   `short:"d" long:"deployment" description:"The name of the deployment in which you would like to capture." required:"true"`
 	InstanceGroups  []string `short:"g" long:"instance-group" description:"The name of an instance group in the deployment in which you would like to capture. Can be defined multiple times." required:"true"`
 	InstanceIds     []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"`
+	Verbose         []bool   `short:"v" long:"verbose" description:"Show verbose debug information"`
 }
 
-func tempInit() {
+func readBoshConfig() {
 	var err error
 
-	// TODO: do not use CommonConfig
-	var cliConfig Config
-	cliConfig = DefaultConfig
-	cliConfig.validate()
-
-	log.Debug("initializing pcap-bosh-cli", zap.Int64("compatibilityLevel", pcap.CompatibilityLevel))
-
-	_, err = flags.ParseArgs(&opts, os.Args[1:])
-	if err != nil {
-		log.Fatal("could not parse the provided arguments", zap.Error(err))
-	}
-
+	// Read Bosh Config from Config File
 	opts.BoshConfig = os.ExpandEnv(opts.BoshConfig)
 	configReader, err := os.Open(opts.BoshConfig)
 	if err != nil {
-		log.Fatalf("could not open %v: %v", opts.BoshConfig, err.Error())
+		logger.Fatal("could not open Bosh Config", zap.Any("bosh-config", opts.BoshConfig), zap.Error(err))
 	}
 	config = &bosh.Config{}
 	err = yaml.NewDecoder(configReader).Decode(config)
 	if err != nil {
-		log.Fatal("could not parse the provided bosh-config", zap.Error(err), zap.String("bosh-config-path", opts.BoshConfig))
+		logger.Fatal("could not parse the provided bosh-config", zap.Error(err), zap.String("bosh-config-path", opts.BoshConfig))
 	}
-
-	// TODO: extract to method
-	environment, err = getEnvironment(opts.BoshEnvironment)
-	if err != nil {
-		log.Fatal("could not get environment config", zap.Error(err), zap.String("environment", opts.BoshEnvironment))
-	}
+	logger.Debug("read bosh-config", zap.Any("bosh-config", config))
+}
+func setupBoshConnection() {
+	var err error
+	environment = getEnvironment()
 
 	environmentURL, err := url.Parse(environment.Url)
 	if err != nil {
-		log.Fatalf("error parsing environment url: %v", environment.Url)
+		logger.Fatal("error parsing environment url", zap.String("environment-url", environment.Url))
 	}
+
 	if environmentURL.Scheme == "https" {
+		logger.Info("using TLS-encrypted connection to bosh-director", zap.String("bosh-director-url", environmentURL.String()))
 		boshCA := x509.NewCertPool()
 		ok := boshCA.AppendCertsFromPEM([]byte(environment.CaCert))
 		if !ok {
-			log.Fatalf("could not add BOSH Director CA from %v, adding to the cert pool failed.", opts.BoshConfig)
+			logger.Fatal("could not add BOSH Director CA from bosh-config, adding to the cert pool failed.", zap.Any("bosh-config", opts.BoshConfig))
 		}
 
 		transport := http.DefaultTransport.(*http.Transport).Clone()
@@ -101,30 +94,35 @@ func tempInit() {
 			Transport: transport,
 		}
 	} else {
+		logger.Info("using unencrypted connection to bosh-director", zap.String("bosh-director-url", environmentURL.String()))
 		client = http.DefaultClient
 	}
 }
 
 func main() {
-	// TODO Split up in multiple methods
-	tempInit()
+	var err error
 
-	apiURL, err := parseAPIURL(opts.PcapAPIURL)
+	setupLogging()
+
+	_, err = flags.ParseArgs(&opts, os.Args[1:])
 	if err != nil {
-		log.Fatal(err.Error()) // TODO
+		logger.Fatal("could not parse the provided arguments", zap.Error(err))
 	}
 
-	log := zap.L()
-	log.Info("done with init")
+	setLogLevel(opts.Verbose) // we cannot log to Debug before this point
 
-	token, err := updateTokens()
-	if err != nil {
-		log.Fatal(err.Error()) // TODO
-	}
+	apiURL := parseAPIURL(opts.PcapAPIURL)
 
-	client, err := pcap.NewClient(opts.File, apiURL, log)
+	logger.Debug("pcap-bosh-cli initialized", zap.Int64("compatibilityLevel", pcap.CompatibilityLevel))
+
+	readBoshConfig()
+	setupBoshConnection()
+
+	token := updateTokens()
+
+	client, err := pcap.NewClient(opts.File, apiURL, logger)
 	if err != nil {
-		log.Fatal(err.Error()) // TODO
+		logger.Fatal(err.Error()) // TODO
 		return
 	}
 
@@ -150,29 +148,64 @@ func main() {
 
 	err = client.HandleRequest(endpointRequest, captureOptions, ctx, cancel)
 	if err != nil {
-		log.Fatal("encountered error during request handling: %s", zap.Error(err))
+		logger.Fatal("encountered error during request handling: %s", zap.Error(err))
 	}
 
 	err = pcap.Cause(ctx)
 	if err != nil {
 		if status.Code(err) == codes.OK {
-			log.Info("finished successfully")
+			logger.Info("finished successfully")
 			return
 		}
-		log.Fatal("finished with error ", zap.Error(err))
+		logger.Fatal("finished with error ", zap.Error(err))
 	}
 }
 
+func setupLogging() {
+	atomicLogLevel = zap.NewAtomicLevelAt(zap.WarnLevel)
+	encoderConfig := zap.NewProductionEncoderConfig()
+	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	zapConfig := zap.Config{
+		Level:             atomicLogLevel,
+		DisableCaller:     true,
+		DisableStacktrace: true,
+		Encoding:          "console",
+		EncoderConfig:     encoderConfig,
+		OutputPaths:       []string{"stderr"},
+		ErrorOutputPaths:  []string{"stderr"},
+	}
+	logger = zap.Must(zapConfig.Build())
+	zap.ReplaceGlobals(logger)
+	logger.Debug("successfully set up logger")
+}
+
+func setLogLevel(verbose []bool) {
+	var logLevel zapcore.Level
+	switch len(verbose) {
+	case 0:
+		logLevel = zapcore.WarnLevel
+	case 1:
+		logLevel = zapcore.InfoLevel
+	default: // if more than one -v is given as argument
+		logLevel = zapcore.DebugLevel
+	}
+
+	atomicLogLevel.SetLevel(logLevel)
+
+	logger.Debug("set log-level", zap.String("log-level", logLevel.String()))
+}
+
 func setupContextCancel(cancel pcap.CancelCauseFunc) {
-	log.Debug("registering signal handler for SIGINT")
+	logger.Debug("registering signal handler for SIGINT")
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
 
 	go func() {
-		log.Debug("waiting for SIGINT to be sent")
+		logger.Debug("waiting for SIGINT to be sent")
 		<-sigChan
 
-		log.Debug("received SIGINT, stopping progress")
+		logger.Debug("received SIGINT, stopping progress")
 		//cancelCause := pcap.errorf() // TODO: make public so we can use the status to accept this as a successful exit
 		cancelCause := fmt.Errorf("client stop")
 		cancel(cancelCause)
@@ -290,25 +323,31 @@ func (t *boshToken) refreshAccess() error { //TODO: logging
 	return nil
 }
 
-func getEnvironment(alias string) (bosh.Environment, error) {
+func getEnvironment() bosh.Environment {
 	for _, environment := range config.Environments {
 		if environment.Alias == opts.BoshEnvironment {
-			return environment, nil
+			logger.Debug("found bosh-environment", zap.String("environment-alias", environment.Alias))
+			return environment
 		}
 	}
-	return bosh.Environment{}, fmt.Errorf("could not find environment %v", alias)
+	logger.Fatal("could not find bosh-environment in config", zap.String("environment-alias", opts.BoshEnvironment))
+	return bosh.Environment{}
 }
 
-func parseAPIURL(urlString string) (*url.URL, error) {
+func parseAPIURL(urlString string) *url.URL {
 	// check if urlString contains a scheme
 	re := regexp.MustCompile(`^(\w+://)`) //
 	if re.MatchString(urlString) {
 		if strings.HasPrefix(urlString, "http") { // http & https are the only supported protocols
-			return url.Parse(urlString)
+			logger.Debug("pcap-api URL contains http/https scheme")
+			url, err := url.Parse(urlString)
+			if err != nil {
+				logger.Fatal("could not parse pcap-api URL", zap.String("pcap-api URl", urlString), zap.Error(err))
+			}
+			return url
 		}
-		return nil, fmt.Errorf("unsupported pcap-api scheme: %s", urlString)
+		logger.Fatal("unsupported pcap-api URL scheme", zap.String("pcap-api URl", urlString))
 	}
-
-	// url has no scheme: we'll default to https
-	return &url.URL{Scheme: "https", Host: urlString}, nil
+	logger.Info("pcap-api URL does not contain scheme. Defaulting to HTTPS.", zap.String("pcap-api URl", urlString))
+	return &url.URL{Scheme: "https", Host: urlString}
 }
