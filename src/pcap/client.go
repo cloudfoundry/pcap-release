@@ -1,10 +1,16 @@
 package pcap
 
 import (
-	"code.cloudfoundry.org/bytefmt"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/url"
+	"os"
+	"sync"
+	"time"
+
+	"code.cloudfoundry.org/bytefmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
@@ -16,23 +22,18 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"io"
-	"net/url"
-	"os"
-	"sync"
-	"time"
 )
 
-const POLL_DELAY = 200 * time.Millisecond
+const PollDelay = 200 * time.Millisecond
 
 type Client struct {
 	packetFile *os.File
-	//messageOut   *os.File  // TODO: may be required later to set message output target
-	tlsCredentials credentials.TransportCredentials
+	// messageOut   *os.File  // TODO: may be required later to set message output target
+	// tlsCredentials credentials.TransportCredentials
 	aPIClient
 }
 
-func NewClient(outputFile string, logger *zap.Logger) (*Client, error) { // TODO: remove unused logger
+func NewClient(outputFile string) (*Client, error) { // TODO: remove unused logger
 	var err error
 
 	client := &Client{}
@@ -74,11 +75,11 @@ func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 
 	statusResponse, err := c.Status(ctx, &StatusRequest{})
 	if err != nil {
-		return fmt.Errorf("could not fetch api status: %v", err.Error())
+		return fmt.Errorf("could not fetch api status: %w", err)
 	}
 
 	if !statusResponse.GetHealthy() {
-		return fmt.Errorf("api not up") // TODO
+		return fmt.Errorf("pcap-api reported unhealthy status")
 	}
 	// TODO: check errorhandling if endpointRequestType (bosh/cf) is not supported by api
 
@@ -142,7 +143,7 @@ func (c *Client) HandleRequest(endpointRequest *EndpointRequest, options *Captur
 
 func handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel CancelCauseFunc) {
 	for {
-		time.Sleep(POLL_DELAY)
+		time.Sleep(PollDelay)
 
 		res, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
@@ -152,7 +153,7 @@ func handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg 
 		}
 		code := status.Code(err)
 		if code != codes.OK {
-			err = fmt.Errorf("receive non-OK code: %v: %v\n", zap.Any("code", code), zap.Error(err))
+			err = fmt.Errorf("receive non-OK code: %v: %w", code, err)
 			cancel(err)
 			break
 		}
@@ -210,7 +211,7 @@ func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 // TODO: still needed?
 func (c *Client) logProgress(ctx context.Context) {
 	if c.packetFile == os.Stdout {
-		//writing progress information could interfere with packet output when both are written to stdout
+		// writing progress information could interfere with packet output when both are written to stdout
 		log.Debug("writing captures to stdout, skipping write-progress logs")
 		return
 	}

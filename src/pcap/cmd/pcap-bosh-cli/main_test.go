@@ -1,11 +1,22 @@
 package main
 
 import (
+	"os"
 	"testing"
+
+	"go.uber.org/zap"
 )
 
-func TestParseAPIURL(t *testing.T) {
+func TestMain(m *testing.M) {
+	var err error
+	logger, err = zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
 
+func TestParseAPIURL(t *testing.T) {
 	tests := []struct {
 		name           string
 		url            string
@@ -28,19 +39,30 @@ func TestParseAPIURL(t *testing.T) {
 			wantErr:        false,
 			expectedScheme: "http",
 		}, {
-			name:    "invalid - different schema",
+			name:    "invalid - different schema -ftp",
 			url:     "ftp://google.com",
+			wantErr: true,
+		}, {
+			name:    "invalid - different schema -httpx",
+			url:     "httpx://google.com",
+			wantErr: true,
+		}, {
+			name:    "invalid - different schema - special chars",
+			url:     "h_+.x://google.com",
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
-		parsedURL, err := parseAPIURL(tt.url)
-		if (err != nil) != tt.wantErr {
-			t.Errorf("%s: wantErr = %t, gotError = %v", tt.url, tt.wantErr, err)
-		}
-		if tt.expectedScheme != "" && parsedURL.Scheme != tt.expectedScheme {
-			t.Errorf("expectedScheme = %v, actual = %v", tt.expectedScheme, parsedURL.Scheme)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			url := urlWithScheme(tt.url)
+			parsedURL, err := parseAPIURL(url)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("%s: wantErr = %t, gotError = %v", tt.url, tt.wantErr, err)
+			}
+			if tt.expectedScheme != "" && parsedURL.Scheme != tt.expectedScheme {
+				t.Errorf("expectedScheme = %v, actual = %v", tt.expectedScheme, parsedURL.Scheme)
+			}
+		})
 	}
 }

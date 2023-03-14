@@ -4,13 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
-	"github.com/google/gopacket"
 	"io"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test"
+
+	"github.com/google/gopacket"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -373,48 +375,58 @@ func TestAPIStatus(t *testing.T) {
 }
 
 func TestAPIRegisterHandler(t *testing.T) {
+	jwtapi, _ := test.MockJwtAPI()
+	boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
 
-	boshAgentResolver := &BoshAgentResolver{
-		environment: bosh.Environment{},
-		client:      nil,
-		uaaURLs:     nil,
-		agentPort:   0,
+	boshAgentResolver, err := NewBoshAgentResolver(bosh.Environment{
+		AccessToken:     "",
+		AccessTokenType: "",
+		Alias:           "bosh",
+		CaCert:          "",
+		RefreshToken:    "",
+		RawDirectorURL:  boshAPI.URL,
+		DirectorURL:     test.MustParseURL(boshAPI.URL),
+		UaaURL:          test.MustParseURL(jwtapi.URL),
+	}, 8083)
+	if err != nil {
+		panic(err)
 	}
 
 	tests := []struct {
-		name              string
-		resolver          AgentResolver
-		wantRegistered    bool
-		wantedHandlerName string
+		name               string
+		resolver           AgentResolver
+		wantRegistered     bool
+		wantedResolverName string
 	}{
 		{
-			name:              "Register bosh handler and check the handler with correct name",
-			resolver:          boshAgentResolver,
-			wantRegistered:    true,
-			wantedHandlerName: "bosh",
+			name:               "Register bosh handler and check the handler with correct name",
+			resolver:           boshAgentResolver,
+			wantRegistered:     true,
+			wantedResolverName: "bosh",
 		},
 		{
-			name:              "Register cf handler and check the handler with correct name",
-			resolver:          &CloudfoundryAgentResolver{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
-			wantRegistered:    true,
-			wantedHandlerName: "cf",
+			name:               "Register cf handler and check the handler with correct name",
+			resolver:           &CloudfoundryAgentResolver{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
+			wantRegistered:     true,
+			wantedResolverName: "cf",
 		},
 		{
-			name:              "Register bosh handler and check the handler with invalid name",
-			resolver:          boshAgentResolver,
-			wantRegistered:    false,
-			wantedHandlerName: "cf",
+			name:               "Register bosh handler and check the handler with invalid name",
+			resolver:           boshAgentResolver,
+			wantRegistered:     false,
+			wantedResolverName: "cf",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
+			var api *API
+			api, err = NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
 			if err != nil {
 				t.Errorf("RegisterResolver() unexpected error during api creation: %v", err)
 			}
 
 			api.RegisterResolver(tt.resolver)
-			registered := api.handlerRegistered(tt.wantedHandlerName)
+			registered := api.resolverRegistered(tt.wantedResolverName)
 			if *registered != tt.wantRegistered {
 				t.Errorf("RegisterResolver() expected registered %v but got %v", tt.wantRegistered, *registered)
 			}

@@ -29,7 +29,7 @@ func init() {
 }
 
 func main() {
-	jwtapi, _ := test.MockjwtAPI()
+	jwtapi, _ := test.MockJwtAPI()
 	responses := prepareMockBoshDirectorResponse()
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
 	defer boshAPI.Close()

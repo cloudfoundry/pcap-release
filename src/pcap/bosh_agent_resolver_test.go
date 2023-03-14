@@ -4,17 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
-	"github.com/cloudfoundry/pcap-release/src/pcap/test"
-	"go.uber.org/zap"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 )
 
 func NewAgentResolverWithMockBoshAPI(responses map[string]string) (*BoshAgentResolver, error) {
-	jwtapi, _ := test.MockjwtAPI()
+	jwtapi, _ := test.MockJwtAPI()
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
 	environment := bosh.Environment{
 		Alias:          "bosh",
@@ -29,7 +31,7 @@ func NewAgentResolverWithMockBoshAPI(responses map[string]string) (*BoshAgentRes
 }
 
 func TestNewBoshAgentResolver(t *testing.T) {
-	jwtapi, _ := test.MockjwtAPI()
+	jwtapi, _ := test.MockJwtAPI()
 	boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
 
 	tests := []struct {
@@ -59,18 +61,19 @@ func TestNewBoshAgentResolver(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		boshAgentResolver, err := NewBoshAgentResolver(tt.environment, tt.agentPort)
-		if err != nil {
-			if (err != nil) != tt.wantErr {
-				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
-			}
-			if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
-				t.Errorf("expectedErr = %v, actualErr = %v", tt.expectedErr, err)
-			}
-			if boshAgentResolver == nil {
+		t.Run(tt.name, func(t *testing.T) {
+			boshAgentResolver, err := NewBoshAgentResolver(tt.environment, tt.agentPort)
+			if err != nil {
+				if (err != nil) != tt.wantErr {
+					t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
+				}
+				if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
+					t.Errorf("expectedErr = %v, actualErr = %v", tt.expectedErr, err)
+				}
+			} else if boshAgentResolver == nil {
 				t.Error("boshAgentResolver is nil")
 			}
-		}
+		})
 	}
 }
 

@@ -3,8 +3,13 @@ package pcap
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
+	"io"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -13,12 +18,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"io"
-	"net/url"
-	"os"
-	"sync"
-	"testing"
-	"time"
 )
 
 var examplePacket = []byte{
@@ -82,12 +81,22 @@ func (x *MockAPIWriter) Recv() (*CaptureResponse, error) {
 	return response, err
 }
 
+func TestMain(m *testing.M) {
+	// setup logger
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	zap.ReplaceGlobals(logger)
+	os.Exit(m.Run())
+}
+
 func TestHandleStream(t *testing.T) {
 	tests := []struct {
 		name               string
 		clientError        error
 		messages           []MessageTuple
-		expectedErrMessage string
+		expectedErrMessage string // TODO: better way to compare errors
 	}{
 		{
 			name:        "clean stop",
@@ -115,64 +124,112 @@ func TestHandleStream(t *testing.T) {
 					err: errorf(codes.PermissionDenied, "error-text"),
 				},
 			},
-			expectedErrMessage: "receive non-OK code: {code 25 0  PermissionDenied}: {error 26 0  error-text}\n",
+			expectedErrMessage: "receive non-OK code: PermissionDenied: error-text",
 		},
 	}
 
 	for _, tt := range tests {
-		var buf bytes.Buffer
-		writer := pcapgo.NewWriter(&buf)
-		copyWg := &sync.WaitGroup{}
-		copyWg.Add(1)
-		stream := &MockAPIWriter{messages: tt.messages}
-		ctx, cancel := WithCancelCause(context.Background())
-		go handleStream(stream, writer, copyWg, cancel)
-		if tt.clientError != nil {
-			cancel(tt.clientError)
-		}
-		copyWg.Wait()
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			writer := pcapgo.NewWriter(&buf)
+			copyWg := &sync.WaitGroup{}
+			copyWg.Add(1)
+			stream := &MockAPIWriter{messages: tt.messages}
+			ctx, cancel := WithCancelCause(context.Background())
+			go handleStream(stream, writer, copyWg, cancel)
+			if tt.clientError != nil {
+				cancel(tt.clientError)
+			}
+			copyWg.Wait()
 
-		err := Cause(ctx)
-		if err.Error() != tt.expectedErrMessage {
-			t.Errorf("expected = %v, actual = %v", tt.expectedErrMessage, err)
-		}
+			err := Cause(ctx)
+			if err.Error() != tt.expectedErrMessage {
+				t.Errorf("expected = %v, actual = %v", tt.expectedErrMessage, err)
+			}
+		})
 	}
 }
 
 func TestNewClient(t *testing.T) {
-	log := zap.L()
+	// remove test file if already present
+	outputFile := "testpcapfile.pcap"
+	_ = os.Remove(outputFile)
 
 	tests := []struct {
-		name        string
-		outputFile  string
-		apiURL      *url.URL
-		wantErr     bool
-		expectedErr error
+		name              string
+		outputFile        string
+		wantErr           bool
+		expectedErrString string
 	}{
 		{
-			name:       "valid configuration", //TODO mock api or skip test/make integration test?
-			outputFile: "",
-			apiURL: &url.URL{
-				Scheme: "http",
-				Host:   "localhost:8080",
-			},
-			wantErr: false,
+			name:       "first run - file does not exist",
+			outputFile: outputFile,
+			wantErr:    false,
+		}, {
+			name:              "second run - file does exist",
+			outputFile:        outputFile,
+			wantErr:           true,
+			expectedErrString: "output file testpcapfile.pcap already exists",
 		},
 	}
 
 	for _, tt := range tests {
-		client, err := NewClient(tt.outputFile, tt.apiURL, log)
-		if (err != nil) != tt.wantErr {
-			t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
-		}
-		if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
-			t.Errorf("expectedErr = %v, actualErr = %v", tt.expectedErr, err)
-		}
-		if client == nil {
-			t.Errorf("client is nil")
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := NewClient(tt.outputFile)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
+			}
+			if tt.expectedErrString != "" && (err.Error() != tt.expectedErrString) {
+				t.Errorf("expectedErr = %v, actualErr = %v", tt.expectedErrString, err)
+			} else {
+				return
+			}
+			if client != nil {
+				t.Errorf("client is not nil")
+			}
+		})
 	}
 }
+
+// TODO: this is basically an integration test. Skip?
+//func TestClient_ConnectToAPI(t *testing.T) {
+//	tests := []struct {
+//		name          string
+//		rawPcapAPIURL string
+//		wantErr       bool
+//		expectedErr   error
+//	}{
+//		{
+//			name:          "valid configuration",
+//			rawPcapAPIURL: "?", // TODO
+//			wantErr:       false,
+//		}, {
+//			name:          "invalid configuration",
+//			rawPcapAPIURL: "http://localhost",
+//			wantErr:       true,
+//		},
+//	}
+//
+//	for _, tt := range tests {
+//		t.Run(tt.name, func(t *testing.T) {
+//			client, err := NewClient("")
+//			if err != nil {
+//				panic(err)
+//			}
+//
+//			err = client.ConnectToAPI(test.MustParseURL(tt.rawPcapAPIURL))
+//			if (err != nil) != tt.wantErr {
+//				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
+//			}
+//			if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
+//				t.Errorf("expectedErr = %v, actualErr = %v", tt.expectedErr, err)
+//			}
+//			if client == nil {
+//				t.Errorf("client is nil")
+//			}
+//		})
+//	}
+//}
 
 // writes a predefined packet to a pcap-file, parses the file and compares timestamp and destination port
 func TestWritePacket(t *testing.T) {

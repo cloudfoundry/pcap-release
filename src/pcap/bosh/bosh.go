@@ -6,11 +6,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/url"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -95,7 +96,7 @@ func (e *Environment) UpdateTokens() error {
 
 	err := e.refreshTokens()
 	if err != nil {
-		return fmt.Errorf("failed to refresh bosh access token %v", err.Error())
+		return fmt.Errorf("failed to refresh bosh access token %w", err)
 	}
 
 	return nil
@@ -107,7 +108,7 @@ func (e *Environment) init() error {
 
 	e.DirectorURL, err = url.Parse(e.RawDirectorURL)
 	if err != nil {
-		return fmt.Errorf("error parsing environment url %v", zap.String("environment-url", e.RawDirectorURL))
+		return fmt.Errorf("error parsing environment url (%v) %w", e.RawDirectorURL, err)
 	}
 
 	if e.DirectorURL.Scheme == "https" {
@@ -115,7 +116,7 @@ func (e *Environment) init() error {
 		boshCA := x509.NewCertPool()
 		ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
 		if !ok {
-			return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed %v", zap.String("ca-cert", e.CaCert))
+			return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed %v", e.CaCert) //TODO really output cert here?
 		}
 
 		transport := http.DefaultTransport.(*http.Transport).Clone()
@@ -144,7 +145,7 @@ func (e *Environment) fetchUaaURL() error {
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("could not get response from bosh-director %v", zap.Error(err))
+		return fmt.Errorf("could not get response from bosh-director %w", err)
 	}
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code %d from bosh-director", res.StatusCode)

@@ -20,7 +20,15 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-func MockjwtAPI() (*httptest.Server, string) {
+func MustParseURL(rawURL string) *url.URL {
+	url, err := url.Parse(rawURL)
+	if err != nil {
+		panic(err)
+	}
+	return url
+}
+
+func MockJwtAPI() (*httptest.Server, string) {
 	type JwtAPIMock struct {
 		UAAUrl string
 	}

@@ -3,19 +3,20 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"os"
+	"os/signal"
+	"regexp"
+
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
+
 	"github.com/jessevdk/go-flags"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
-	"net/url"
-	"os"
-	"os/signal"
-	"regexp"
-	"strings"
 )
 
 var (
@@ -45,80 +46,111 @@ func main() {
 	)
 	setupLogging()
 
+	defer func() {
+		if err != nil {
+			logger.Panic("execution failed", zap.Error(err))
+		}
+	}()
+
 	// Parse command-line arguments
 	_, err = flags.ParseArgs(&opts, os.Args[1:])
 	if err != nil {
-		logger.Fatal("could not parse the provided arguments", zap.Error(err))
+		err = fmt.Errorf("could not parse the provided arguments %w", err)
+		return
 	}
 
 	setLogLevel(opts.Verbose) // we cannot log to Debug before this point
 
-	// update bosh tokens/config
-	apiURL := parseAPIURL(opts.PcapAPIURL)
-	boshConfig := getBoshConfigFromFile(opts.BoshConfigFilename)
-	environment := getEnvironment(opts.BoshEnvironment, boshConfig)
-	err = environment.UpdateTokens()
-	if err != nil {
-		logger.Fatal("could not refresh bosh tokens", zap.Error(err))
-	}
-	writeBoshConfig(boshConfig, opts.BoshConfigFilename)
-
-	//initialization done
 	logger.Debug("pcap-bosh-cli initialized", zap.Int64("compatibilityLevel", pcap.CompatibilityLevel))
 
-	//set up pcap-client/pcap-api connection
-	client, err := pcap.NewClient(opts.File, logger)
+	// update bosh tokens/config
+	apiURL, err := parseAPIURL(urlWithScheme(opts.PcapAPIURL))
 	if err != nil {
-		logger.Fatal("could not set up pcap-client", zap.Error(err))
+		return
+	}
+	boshConfig, err := getBoshConfigFromFile(opts.BoshConfigFilename)
+	if err != nil {
+		return
+	}
+	environment, err := getEnvironment(opts.BoshEnvironment, boshConfig)
+	if err != nil {
+		return
+	}
+	err = environment.UpdateTokens()
+	if err != nil {
+		return
+	}
+	err = writeBoshConfig(boshConfig, opts.BoshConfigFilename)
+	if err != nil {
+		return
+	}
+
+	logger.Debug("bosh-config and tokens successfully updated")
+
+	// set up pcap-client/pcap-api connection
+	client, err := pcap.NewClient(opts.File)
+	if err != nil {
+		err = fmt.Errorf("could not set up pcap-client %w", err)
+		return
 	}
 	err = client.ConnectToAPI(apiURL)
 	if err != nil {
-		logger.Fatal("could not connect to pcap-api", zap.Error(err))
+		err = fmt.Errorf("could not connect to pcap-api %w", err)
+		return
 	}
 
-	//set up capture request
+	logger.Debug("pcap-client successfully initialized and connected to pcap-api")
+
+	// set up capture request
 	ctx := context.Background()
 	ctx, cancel := pcap.WithCancelCause(ctx)
 	setupContextCancel(cancel)
 	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups)
 	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, 65_000) // TODO: get snaplen from config or parameters
 
-	//perform capture request
+	// perform capture request
 	err = client.HandleRequest(endpointRequest, captureOptions, ctx, cancel)
 	if err != nil {
-		logger.Fatal("encountered error during request handling: %s", zap.Error(err))
+		err = fmt.Errorf("encountered error during request handling: %w", err)
+		return
 	}
 
-	//handle results of capture request
+	// handle results of capture request
 	err = pcap.Cause(ctx)
 	if err != nil {
 		if status.Code(err) == codes.OK {
 			logger.Info("capture finished successfully")
 			return
 		}
-		logger.Fatal("finished with error", zap.Error(err))
+		err = fmt.Errorf("finished with error %w", err)
+		return
 	}
 }
 
+// sets up the zap.Logger. Currently outputs to stderr in Console format.
 func setupLogging() {
 	atomicLogLevel = zap.NewAtomicLevelAt(zap.WarnLevel)
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	outputPaths := []string{"stderr"} //TODO: make configurable?
 	zapConfig := zap.Config{
 		Level:             atomicLogLevel,
 		DisableCaller:     true,
 		DisableStacktrace: true,
 		Encoding:          "console",
 		EncoderConfig:     encoderConfig,
-		OutputPaths:       []string{"stderr"}, //TODO: make configurable?
-		ErrorOutputPaths:  []string{"stderr"},
+		OutputPaths:       outputPaths,
+		ErrorOutputPaths:  outputPaths,
 	}
 	logger = zap.Must(zapConfig.Build())
 	zap.ReplaceGlobals(logger)
-	logger.Debug("successfully set up logger")
+	logger.Debug("successfully set up logger", zap.Strings("output-paths", outputPaths))
 }
 
+// setLogLevel sets the log level of the zap.Logger created in setupLogging via atomicLogLevel
+// It accepts []bool as parameter as this is the output of the opts.Verbose flag:
+// -v sets the level to zapcore.InfoLevel, -vv (and more v's) sets zapcore.DebugLevel.
 func setLogLevel(verbose []bool) {
 	var logLevel zapcore.Level
 	switch len(verbose) {
@@ -135,51 +167,66 @@ func setLogLevel(verbose []bool) {
 	logger.Debug("set log-level", zap.String("log-level", logLevel.String()))
 }
 
-func getBoshConfigFromFile(configFilename string) *bosh.Config {
+// getBoshConfigFromFile fetches the content of the specified bosh-config file under path configFilename
+// and returns a bosh.Config struct.
+func getBoshConfigFromFile(configFilename string) (*bosh.Config, error) {
 	var err error
 	configFilename = os.ExpandEnv(configFilename)
 	configReader, err := os.Open(configFilename)
 	if err != nil {
-		logger.Fatal("could not open bosh-config", zap.Any("bosh-config", configFilename), zap.Error(err))
+		return nil, fmt.Errorf("could not open bosh-config %w", err)
 	}
 	config := &bosh.Config{}
 	err = yaml.NewDecoder(configReader).Decode(config)
 	if err != nil {
-		logger.Fatal("could not parse the provided bosh-config", zap.Error(err), zap.String("bosh-config-path", configFilename))
+		return nil, fmt.Errorf("could not parse the provided bosh-config %w", err)
 	}
 	logger.Debug("read bosh-config", zap.Any("bosh-config", config))
-	return config
+	return config, nil
 }
 
-func parseAPIURL(urlString string) *url.URL {
-	// check if urlString contains a scheme
-	re := regexp.MustCompile(`^(\w+://)`) //
-	if re.MatchString(urlString) {
-		if strings.HasPrefix(urlString, "http") { // http & https are the only supported protocols
-			logger.Debug("pcap-api URL contains http/https scheme")
-			url, err := url.Parse(urlString)
-			if err != nil {
-				logger.Fatal("could not parse pcap-api URL", zap.String("pcap-api URl", urlString), zap.Error(err))
-			}
-			return url
-		}
-		logger.Fatal("unsupported pcap-api URL scheme", zap.String("pcap-api URl", urlString))
+// urlWithScheme prepends a string with https:// if no scheme is specified.
+//
+// returns url with scheme prefix.
+func urlWithScheme(url string) string {
+	re := regexp.MustCompile(`^([\w+.-_]+://)`)
+	if !re.MatchString(url) {
+		return "https://" + url
 	}
-	logger.Info("pcap-api URL does not contain scheme. Defaulting to HTTPS.", zap.String("pcap-api URl", urlString))
-	return &url.URL{Scheme: "https", Host: urlString}
+	logger.Debug("pcap-api URL contains http/https scheme")
+	return url
 }
 
-func getEnvironment(environmentAlias string, config *bosh.Config) *bosh.Environment {
+// parseAPIURL parses the provided urlString into a URL.
+//
+// Returns an error if the URL could not be parsed or is not a http(s) URL.
+func parseAPIURL(urlString string) (*url.URL, error) {
+	parsedURL, err := url.Parse(urlString)
+	if err != nil {
+		return nil, err
+	}
+	if parsedURL.Scheme != "https" && parsedURL.Scheme != "http" {
+		return nil, fmt.Errorf("invalid URL, must start with http or https: %s", parsedURL)
+	}
+	return parsedURL, nil
+}
+
+// getEnvironment searches the provided bosh.Config (config) for the environmentAlias.
+//
+// Returns a matching environment if one exists.
+func getEnvironment(environmentAlias string, config *bosh.Config) (*bosh.Environment, error) {
 	for _, environment := range config.Environments {
 		if environment.Alias == environmentAlias {
 			logger.Debug("found matching bosh-environment", zap.String("environment-alias", environment.Alias))
-			return &environment
+			return &environment, nil
 		}
 	}
-	logger.Fatal("could not find bosh-environment in config", zap.String("environment-alias", environmentAlias))
-	return &bosh.Environment{}
+	return nil, fmt.Errorf("could not find bosh-environment %s in config", environmentAlias)
 }
 
+// setupContextCancel starts a goroutine to capture the SIGINT signal that's sent if the user sends CTRL+C.
+//
+// It then stops the capture using the pcap.CancelCauseFunc cancel.
 func setupContextCancel(cancel pcap.CancelCauseFunc) {
 	logger.Debug("registering signal handler for SIGINT")
 	sigChan := make(chan os.Signal, 1)
@@ -189,13 +236,14 @@ func setupContextCancel(cancel pcap.CancelCauseFunc) {
 		logger.Debug("waiting for SIGINT to be sent")
 		<-sigChan
 
-		logger.Debug("received SIGINT, stopping progress")
-		//cancelCause := pcap.errorf() // TODO: make public so we can use the status to accept this as a successful exit
-		cancelCause := fmt.Errorf("client stop")
+		logger.Debug("received SIGINT, stopping capture")
+		// cancelCause := pcap.errorf() // TODO: make public so we can use the status to accept this as a successful exit
+		cancelCause := fmt.Errorf("client stop, received SIGINT")
 		cancel(cancelCause)
 	}()
 }
 
+// createEndpointRequest is a helper function to create a pcap.EndpointRequest from parameters.
 func createEndpointRequest(token string, deployment string, instanceGroups []string) *pcap.EndpointRequest {
 	endpointRequest := &pcap.EndpointRequest{
 		Request: &pcap.EndpointRequest_Bosh{
@@ -210,6 +258,7 @@ func createEndpointRequest(token string, deployment string, instanceGroups []str
 	return endpointRequest
 }
 
+// createCaptureOptions is a helper function to create a pcap.CaptureOptions struct from parameters.
 func createCaptureOptions(device string, filter string, snaplen uint32) *pcap.CaptureOptions {
 	captureOptions := &pcap.CaptureOptions{
 		Device:  device,
@@ -220,15 +269,17 @@ func createCaptureOptions(device string, filter string, snaplen uint32) *pcap.Ca
 	return captureOptions
 }
 
-func writeBoshConfig(config *bosh.Config, configFileName string) {
+// writeBoshConfig writes the bosh.Config (config) to the config-file under configFileName.
+func writeBoshConfig(config *bosh.Config, configFileName string) error {
 	configWriter, err := os.Create(configFileName)
 	if err != nil {
-		logger.Fatal("failed to create bosh-config file", zap.Error(err))
+		return fmt.Errorf("failed to create bosh-config file %w", err)
 	}
 
 	err = yaml.NewEncoder(configWriter).Encode(config)
 	if err != nil {
-		logger.Fatal("failed to update bosh-config file", zap.Error(err))
+		return fmt.Errorf("failed to update bosh-config file %w", err)
 	}
 	logger.Info("wrote updated bosh config/tokens to file", zap.String("config-file", configFileName))
+	return nil
 }

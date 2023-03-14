@@ -80,8 +80,8 @@ func (api *API) RegisterResolver(resolver AgentResolver) {
 
 // Status provides the current status information for the pcap-api service.
 func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
-	bosh := api.handlerRegistered("bosh")
-	cf := api.handlerRegistered("cf")
+	bosh := api.resolverRegistered("bosh")
+	cf := api.resolverRegistered("cf")
 
 	apiStatus := &StatusResponse{
 		Healthy:            !api.draining(),
@@ -98,9 +98,9 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	return apiStatus, nil
 }
 
-// handlerRegistered checks if handler is registered.
+// resolverRegistered checks if handler is registered.
 // returns false, if the handler is not registered.
-func (api *API) handlerRegistered(handler string) *bool {
+func (api *API) resolverRegistered(handler string) *bool {
 	_, ok := api.resolvers[handler]
 	return &ok
 }

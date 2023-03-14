@@ -5,14 +5,16 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
-	log "github.com/sirupsen/logrus"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 )
 
 type BoshAgentResolver struct {
@@ -32,7 +34,9 @@ func NewBoshAgentResolver(environment bosh.Environment, agentPort int) (*BoshAge
 }
 
 func (boshAgentResolver *BoshAgentResolver) Name() string {
-	return fmt.Sprintf("bosh/%s", boshAgentResolver.environment.Alias)
+	// TODO we need to differentiate between bosh resolvers for different environments (i.e. bootstrap-bosh, bosh. This would take some refactoring, e.g. in pcap.proto StatusResponse
+	//return fmt.Sprintf("bosh/%s", boshAgentResolver.environment.Alias)
+	return "bosh"
 }
 
 func (boshAgentResolver *BoshAgentResolver) CanResolve(request *EndpointRequest) bool {
@@ -164,14 +168,14 @@ func (boshAgentResolver *BoshAgentResolver) authenticate(authToken string) error
 
 func (boshAgentResolver *BoshAgentResolver) getInstances(deployment string, authToken string) ([]bosh.Instance, int, error) {
 	log.Debugf("Checking at %s if deployment %s can be seen by token %s", boshAgentResolver.environment.RawDirectorURL, deployment, authToken)
-	instancesUrl, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", boshAgentResolver.environment.RawDirectorURL, deployment))
+	instancesURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", boshAgentResolver.environment.RawDirectorURL, deployment))
 	if err != nil {
 		return nil, 0, err
 	}
 
 	req := &http.Request{
-		Method: "GET",
-		URL:    instancesUrl,
+		Method: http.MethodGet,
+		URL:    instancesURL,
 		Header: map[string][]string{
 			"Authorization": {"Bearer " + authToken},
 		},
