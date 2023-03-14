@@ -378,7 +378,7 @@ func TestAPIRegisterHandler(t *testing.T) {
 	jwtapi, _ := test.MockJwtAPI()
 	boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
 
-	boshAgentResolver, err := NewBoshAgentResolver(bosh.Environment{
+	boshResolver, err := NewBoshResolver(bosh.Environment{
 		AccessToken:     "",
 		AccessTokenType: "",
 		Alias:           "bosh",
@@ -400,19 +400,19 @@ func TestAPIRegisterHandler(t *testing.T) {
 	}{
 		{
 			name:               "Register bosh handler and check the handler with correct name",
-			resolver:           boshAgentResolver,
+			resolver:           boshResolver,
 			wantRegistered:     true,
 			wantedResolverName: "bosh",
 		},
 		{
 			name:               "Register cf handler and check the handler with correct name",
-			resolver:           &CloudfoundryAgentResolver{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
+			resolver:           &CfResolver{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
 			wantRegistered:     true,
 			wantedResolverName: "cf",
 		},
 		{
 			name:               "Register bosh handler and check the handler with invalid name",
-			resolver:           boshAgentResolver,
+			resolver:           boshResolver,
 			wantRegistered:     false,
 			wantedResolverName: "cf",
 		},

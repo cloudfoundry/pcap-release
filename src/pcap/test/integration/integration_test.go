@@ -17,7 +17,6 @@ import (
 	"path"
 	"time"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap"
 	gopcap "github.com/google/gopacket/pcap"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -28,6 +27,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 var apiClient pcap.APIClient
@@ -93,7 +94,7 @@ var _ = Describe("IntegrationTests", func() {
 	Describe("Starting a capture", func() {
 		BeforeEach(func() {
 			var targets []pcap.AgentEndpoint
-			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil) //fixme: The BoshAgentResolver can't support agent-specific Ports, as that information is not returned by the bosh director. We need to find another way to integration test multiple agents
+			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil) //fixme: The BoshResolver can't support agent-specific Ports, as that information is not returned by the bosh director. We need to find another way to integration test multiple agents
 			targets = append(targets, agentTarget1)
 
 			agentServer2, agentTarget2, _ = createAgent(nextFreePort(), agentID2, nil)

@@ -15,22 +15,22 @@ import (
 	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 )
 
-func NewAgentResolverWithMockBoshAPI(responses map[string]string) (*BoshAgentResolver, error) {
+func NewResolverWithMockBoshAPI(responses map[string]string) (*BoshResolver, error) {
 	jwtapi, _ := test.MockJwtAPI()
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
 	environment := bosh.Environment{
 		Alias:          "bosh",
 		RawDirectorURL: boshAPI.URL,
 	}
-	boshAgentResolver, err := NewBoshAgentResolver(environment, 8083)
+	boshResolver, err := NewBoshResolver(environment, 8083)
 	if err != nil {
 		return nil, err
 	}
-	boshAgentResolver.uaaURLs = []string{jwtapi.URL}
-	return boshAgentResolver, nil
+	boshResolver.uaaURLs = []string{jwtapi.URL}
+	return boshResolver, nil
 }
 
-func TestNewBoshAgentResolver(t *testing.T) {
+func TestNewBoshResolver(t *testing.T) {
 	jwtapi, _ := test.MockJwtAPI()
 	boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
 
@@ -62,7 +62,7 @@ func TestNewBoshAgentResolver(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			boshAgentResolver, err := NewBoshAgentResolver(tt.environment, tt.agentPort)
+			boshResolver, err := NewBoshResolver(tt.environment, tt.agentPort)
 			if err != nil {
 				if (err != nil) != tt.wantErr {
 					t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
@@ -70,15 +70,15 @@ func TestNewBoshAgentResolver(t *testing.T) {
 				if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
 					t.Errorf("expectedErr = %v, actualErr = %v", tt.expectedErr, err)
 				}
-			} else if boshAgentResolver == nil {
-				t.Error("boshAgentResolver is nil")
+			} else if boshResolver == nil {
+				t.Error("boshResolver is nil")
 			}
 		})
 	}
 }
 
 func TestAuthenticate(t *testing.T) {
-	bar, err := NewAgentResolverWithMockBoshAPI(nil)
+	bar, err := NewResolverWithMockBoshAPI(nil)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -174,12 +174,12 @@ func TestResolve(t *testing.T) {
 		fmt.Sprintf("/deployments/%v/instances", deploymentName): string(instances),
 	}
 
-	boshAgentResolver, err := NewAgentResolverWithMockBoshAPI(responses)
+	boshResolver, err := NewResolverWithMockBoshAPI(responses)
 	if err != nil {
 		t.Errorf("received unexpected error = %v", err)
 	}
 
-	validToken, err := test.GetValidToken(boshAgentResolver.uaaURLs[0])
+	validToken, err := test.GetValidToken(boshResolver.uaaURLs[0])
 	if err != nil {
 		t.Error(err)
 	}
@@ -193,7 +193,7 @@ func TestResolve(t *testing.T) {
 		}},
 	}
 
-	agentEndpoints, err := boshAgentResolver.Resolve(request, log)
+	agentEndpoints, err := boshResolver.Resolve(request, log)
 	if err != nil {
 		t.Errorf("received unexpected error = %v", err)
 	}
@@ -229,14 +229,14 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 		},
 	}
 
-	boshAgentResolver, err := NewAgentResolverWithMockBoshAPI(nil) // NewBoshAgentResolver(bosh.Environment{}, 8083)
+	boshResolver, err := NewResolverWithMockBoshAPI(nil) // NewBoshResolver(bosh.Environment{}, 8083)
 	if err != nil {
 		t.Error(err)
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := boshAgentResolver.CanResolve(tt.req)
+			result := boshResolver.CanResolve(tt.req)
 			if tt.expectedResult != result {
 				t.Errorf("expectedResult = %v, result = %v", tt.expectedResult, result)
 			}
@@ -292,7 +292,7 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 		},
 	}
 
-	boshAgentResolver, err := NewAgentResolverWithMockBoshAPI(nil) // NewBoshAgentResolver(bosh.Environment{}, 8083)
+	boshResolver, err := NewResolverWithMockBoshAPI(nil) // NewBoshResolver(bosh.Environment{}, 8083)
 	if err != nil {
 		t.Error(err)
 	}
@@ -301,7 +301,7 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testEndpointRequest := &EndpointRequest{Request: &EndpointRequest_Bosh{tt.req}}
 
-			err = boshAgentResolver.validate(testEndpointRequest)
+			err = boshResolver.validate(testEndpointRequest)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
 			}
