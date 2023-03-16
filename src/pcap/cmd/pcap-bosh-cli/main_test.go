@@ -1,20 +1,8 @@
 package main
 
 import (
-	"os"
 	"testing"
-
-	"go.uber.org/zap"
 )
-
-func TestMain(m *testing.M) {
-	var err error
-	logger, err = zap.NewDevelopment()
-	if err != nil {
-		panic(err)
-	}
-	os.Exit(m.Run())
-}
 
 func TestParseAPIURL(t *testing.T) {
 	tests := []struct {

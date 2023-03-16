@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -14,8 +15,6 @@ import (
 	"github.com/jessevdk/go-flags"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
 )
 
@@ -38,22 +37,43 @@ type options struct {
 	Verbose            []bool   `short:"v" long:"verbose" description:"Show verbose debug information"`
 }
 
-// TODO: still too long but how can we split it into multiple methods?
+// init sets up the zap.Logger. Currently outputs to stderr in Console format.
+func init() {
+	atomicLogLevel = zap.NewAtomicLevelAt(zap.InfoLevel)
+	encoderConfig := zap.NewProductionEncoderConfig()
+	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	outputPaths := []string{"stderr"} //TODO: make configurable?
+	zapConfig := zap.Config{
+		Level:             atomicLogLevel,
+		DisableCaller:     true,
+		DisableStacktrace: true,
+		Encoding:          "console",
+		EncoderConfig:     encoderConfig,
+		OutputPaths:       outputPaths,
+		ErrorOutputPaths:  outputPaths,
+	}
+	logger = zap.Must(zapConfig.Build())
+	zap.ReplaceGlobals(logger)
+	logger.Debug("successfully set up logger", zap.Strings("output-paths", outputPaths))
+}
+
 func main() {
 	var (
 		err  error
 		opts options
 	)
-	setupLogging()
 
 	defer func() {
 		if err != nil {
-			logger.Panic("execution failed", zap.Error(err))
+			//logger.Error("execution failed", zap.Error(err))
+			logger.Error(err.Error())
+			os.Exit(1)
 		}
 	}()
 
 	// Parse command-line arguments
-	_, err = flags.ParseArgs(&opts, os.Args[1:])
+	_, err = flags.Parse(&opts)
 	if err != nil {
 		err = fmt.Errorf("could not parse the provided arguments %w", err)
 		return
@@ -88,7 +108,7 @@ func main() {
 	logger.Debug("bosh-config and tokens successfully updated")
 
 	// set up pcap-client/pcap-api connection
-	client, err := pcap.NewClient(opts.File)
+	client, err := pcap.NewClient(opts.File, logger)
 	if err != nil {
 		err = fmt.Errorf("could not set up pcap-client %w", err)
 		return
@@ -109,43 +129,19 @@ func main() {
 	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, 65_000) // TODO: get snaplen from config or parameters
 
 	// perform capture request
-	err = client.HandleRequest(endpointRequest, captureOptions, ctx, cancel)
+	err = client.HandleRequest(ctx, endpointRequest, captureOptions, cancel)
 	if err != nil {
 		err = fmt.Errorf("encountered error during request handling: %w", err)
 		return
 	}
 
 	// handle results of capture request
-	err = pcap.Cause(ctx)
-	if err != nil {
-		if status.Code(err) == codes.OK {
-			logger.Info("capture finished successfully")
-			return
-		}
-		err = fmt.Errorf("finished with error %w", err)
+	cause := pcap.Cause(ctx)
+	if cause != nil && !errors.Is(cause, context.Canceled) {
+		err = fmt.Errorf("finished with error %w", cause)
 		return
 	}
-}
-
-// sets up the zap.Logger. Currently outputs to stderr in Console format.
-func setupLogging() {
-	atomicLogLevel = zap.NewAtomicLevelAt(zap.WarnLevel)
-	encoderConfig := zap.NewProductionEncoderConfig()
-	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
-	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	outputPaths := []string{"stderr"} //TODO: make configurable?
-	zapConfig := zap.Config{
-		Level:             atomicLogLevel,
-		DisableCaller:     true,
-		DisableStacktrace: true,
-		Encoding:          "console",
-		EncoderConfig:     encoderConfig,
-		OutputPaths:       outputPaths,
-		ErrorOutputPaths:  outputPaths,
-	}
-	logger = zap.Must(zapConfig.Build())
-	zap.ReplaceGlobals(logger)
-	logger.Debug("successfully set up logger", zap.Strings("output-paths", outputPaths))
+	logger.Info("capture finished successfully")
 }
 
 // setLogLevel sets the log level of the zap.Logger created in setupLogging via atomicLogLevel
@@ -155,9 +151,9 @@ func setLogLevel(verbose []bool) {
 	var logLevel zapcore.Level
 	switch len(verbose) {
 	case 0:
-		logLevel = zapcore.WarnLevel
-	case 1:
 		logLevel = zapcore.InfoLevel
+	//case 1: // TODO: implement -q flag
+	//	logLevel = zapcore.InfoLevel
 	default: // if more than one -v is given as argument
 		logLevel = zapcore.DebugLevel
 	}
@@ -236,10 +232,8 @@ func setupContextCancel(cancel pcap.CancelCauseFunc) {
 		logger.Debug("waiting for SIGINT to be sent")
 		<-sigChan
 
-		logger.Debug("received SIGINT, stopping capture")
-		// cancelCause := pcap.errorf() // TODO: make public so we can use the status to accept this as a successful exit
-		cancelCause := fmt.Errorf("client stop, received SIGINT")
-		cancel(cancelCause)
+		logger.Info("received SIGINT, stopping capture")
+		cancel(nil)
 	}()
 }
 

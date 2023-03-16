@@ -3,7 +3,6 @@ package pcap
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -81,15 +80,16 @@ func (x *MockAPIWriter) Recv() (*CaptureResponse, error) {
 	return response, err
 }
 
-func TestMain(m *testing.M) {
-	// setup logger
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		panic(err)
-	}
-	zap.ReplaceGlobals(logger)
-	os.Exit(m.Run())
-}
+//
+//func TestMain(m *testing.M) {
+//	// setup logger
+//	logger, err := zap.NewDevelopment()
+//	if err != nil {
+//		panic(err)
+//	}
+//	zap.ReplaceGlobals(logger)
+//	os.Exit(m.Run())
+//}
 
 func TestHandleStream(t *testing.T) {
 	tests := []struct {
@@ -109,13 +109,13 @@ func TestHandleStream(t *testing.T) {
 			expectedErrMessage: "context canceled",
 		}, {
 			name:        "client stop",
-			clientError: fmt.Errorf("client stop"),
+			clientError: context.Canceled,
 			messages: []MessageTuple{
 				{
 					Response: newPacketResponse(examplePacket, gopacket.CaptureInfo{}),
 				},
 			},
-			expectedErrMessage: "client stop",
+			expectedErrMessage: "context canceled",
 		}, {
 			name:        "Permission Denied",
 			clientError: nil,
@@ -175,7 +175,8 @@ func TestNewClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewClient(tt.outputFile)
+			logger, _ := zap.NewDevelopment()
+			client, err := NewClient(tt.outputFile, logger)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
 			}

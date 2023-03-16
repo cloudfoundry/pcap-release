@@ -4,17 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/go-playground/validator/v10"
-	"github.com/google/gopacket"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest/observer"
-	"google.golang.org/grpc/metadata"
 	"io"
 	"math/rand"
 	"net"
 	"strconv"
 	"sync"
 	"testing"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/google/gopacket"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestCaptureOptionsValidate(t *testing.T) {

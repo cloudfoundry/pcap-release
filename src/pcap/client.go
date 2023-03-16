@@ -14,7 +14,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
-	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
@@ -24,7 +23,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const PollDelay = 200 * time.Millisecond
+const handleStreamWait = 200 * time.Millisecond
+const logProgressWait = 5 * time.Second
 
 type Client struct {
 	packetFile *os.File
@@ -33,10 +33,13 @@ type Client struct {
 	aPIClient
 }
 
-func NewClient(outputFile string) (*Client, error) { // TODO: remove unused logger
+func NewClient(outputFile string, logger *zap.Logger) (*Client, error) {
 	var err error
 
 	client := &Client{}
+
+	logger = logger.With(zap.String(LogKeyTarget, "client"))
+	zap.ReplaceGlobals(logger)
 
 	if len(outputFile) == 0 {
 		client.packetFile = os.Stdout
@@ -86,7 +89,8 @@ func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 	return nil
 }
 
-func (c *Client) HandleRequest(endpointRequest *EndpointRequest, options *CaptureOptions, ctx context.Context, cancel CancelCauseFunc) error {
+func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointRequest, options *CaptureOptions, cancel CancelCauseFunc) error {
+	logger := zap.L().With(zap.String(LogKeyHandler, "HandleRequest"))
 	// setup output/pcap-file
 	packetWriter := pcapgo.NewWriter(c.packetFile)
 	err := packetWriter.WriteFileHeader(options.SnapLen, layers.LinkTypeEthernet)
@@ -123,16 +127,16 @@ func (c *Client) HandleRequest(endpointRequest *EndpointRequest, options *Captur
 	// wait for progress to finish
 	<-ctx.Done()
 
-	log.Debug("waiting for copy operation to stop")
+	logger.Info("waiting for copy operation to stop")
 	copyWg.Wait()
 
-	log.Debug("syncing file to disk")
+	logger.Debug("syncing file to disk")
 	err = c.packetFile.Sync()
 	if err != nil {
 		return err
 	}
 
-	log.Debug("closing file")
+	logger.Debug("closing file")
 	err = c.packetFile.Close()
 	if err != nil {
 		return err
@@ -142,12 +146,13 @@ func (c *Client) HandleRequest(endpointRequest *EndpointRequest, options *Captur
 }
 
 func handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel CancelCauseFunc) {
+	logger := zap.L().With(zap.String(LogKeyHandler, "handleStream"))
 	for {
-		time.Sleep(PollDelay)
+		time.Sleep(handleStreamWait)
 
 		res, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
-			zap.L().Info("clean stop, done") // TODO: fix logger
+			logger.Info("clean stop, done") // TODO: fix logger
 			cancel(nil)
 			break
 		}
@@ -189,7 +194,6 @@ func writeMessage(message *Message) {
 	case MessageType_CONNECTION_ERROR:
 		logLevel = zapcore.ErrorLevel
 	}
-	log.Infof("%s - %v", message.String(), logLevel.String()) // TODO: duplicate logging
 	zap.L().Log(logLevel, "received message", zap.String("message-type", message.Type.String()), zap.Any("message", message.Message))
 }
 
@@ -210,22 +214,23 @@ func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 
 // TODO: still needed?
 func (c *Client) logProgress(ctx context.Context) {
+	logger := zap.L()
 	if c.packetFile == os.Stdout {
 		// writing progress information could interfere with packet output when both are written to stdout
-		log.Debug("writing captures to stdout, skipping write-progress logs")
+		logger.Debug("writing captures to stdout, skipping write-progress logs")
 		return
 	}
 
-	ticker := time.Tick(5 * time.Second)
+	ticker := time.Tick(logProgressWait)
 	for {
 		select {
 		case <-ticker:
 			info, err := c.packetFile.Stat()
 			if err != nil {
-				log.Debug("pcap output file already closed: ", zap.Error(err))
+				logger.Debug("pcap output file already closed: ", zap.Error(err))
 				return
 			}
-			log.Info(fmt.Sprintf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size()))))
+			logger.Info(fmt.Sprintf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size()))))
 		case <-ctx.Done():
 			return
 		}
