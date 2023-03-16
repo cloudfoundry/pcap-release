@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net"
 	"os"
@@ -59,23 +60,21 @@ func boshRequest(bosh *pcap.BoshRequest, options *pcap.CaptureOptions) *pcap.Cap
 }
 
 // findLoopback finds the first identified loopback interface.
-func findLoopback() (*gopcap.Interface, error) {
+func findLoopback() *gopcap.Interface {
 	devs, err := gopcap.FindAllDevs()
-	if err != nil {
-		return nil, err
-	}
+	if err == nil {
+		for _, dev := range devs {
+			// find device with the loopback flag. Loopback devices are called differently on the various OSes.
 
-	for _, dev := range devs {
-		// find device with the loopback flag. Loopback devices are called differently on the various OSes.
-
-		// libpcap/pcap/pcap.h
-		// #define PCAP_IF_LOOPBACK				0x00000001	/* interface is loopback */
-		if dev.Flags&0x00000001 > 0 {
-			return &dev, nil
+			// libpcap/pcap/pcap.h
+			// #define PCAP_IF_LOOPBACK				0x00000001	/* interface is loopback */
+			if dev.Flags&0x00000001 > 0 {
+				return &dev
+			}
 		}
 	}
-
-	return nil, fmt.Errorf("no loopback device found")
+	log.Panic("no loopback device found")
+	return nil
 }
 
 var _ = Describe("Using LocalResolver", func() {
@@ -91,6 +90,7 @@ var _ = Describe("Using LocalResolver", func() {
 	var defaultOptions *pcap.CaptureOptions
 	var api *pcap.API
 	var agent1 *pcap.Agent
+	loopback := findLoopback().Name
 
 	Context("Starting a capture", func() {
 
@@ -111,11 +111,8 @@ var _ = Describe("Using LocalResolver", func() {
 					Operation: &pcap.CaptureRequest_Stop{},
 				}
 
-				loopback, err := findLoopback()
-				Expect(err).ToNot(HaveOccurred())
-
 				defaultOptions = &pcap.CaptureOptions{
-					Device:  loopback.Name,
+					Device:  loopback,
 					Filter:  "",
 					SnapLen: 65000,
 				}
@@ -272,11 +269,8 @@ var _ = Describe("Using LocalResolver", func() {
 					Operation: &pcap.CaptureRequest_Stop{},
 				}
 
-				loopback, err := findLoopback()
-				Expect(err).ToNot(HaveOccurred())
-
 				defaultOptions = &pcap.CaptureOptions{
-					Device:  loopback.Name,
+					Device:  loopback,
 					Filter:  "",
 					SnapLen: 65000,
 				}
@@ -323,11 +317,8 @@ var _ = Describe("Using LocalResolver", func() {
 					Operation: &pcap.CaptureRequest_Stop{},
 				}
 
-				loopback, err := findLoopback()
-				Expect(err).ToNot(HaveOccurred())
-
 				defaultOptions = &pcap.CaptureOptions{
-					Device:  loopback.Name,
+					Device:  loopback,
 					Filter:  "",
 					SnapLen: 65000,
 				}
@@ -388,11 +379,8 @@ var _ = Describe("Using LocalResolver", func() {
 					Operation: &pcap.CaptureRequest_Stop{},
 				}
 
-				loopback, err := findLoopback()
-				Expect(err).ToNot(HaveOccurred())
-
 				defaultOptions = &pcap.CaptureOptions{
-					Device:  loopback.Name,
+					Device:  loopback,
 					Filter:  "",
 					SnapLen: 65000,
 				}
@@ -489,7 +477,7 @@ var _ = Describe("Using LocalResolver", func() {
 				}
 
 				captureOptions := &pcap.CaptureOptions{
-					Device:  "en0",
+					Device:  findLoopback().Name,
 					Filter:  "",
 					SnapLen: 65000,
 				}
@@ -531,8 +519,8 @@ func validatePcapFile(fileName string) {
 
 	actualTimestamp := packets[0].Metadata().Timestamp
 	Expect(actualTimestamp).ToNot(BeNil())
-	delta := time.Now().Sub(actualTimestamp)
-	Expect(delta).To(BeNumerically("<", 10*time.Second))
+	delta := time.Since(actualTimestamp)
+	Expect(delta).To(BeNumerically(">", 5*time.Second))
 
 	//transportLayer := packets[0].TransportLayer()
 	//dstPort := transportLayer.TransportFlow().Dst().String()
