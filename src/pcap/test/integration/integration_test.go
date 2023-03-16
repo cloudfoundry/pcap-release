@@ -78,7 +78,7 @@ func findLoopback() (*gopcap.Interface, error) {
 	return nil, fmt.Errorf("no loopback device found")
 }
 
-var _ = Describe("IntegrationTests", func() {
+var _ = Describe("Using LocalResolver", func() {
 	var agentServer1 *grpc.Server
 	var agentServer2 *grpc.Server
 	var apiServer *grpc.Server
@@ -92,9 +92,9 @@ var _ = Describe("IntegrationTests", func() {
 	var api *pcap.API
 	var agent1 *pcap.Agent
 
-	Context("From api to agent - Using ManualEndpointResolver", func() {
+	Context("Starting a capture", func() {
 
-		Describe("Starting a capture", func() {
+		Context("with two agents and one API", func() {
 			BeforeEach(func() {
 				var targets []pcap.AgentEndpoint
 				agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil) //fixme: The BoshResolver can't support agent-specific Ports, as that information is not returned by the bosh director. We need to find another way to integration test multiple agents
@@ -126,139 +126,136 @@ var _ = Describe("IntegrationTests", func() {
 				agentServer2.GracefulStop()
 				apiServer.GracefulStop()
 			})
+			It("finished without errors", func() {
+				stream, err := createStreamAndStartCapture(defaultOptions)
 
-			Context("with two agents and one API", func() {
-				It("finished without errors", func() {
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+
+				readAndExpectFirstMessages(stream)
+
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+
+				_ = readAndExpectCleanEnd(stream)
+			})
+			It("many concurrent captures from the same client", func() {
+				streams := make([]pcap.API_CaptureClient, 2)
+				for i := 0; i < 2; i++ {
 					stream, err := createStreamAndStartCapture(defaultOptions)
 
 					Expect(err).NotTo(HaveOccurred(), "Sending the request")
+					streams[i] = stream
 
 					readAndExpectFirstMessages(stream)
+				}
 
+				streamLimitReached, err := createStreamAndStartCapture(defaultOptions)
+
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				errCode, _, err := recvCapture(1, streamLimitReached)
+				Expect(err).To(HaveOccurred())
+				Expect(errCode).To(Equal(codes.ResourceExhausted))
+
+				for _, stream := range streams {
 					err = stream.Send(stop)
 					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
 					_ = readAndExpectCleanEnd(stream)
-				})
-				It("many concurrent captures from the same client", func() {
-					streams := make([]pcap.API_CaptureClient, 2)
-					for i := 0; i < 2; i++ {
-						stream, err := createStreamAndStartCapture(defaultOptions)
+				}
+			})
 
-						Expect(err).NotTo(HaveOccurred(), "Sending the request")
-						streams[i] = stream
+			It("one agent unavailable", func() {
+				agentServer2.GracefulStop()
 
-						readAndExpectFirstMessages(stream)
-					}
+				stream, err := createStreamAndStartCapture(defaultOptions)
 
-					streamLimitReached, err := createStreamAndStartCapture(defaultOptions)
+				Expect(err).NotTo(HaveOccurred())
 
-					Expect(err).NotTo(HaveOccurred(), "Sending the request")
-					errCode, _, err := recvCapture(1, streamLimitReached)
-					Expect(err).To(HaveOccurred())
-					Expect(errCode).To(Equal(codes.ResourceExhausted))
+				errCode, messages, _ := recvCapture(10, stream)
+				Expect(errCode).To(Equal(codes.OK))
 
-					for _, stream := range streams {
-						err = stream.Send(stop)
-						Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				_ = readAndExpectCleanEnd(stream)
+			})
+			It("No pcap-agents available", func() {
+				agentServer1.GracefulStop()
+				agentServer2.GracefulStop()
 
-						_ = readAndExpectCleanEnd(stream)
-					}
-				})
+				stream, err := createStreamAndStartCapture(defaultOptions)
 
-				It("one agent unavailable", func() {
-					agentServer2.GracefulStop()
+				Expect(err).NotTo(HaveOccurred())
+				errCode, messages, err := recvCapture(10, stream)
+				Expect(err).To(HaveOccurred(), "Error occurred due to failed precondition")
+				Expect(errCode).To(Equal(codes.FailedPrecondition))
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
+			})
+			It("One pcap-agent crashes", func() {
+				stream, err := createStreamAndStartCapture(defaultOptions)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-					stream, err := createStreamAndStartCapture(defaultOptions)
+				readAndExpectFirstMessages(stream)
 
-					Expect(err).NotTo(HaveOccurred())
+				go func() {
+					agentServer2.Stop()
+				}()
 
-					errCode, messages, _ := recvCapture(10, stream)
-					Expect(errCode).To(Equal(codes.OK))
+				code, messages, _ := recvCapture(500, stream)
+				Expect(code).To(Equal(codes.OK))
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-					Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
-					err = stream.Send(stop)
-					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
-					_ = readAndExpectCleanEnd(stream)
-				})
-				It("No pcap-agents available", func() {
-					agentServer1.GracefulStop()
-					agentServer2.GracefulStop()
+				_ = readAndExpectCleanEnd(stream)
+			})
+			It("One pcap-agent drains", func() {
+				stream, err := createStreamAndStartCapture(defaultOptions)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-					stream, err := createStreamAndStartCapture(defaultOptions)
+				readAndExpectFirstMessages(stream)
 
-					Expect(err).NotTo(HaveOccurred())
-					errCode, messages, err := recvCapture(10, stream)
-					Expect(err).To(HaveOccurred(), "Error occurred due to failed precondition")
-					Expect(errCode).To(Equal(codes.FailedPrecondition))
-					Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
-					Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
-				})
-				It("One pcap-agent crashes", func() {
-					stream, err := createStreamAndStartCapture(defaultOptions)
-					Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				go func() {
+					agent1.Stop()
+					agent1.Wait()
+				}()
 
-					readAndExpectFirstMessages(stream)
+				_, messages, _ := recvCapture(500, stream)
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
 
-					go func() {
-						agentServer2.Stop()
-					}()
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-					code, messages, _ := recvCapture(500, stream)
-					Expect(code).To(Equal(codes.OK))
-					Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
-					err = stream.Send(stop)
-					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				messages = readAndExpectCleanEnd(stream)
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CAPTURE_STOPPED, agentTarget2.Identifier)).To(BeTrue())
+			})
+			It("api drains", func() {
+				stream, err := createStreamAndStartCapture(defaultOptions)
 
-					_ = readAndExpectCleanEnd(stream)
-				})
-				It("One pcap-agent drains", func() {
-					stream, err := createStreamAndStartCapture(defaultOptions)
-					Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-					readAndExpectFirstMessages(stream)
+				readAndExpectFirstMessages(stream)
 
-					go func() {
-						agent1.Stop()
-						agent1.Wait()
-					}()
+				go func() {
+					api.Stop()
+					api.Wait()
+				}()
 
-					_, messages, _ := recvCapture(500, stream)
-					Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
+				time.Sleep(1 * time.Second)
+				_, messages, _ := recvCapture(100_000, stream)
 
-					err = stream.Send(stop)
-					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CAPTURE_STOPPED, agentTarget1.Identifier)).To(BeTrue())
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CAPTURE_STOPPED, agentTarget2.Identifier)).To(BeTrue())
 
-					messages = readAndExpectCleanEnd(stream)
-					Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CAPTURE_STOPPED, agentTarget2.Identifier)).To(BeTrue())
-				})
-				It("api drains", func() {
-					stream, err := createStreamAndStartCapture(defaultOptions)
+				statusResponse, err := apiClient.Status(context.Background(), &pcap.StatusRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(statusResponse.Healthy).To(BeFalse())
 
-					Expect(err).NotTo(HaveOccurred(), "Sending the request")
-
-					readAndExpectFirstMessages(stream)
-
-					go func() {
-						api.Stop()
-						api.Wait()
-					}()
-
-					time.Sleep(1 * time.Second)
-					_, messages, _ := recvCapture(100_000, stream)
-
-					Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CAPTURE_STOPPED, agentTarget1.Identifier)).To(BeTrue())
-					Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CAPTURE_STOPPED, agentTarget2.Identifier)).To(BeTrue())
-
-					statusResponse, err := apiClient.Status(context.Background(), &pcap.StatusRequest{})
-					Expect(err).ToNot(HaveOccurred())
-					Expect(statusResponse.Healthy).To(BeFalse())
-
-				})
 			})
 		})
 
-		Describe("Staring a capture with one agent and one api", func() {
+		Context("with one agent and one API", func() {
 			var apiPort = 8090
 			BeforeEach(func() {
 				var targets []pcap.AgentEndpoint
@@ -289,28 +286,25 @@ var _ = Describe("IntegrationTests", func() {
 				agentServer1.GracefulStop()
 				apiServer.GracefulStop()
 			})
-			Context("with one agent and one API", func() {
-				It("pcap-agent crashes", func() {
-					stream, err := createStreamAndStartCapture(defaultOptions)
+			It("pcap-agent crashes", func() {
+				stream, err := createStreamAndStartCapture(defaultOptions)
 
-					Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-					readAndExpectFirstMessages(stream)
+				readAndExpectFirstMessages(stream)
 
-					go func() {
-						agentServer1.Stop()
-					}()
+				go func() {
+					agentServer1.Stop()
+				}()
 
-					errCode, messages, err := recvCapture(10_000, stream)
-					Expect(err).To(HaveOccurred(), "Error occurred due to agent crash")
-					Expect(errCode).To(Equal(codes.Aborted))
-					Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
-				})
+				errCode, messages, err := recvCapture(10_000, stream)
+				Expect(err).To(HaveOccurred(), "Error occurred due to agent crash")
+				Expect(errCode).To(Equal(codes.Aborted))
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
 			})
-
 		})
 
-		Describe("Staring a capture with an API with a smaller buffer", func() {
+		Context("with two agents and one API and a smaller buffer", func() {
 			var apiPort = 8090
 			BeforeEach(func() {
 				var targets []pcap.AgentEndpoint
@@ -344,25 +338,22 @@ var _ = Describe("IntegrationTests", func() {
 				agentServer2.GracefulStop()
 				apiServer.GracefulStop()
 			})
-			Context("with two agents and one API", func() {
-				It("pcap-api is congested", func() {
-					stream, err := createStreamAndStartCapture(defaultOptions)
-					Expect(err).NotTo(HaveOccurred(), "Sending the request")
+			It("pcap-api is congested", func() {
+				stream, err := createStreamAndStartCapture(defaultOptions)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-					errCode, messages, err := recvCapture(200, stream)
-					GinkgoWriter.Printf("receive non-OK code: %s\n", errCode.String())
-					Expect(err).NotTo(HaveOccurred())
-					Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CONGESTED, apiID)).To(BeTrue())
-					err = stream.Send(stop)
-					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				errCode, messages, err := recvCapture(200, stream)
+				GinkgoWriter.Printf("receive non-OK code: %s\n", errCode.String())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CONGESTED, apiID)).To(BeTrue())
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-					_ = readAndExpectCleanEnd(stream)
-				})
+				_ = readAndExpectCleanEnd(stream)
 			})
-
 		})
 
-		Describe("Starting a capture use mTLS", func() {
+		Context("using mTLS with one agents and one API", func() {
 			BeforeEach(func() {
 				var targets []pcap.AgentEndpoint
 				var target pcap.AgentEndpoint
@@ -417,46 +408,43 @@ var _ = Describe("IntegrationTests", func() {
 				err = os.RemoveAll("agent")
 				Expect(err).ToNot(HaveOccurred())
 			})
-			Context("with one agents and one API", func() {
-				It("finished without errors", func() {
-					stream, err := createStreamAndStartCapture(defaultOptions)
+			It("finished without errors", func() {
+				stream, err := createStreamAndStartCapture(defaultOptions)
 
-					Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
 
-					readAndExpectFirstMessages(stream)
+				readAndExpectFirstMessages(stream)
 
-					err = stream.Send(stop)
+				err = stream.Send(stop)
 
-					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-					_ = readAndExpectCleanEnd(stream)
-				})
-				It("without external vcapID finished without errors", func() {
-					ctx := context.Background()
-					stream, _ := apiClient.Capture(ctx)
+				_ = readAndExpectCleanEnd(stream)
+			})
+			It("without external vcapID finished without errors", func() {
+				ctx := context.Background()
+				stream, _ := apiClient.Capture(ctx)
 
-					request := boshRequest(&pcap.BoshRequest{
-						Token:      "123",
-						Deployment: "cf",
-						Groups:     []string{"router"},
-					}, defaultOptions)
-					err := stream.Send(request)
-					Expect(err).NotTo(HaveOccurred(), "Sending the request")
-					capture, messages, err := recvCapture(10, stream)
-					Expect(err).NotTo(HaveOccurred(), "Receiving the first 10 messages")
-					Expect(capture).NotTo(BeNil())
-					Expect(messages).To(HaveLen(10))
-					err = stream.Send(stop)
-					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
+				request := boshRequest(&pcap.BoshRequest{
+					Token:      "123",
+					Deployment: "cf",
+					Groups:     []string{"router"},
+				}, defaultOptions)
+				err := stream.Send(request)
+				Expect(err).NotTo(HaveOccurred(), "Sending the request")
+				capture, messages, err := recvCapture(10, stream)
+				Expect(err).NotTo(HaveOccurred(), "Receiving the first 10 messages")
+				Expect(capture).NotTo(BeNil())
+				Expect(messages).To(HaveLen(10))
+				err = stream.Send(stop)
+				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
-					_ = readAndExpectCleanEnd(stream)
-				})
+				_ = readAndExpectCleanEnd(stream)
 			})
 		})
-
 	})
 
-	Context("From client to agent ", func() {
+	Context("From client to agent", func() {
 
 		BeforeEach(func() {
 
