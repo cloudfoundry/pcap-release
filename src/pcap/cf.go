@@ -6,19 +6,19 @@ import (
 	"go.uber.org/zap"
 )
 
-type CfResolver struct {
+type CloudfoundryResolver struct {
 	Config ManualEndpoints
 }
 
-func (cf *CfResolver) Name() string {
+func (cf *CloudfoundryResolver) Name() string {
 	return "cf"
 }
 
-func (cf *CfResolver) CanResolve(request *EndpointRequest) bool {
+func (cf *CloudfoundryResolver) CanResolve(request *EndpointRequest) bool {
 	return request.GetCf() != nil
 }
 
-func (cf *CfResolver) Resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
+func (cf *CloudfoundryResolver) Resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
 	log = log.With(zap.String("handler", cf.Name()))
 	log.Info("Handling request")
 
@@ -31,7 +31,7 @@ func (cf *CfResolver) Resolve(request *EndpointRequest, log *zap.Logger) ([]Agen
 	return []AgentEndpoint{}, nil
 }
 
-func (cf *CfResolver) validate(request *EndpointRequest) error {
+func (cf *CloudfoundryResolver) validate(request *EndpointRequest) error {
 	cfRequest := request.GetCf()
 
 	if cfRequest == nil {

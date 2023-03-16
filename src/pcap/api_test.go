@@ -406,7 +406,7 @@ func TestAPIRegisterHandler(t *testing.T) {
 		},
 		{
 			name:               "Register cf handler and check the handler with correct name",
-			resolver:           &CfResolver{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
+			resolver:           &CloudfoundryResolver{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
 			wantRegistered:     true,
 			wantedResolverName: "cf",
 		},
