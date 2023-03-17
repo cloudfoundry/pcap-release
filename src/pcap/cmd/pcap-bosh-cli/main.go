@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"time"
 
@@ -31,6 +32,7 @@ var (
 
 type options struct {
 	File               string   `short:"o" long:"file" description:"The output file. Written in binary pcap format." required:"true"`
+	ForceOverwriteFile bool     `short:"F" long:"force-overwrite-output-file" description:"Overwrites the output file if it already exists."`
 	PcapAPIURL         string   `short:"u" long:"pcap-api-url" description:"The URL of the PCAP API, e.g. pcap.cf.$LANDSCAPE_DOMAIN" env:"PCAP_API" required:"true"`
 	Filter             string   `short:"f" long:"filter" description:"Allows to provide a filter expression in pcap filter format." required:"false"`
 	Interface          string   `short:"i" long:"interface" description:"Specifies the network interface to listen on." default:"eth0" required:"false"`
@@ -40,7 +42,8 @@ type options struct {
 	Deployment         string   `short:"d" long:"deployment" description:"The name of the deployment in which you would like to capture." required:"true"`
 	InstanceGroups     []string `short:"g" long:"instance-group" description:"The name of an instance group in the deployment in which you would like to capture. Can be defined multiple times." required:"true"`
 	InstanceIds        []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"`
-	Verbose            []bool   `short:"v" long:"verbose" description:"Show verbose debug information"`
+	Verbose            bool     `short:"v" long:"verbose" description:"Show verbose debug information"`
+	Quiet              bool     `short:"q" long:"quiet" description:"Show only warnings and errors"`
 }
 
 // init sets up the zap.Logger. Currently outputs to stderr in Console format.
@@ -85,9 +88,14 @@ func main() {
 		return
 	}
 
-	setLogLevel(opts.Verbose) // we cannot log to Debug before this point
+	setLogLevel(opts.Verbose, opts.Quiet) // we cannot log to Debug before this point
 
 	logger.Debug("pcap-bosh-cli initialized", zap.Int64("compatibilityLevel", pcap.CompatibilityLevel))
+
+	err = checkOutputFile(opts.File, opts.ForceOverwriteFile) // TODO: we risk deleting a valid previous capture-file if "-f" is used and the capture fails. to prevent this, we'd have to pass ForceOverwriteFile to the client. Worth it?
+	if err != nil {
+		return
+	}
 
 	// update bosh tokens/config
 	apiURL, err := parseAPIURL(urlWithScheme(opts.PcapAPIURL))
@@ -154,6 +162,27 @@ func main() {
 	logger.Info("capture finished successfully")
 }
 
+// checkOutputFile checks if the specified output-file already exists.
+// If it does exist and forceOverwriteFile is specified, it will be deleted.
+// If it doesn't exist and the parent-directory is invalid an error is returned.
+func checkOutputFile(file string, forceOverwriteFile bool) error {
+	// Check if the file already exists
+	_, err := os.Stat(file)
+	if err == nil { //File already exists
+		if forceOverwriteFile {
+			return os.Remove(file)
+		} else {
+			return fmt.Errorf("outputfile %s already exists (Use option '-F' to overwrite file)", file)
+		}
+	}
+	// File doesn't exist, check if path is valid
+	fileInfo, err := os.Stat(filepath.Dir(file))
+	if err != nil || !fileInfo.IsDir() {
+		return fmt.Errorf("cannot write file %s. %s does not exist", file, fileInfo.Name())
+	}
+	return nil
+}
+
 // checkAPIHealth accepts a Client with working client-connection and an environmentAlias.
 //
 // Using the clients connection to the pcap-api it checks whether the api endpoint is healthy in general
@@ -181,22 +210,24 @@ func checkAPIHealth(c *pcap.Client, environmentAlias string) error {
 }
 
 // setLogLevel sets the log level of the zap.Logger created in setupLogging via atomicLogLevel
-// It accepts []bool as parameter as this is the output of the opts.Verbose flag:
-// -v sets the level to zapcore.InfoLevel, -vv (and more v's) sets zapcore.DebugLevel.
-func setLogLevel(verbose []bool) {
-	var logLevel zapcore.Level
-	switch len(verbose) {
-	case 0:
-		logLevel = zapcore.InfoLevel
-	//case 1: // TODO: implement -q flag
-	//	logLevel = zapcore.InfoLevel
-	default: // if more than one -v is given as argument
-		logLevel = zapcore.DebugLevel
+//
+// It accepts bool values of the verbose and quiet options.
+//
+// verbose sets the loglevel to Debug, quiet to Warn. The default is Info. If both verbose and quiet are specified, we return an error.
+func setLogLevel(verbose bool, quiet bool) error {
+	if verbose && quiet {
+		return fmt.Errorf("options verbose and quiet are mutually exclusive")
 	}
 
+	logLevel := zapcore.InfoLevel
+	if verbose {
+		logLevel = zapcore.DebugLevel
+	} else if quiet {
+		logLevel = zapcore.WarnLevel
+	}
 	atomicLogLevel.SetLevel(logLevel)
-
 	logger.Debug("set log-level", zap.String("log-level", logLevel.String()))
+	return nil
 }
 
 // configFromFile fetches the content of the specified bosh-config file under path configFilename
