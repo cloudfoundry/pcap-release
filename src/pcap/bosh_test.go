@@ -18,11 +18,14 @@ import (
 func NewResolverWithMockBoshAPI(responses map[string]string) (*BoshResolver, error) {
 	jwtapi, _ := test.MockJwtAPI()
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
-	environment := bosh.Environment{
-		Alias:          "bosh",
-		RawDirectorURL: boshAPI.URL,
+	config := BoshResolverConfig{
+		RawDirectorURL:   boshAPI.URL,
+		EnvironmentAlias: "bosh",
+		MTLS:             MutualTLS{},
+		AgentPort:        8083,
+		TokenScope:       "bosh.admin", // TODO Test for other scopes?
 	}
-	boshResolver, err := NewBoshResolver(environment, 8083)
+	boshResolver, err := NewBoshResolver(config)
 	if err != nil {
 		return nil, err
 	}
@@ -35,34 +38,46 @@ func TestNewBoshResolver(t *testing.T) {
 	boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
 
 	tests := []struct {
-		name        string
-		environment bosh.Environment
-		wantErr     bool
-		expectedErr error
-		agentPort   int //TODO: will this be a parameter?
+		name          string
+		apiBoshConfig BoshResolverConfig
+		wantErr       bool
+		expectedErr   error
 	}{
 		{
 			name: "validEnvironment",
-			environment: bosh.Environment{
-				Alias:          "validEnvironment",
-				RawDirectorURL: boshAPI.URL,
+			apiBoshConfig: BoshResolverConfig{
+				EnvironmentAlias: "bosh",
+				RawDirectorURL:   boshAPI.URL,
+				AgentPort:        8083,
 			},
-			wantErr:   false,
-			agentPort: 8083,
+			wantErr: false,
 		},
 		{
-			name:        "empty environment",
-			environment: bosh.Environment{},
+			name: "empty Bosh Director URL",
+			apiBoshConfig: BoshResolverConfig{
+				EnvironmentAlias: "",
+				RawDirectorURL:   "",
+				AgentPort:        0,
+			},
 			wantErr:     true,
 			expectedErr: nil,
-			agentPort:   0,
 		},
-		//TODO: test for CaCert, unavailable Director API, unparseable Director API
+		{
+			name: "unreacheable Bosh Director",
+			apiBoshConfig: BoshResolverConfig{
+				EnvironmentAlias: "",
+				RawDirectorURL:   "localhost:60000",
+				AgentPort:        0,
+			},
+			wantErr:     true,
+			expectedErr: nil,
+		},
+		//TODO: test for MTLS
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			boshResolver, err := NewBoshResolver(tt.environment, tt.agentPort)
+			boshResolver, err := NewBoshResolver(tt.apiBoshConfig)
 			if err != nil {
 				if (err != nil) != tt.wantErr {
 					t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
@@ -186,10 +201,11 @@ func TestResolve(t *testing.T) {
 
 	request := &EndpointRequest{
 		Request: &EndpointRequest_Bosh{Bosh: &BoshRequest{
-			Token:      validToken,
-			Deployment: deploymentName,
-			Groups:     []string{"test-instance-group"},
-			Instances:  nil,
+			Token:       validToken,
+			Deployment:  deploymentName,
+			Groups:      []string{"test-instance-group"},
+			Instances:   nil,
+			Environment: "bosh",
 		}},
 	}
 
@@ -213,7 +229,7 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 			name: "BoshRequest",
 			req: &EndpointRequest{
 				Request: &EndpointRequest_Bosh{
-					Bosh: &BoshRequest{},
+					Bosh: &BoshRequest{Environment: "bosh"},
 				},
 			},
 			expectedResult: true,
@@ -280,13 +296,19 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 		},
 		{
 			name:        "Bosh metadata Groups field is not present",
-			req:         &BoshRequest{Token: "123d24", Deployment: "cf"},
+			req:         &BoshRequest{Token: "123d24", Deployment: "cf", Environment: "bosh"},
+			wantErr:     true,
+			expectedErr: errEmptyField,
+		},
+		{
+			name:        "Bosh metadata Environment field is not present",
+			req:         &BoshRequest{Token: "123d24", Deployment: "cf", Groups: []string{"router"}},
 			wantErr:     true,
 			expectedErr: errEmptyField,
 		},
 		{
 			name:        "Valid request",
-			req:         &BoshRequest{Token: "123d24", Deployment: "cf", Groups: []string{"router"}},
+			req:         &BoshRequest{Token: "123d24", Deployment: "cf", Groups: []string{"router"}, Environment: "bosh"},
 			wantErr:     false,
 			expectedErr: nil,
 		},

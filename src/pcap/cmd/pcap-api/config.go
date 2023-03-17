@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 	"os"
 	"time"
 
@@ -33,11 +32,11 @@ var DefaultAPIConfig = APIConfig{
 
 type APIConfig struct {
 	cmd.CommonConfig   `yaml:"common_config"` // fixme: workaround by a18e to be able to parse a config file again, may not be desired
-	Agents             *pcap.AgentMTLS        `yaml:"agents"`
+	Agents             *pcap.AgentMTLS        `yaml:"agents" validate:"omitempty"`
 	ConcurrentCaptures int                    `yaml:"concurrent_captures"`
 	DrainTimeout       time.Duration          `yaml:"drain_timeout"`
 
-	BoshEnvironments []bosh.Environment `yaml:"bosh_environments"`
+	BoshResolverConfigs []pcap.BoshResolverConfig `yaml:"bosh_environments" validate:"required,dive"`
 	// TODO: Add CF specific config fragments
 }
 

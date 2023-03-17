@@ -71,12 +71,12 @@ type Info struct {
 }
 
 type Environment struct {
-	AccessToken     string       `yaml:"access_token"`
-	AccessTokenType string       `yaml:"access_token_type"`
-	Alias           string       `yaml:"alias"`
-	CaCert          string       `yaml:"ca_cert"`
-	RefreshToken    string       `yaml:"refresh_token"`
-	RawDirectorURL  string       `yaml:"url"`
+	AccessToken     string       `yaml:"access_token" validate:"required"`
+	AccessTokenType string       `yaml:"access_token_type" validate:"required"`
+	Alias           string       `yaml:"alias" validate:"required"`
+	CaCert          string       `yaml:"ca_cert" validate:"required"`
+	RefreshToken    string       `yaml:"refresh_token" validate:"required"`
+	URL             string       `yaml:"url" validate:"required,url"`
 	DirectorURL     *url.URL     `yaml:"-"`
 	UaaURL          *url.URL     `yaml:"-"`
 	client          *http.Client `yaml:"-"`
@@ -106,9 +106,9 @@ func (e *Environment) init() error {
 	var err error
 	logger := zap.L()
 
-	e.DirectorURL, err = url.Parse(e.RawDirectorURL)
+	e.DirectorURL, err = url.Parse(e.URL)
 	if err != nil {
-		return fmt.Errorf("error parsing environment url (%v) %w", e.RawDirectorURL, err)
+		return fmt.Errorf("error parsing environment url (%v) %w", e.URL, err)
 	}
 
 	if e.DirectorURL.Scheme == "https" {

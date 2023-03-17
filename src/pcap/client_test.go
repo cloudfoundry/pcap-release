@@ -192,46 +192,6 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-// TODO: this is basically an integration test. Skip?
-//func TestClient_ConnectToAPI(t *testing.T) {
-//	tests := []struct {
-//		name          string
-//		rawPcapAPIURL string
-//		wantErr       bool
-//		expectedErr   error
-//	}{
-//		{
-//			name:          "valid configuration",
-//			rawPcapAPIURL: "?", // TODO
-//			wantErr:       false,
-//		}, {
-//			name:          "invalid configuration",
-//			rawPcapAPIURL: "http://localhost",
-//			wantErr:       true,
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			client, err := NewClient("")
-//			if err != nil {
-//				panic(err)
-//			}
-//
-//			err = client.ConnectToAPI(test.MustParseURL(tt.rawPcapAPIURL))
-//			if (err != nil) != tt.wantErr {
-//				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
-//			}
-//			if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
-//				t.Errorf("expectedErr = %v, actualErr = %v", tt.expectedErr, err)
-//			}
-//			if client == nil {
-//				t.Errorf("client is nil")
-//			}
-//		})
-//	}
-//}
-
 // writes a predefined packet to a pcap-file, parses the file and compares timestamp and destination port
 func TestWritePacket(t *testing.T) {
 	filename := "testfile.pcap"

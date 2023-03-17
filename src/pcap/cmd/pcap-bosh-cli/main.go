@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
@@ -118,6 +119,10 @@ func main() {
 		err = fmt.Errorf("could not connect to pcap-api %w", err)
 		return
 	}
+	err = checkAPIHealth(client, environment.Alias)
+	if err != nil {
+		return
+	}
 
 	logger.Debug("pcap-client successfully initialized and connected to pcap-api")
 
@@ -125,7 +130,7 @@ func main() {
 	ctx := context.Background()
 	ctx, cancel := pcap.WithCancelCause(ctx)
 	setupContextCancel(cancel)
-	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups)
+	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups, environment.Alias)
 	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, 65_000) // TODO: get snaplen from config or parameters
 
 	// perform capture request
@@ -142,6 +147,32 @@ func main() {
 		return
 	}
 	logger.Info("capture finished successfully")
+}
+
+// checkAPIHealth accepts a Client with working client-connection and an environmentAlias.
+//
+// Using the clients connection to the pcap-api it checks whether the api endpoint is healthy in general
+// and if it supports requests to the Bosh Environment specified in environmentAlias.
+func checkAPIHealth(c *pcap.Client, environmentAlias string) error {
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	statusResponse, err := c.Status(ctx, &pcap.StatusRequest{})
+	if err != nil {
+		return fmt.Errorf("could not fetch api status: %w", err)
+	}
+
+	if !statusResponse.GetHealthy() {
+		return fmt.Errorf("pcap-api reported unhealthy status")
+	}
+
+	for _, resolverName := range statusResponse.Resolvers {
+		if resolverName == fmt.Sprintf("bosh/%v", environmentAlias) {
+			return nil
+		}
+	}
+	return fmt.Errorf("pcap-api does not support environment %v", environmentAlias)
 }
 
 // setLogLevel sets the log level of the zap.Logger created in setupLogging via atomicLogLevel
@@ -238,13 +269,14 @@ func setupContextCancel(cancel pcap.CancelCauseFunc) {
 }
 
 // createEndpointRequest is a helper function to create a pcap.EndpointRequest from parameters.
-func createEndpointRequest(token string, deployment string, instanceGroups []string) *pcap.EndpointRequest {
+func createEndpointRequest(token string, deployment string, instanceGroups []string, environmentAlias string) *pcap.EndpointRequest {
 	endpointRequest := &pcap.EndpointRequest{
 		Request: &pcap.EndpointRequest_Bosh{
 			Bosh: &pcap.BoshRequest{
-				Token:      token,
-				Deployment: deployment,
-				Groups:     instanceGroups,
+				Token:       token,
+				Deployment:  deployment,
+				Groups:      instanceGroups,
+				Environment: environmentAlias,
 			},
 		},
 	}

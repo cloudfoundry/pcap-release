@@ -51,6 +51,6 @@ type Listen struct {
 }
 
 // AgentMTLS defines the optional mTLS configuration to connect to agents.
-type AgentMTLS struct {
+type AgentMTLS struct { //TODO as AgentPort is now a property of the BoshResolver, can we just use MTLS directly here?
 	MTLS *MutualTLS `yaml:"mtls,omitempty"`
 }

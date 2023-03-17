@@ -80,15 +80,11 @@ func (api *API) RegisterResolver(resolver AgentResolver) {
 
 // Status provides the current status information for the pcap-api service.
 func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
-	bosh := api.resolverRegistered("bosh")
-	cf := api.resolverRegistered("cf")
-
 	apiStatus := &StatusResponse{
 		Healthy:            !api.draining(),
 		CompatibilityLevel: 0,
 		Message:            "Ready.",
-		Bosh:               bosh,
-		Cf:                 cf,
+		Resolvers:          api.resolverNames(),
 	}
 
 	if api.draining() {
@@ -96,6 +92,17 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	}
 
 	return apiStatus, nil
+}
+
+func (api *API) resolverNames() []string {
+	//TODO alternative? registeredHandlerNames := reflect.ValueOf(api.resolvers).MapKeys()
+	resolverNames := make([]string, len(api.resolvers))
+	i := 0
+	for key := range api.resolvers {
+		resolverNames[i] = key
+		i++
+	}
+	return resolverNames
 }
 
 // resolverRegistered checks if handler is registered.
@@ -368,7 +375,7 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 				return
 			}
 			if err != nil {
-				msg := fmt.Sprintf("Capturing stopped on agent pcap-agent %s", target)
+				msg := fmt.Sprintf("Capturing stopped on agent pcap-agent %s: %v", target, err.Error())
 				out <- newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, msg, target.Identifier)
 				return
 			}

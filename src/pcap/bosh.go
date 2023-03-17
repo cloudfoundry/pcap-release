@@ -11,22 +11,40 @@ import (
 	"os"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 )
 
-type BoshResolver struct {
-	environment bosh.Environment
-	client      *http.Client
-	uaaURLs     []string
-	agentPort   int
+type BoshResolverConfig struct {
+	RawDirectorURL   string    `yaml:"director_url" validate:"required,url"`
+	EnvironmentAlias string    `yaml:"alias" validate:"required"`
+	AgentPort        int       `yaml:"agent_port" validate:"required,gt=0,lte=65535"` //TODO: what about api.agents.port?
+	TokenScope       string    `yaml:"token_scope" validate:"required"`
+	MTLS             MutualTLS `yaml:"mtls" validate:"omitempty,structonly"` // TODO: this skips validation of the nested fields
 }
 
-func NewBoshResolver(environment bosh.Environment, agentPort int) (*BoshResolver, error) {
-	resolver := &BoshResolver{environment: environment, agentPort: agentPort} // TODO: get agent port from where?
-	err := resolver.setup()
+type BoshResolver struct {
+	client      *http.Client
+	uaaURLs     []string
+	config      BoshResolverConfig
+	directorURL *url.URL
+	logger      *zap.Logger
+}
+
+func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
+	directorURL, err := url.Parse(config.RawDirectorURL)
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize BoshResolver for environment %s. %w", config.EnvironmentAlias, err)
+	}
+
+	resolver := &BoshResolver{
+		logger:      zap.L().With(zap.String(LogKeyHandler, config.EnvironmentAlias)),
+		config:      config,
+		directorURL: directorURL,
+	}
+
+	err = resolver.setup()
 	if err != nil {
 		return nil, err
 	}
@@ -34,18 +52,18 @@ func NewBoshResolver(environment bosh.Environment, agentPort int) (*BoshResolver
 }
 
 func (br *BoshResolver) Name() string {
-	// TODO we need to differentiate between bosh resolvers for different environments (i.e. bootstrap-bosh, bosh. This would take some refactoring, e.g. in pcap.proto StatusResponse
-	// return fmt.Sprintf("bosh/%s", br.environment.Alias)
-	return "bosh"
+	return fmt.Sprintf("bosh/%s", br.config.EnvironmentAlias)
 }
 
 func (br *BoshResolver) CanResolve(request *EndpointRequest) bool {
-	return request.GetBosh() != nil
+	if boshRequest := request.GetBosh(); boshRequest != nil {
+		return boshRequest.Environment == br.config.EnvironmentAlias
+	}
+	return false
 }
 
-func (br *BoshResolver) Resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
-	log = log.With(zap.String(LogKeyHandler, br.Name()))
-	log.Info("Resolving endpoints for bosh request")
+func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([]AgentEndpoint, error) { // TODO why do we pass the logger here?
+	logger.Info("resolving endpoints for bosh request")
 
 	err := br.validate(request)
 	if err != nil {
@@ -61,21 +79,21 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, log *zap.Logger) ([]Ag
 
 	instances, _, err := br.getInstances(boshRequest.Deployment, boshRequest.Token)
 	if err != nil {
-		log.Error("failed to get instances from bosh-director", zap.String(LogKeyTarget, ""))
+		logger.Error("failed to get instances from bosh-director", zap.String(LogKeyTarget, ""))
 		return nil, err
 	}
 
 	var endpoints []AgentEndpoint
 	for _, instance := range instances {
 		identifier := strings.Join([]string{instance.Job, instance.Id}, "/")
-		endpoints = append(endpoints, AgentEndpoint{IP: instance.Ips[0], Port: br.agentPort, Identifier: identifier}) //TODO: defaultport ok here?
+		endpoints = append(endpoints, AgentEndpoint{IP: instance.Ips[0], Port: br.config.AgentPort, Identifier: identifier})
 	}
 
 	if len(endpoints) == 0 {
 		return nil, fmt.Errorf("no matching endpoints found")
 	}
 
-	log.Debug("received AgentEndpoints from Bosh Director", zap.Any("agent-endpoint", endpoints))
+	logger.Debug("received AgentEndpoints from Bosh Director", zap.Any("agent-endpoint", endpoints))
 	return endpoints, nil
 }
 
@@ -94,6 +112,10 @@ func (br *BoshResolver) validate(endpointRequest *EndpointRequest) error {
 		return fmt.Errorf("invalid message: deployment: %w", errEmptyField)
 	}
 
+	if boshRequest.Environment == "" {
+		return fmt.Errorf("invalid message: environment: %w", errEmptyField)
+	}
+
 	if len(boshRequest.Groups) == 0 {
 		return fmt.Errorf("invalid message: instance group(s): %w", errEmptyField)
 	}
@@ -102,21 +124,21 @@ func (br *BoshResolver) validate(endpointRequest *EndpointRequest) error {
 }
 
 func (br *BoshResolver) setup() error {
-	log.Infof("Setting Up BoshResolver for %s", br.environment.Alias)
+	br.logger.Info("setting Up BoshResolver", zap.Any("resolver-config", br.config))
 
-	if br.environment.CaCert == "" {
+	if br.config.MTLS.CertificateAuthority == "" {
 		br.client = http.DefaultClient
 	} else {
-		data, err := os.ReadFile(br.environment.CaCert)
+		data, err := os.ReadFile(br.config.MTLS.CertificateAuthority)
 		if err != nil {
-			return fmt.Errorf("could not load BOSH Director CA from %s (%s)", br.environment.CaCert, err)
+			return fmt.Errorf("could not load bosh-director ca from %s (%s)", br.config.MTLS.CertificateAuthority, err)
 		}
 
 		boshCA := x509.NewCertPool()
 		ok := boshCA.AppendCertsFromPEM(data)
 
 		if !ok {
-			return fmt.Errorf("could not add BOSH Director CA from %s, adding to the cert pool failed.", br.environment.CaCert)
+			return fmt.Errorf("could not add bosh-director ca from %s, adding to the cert pool failed", br.config.MTLS.CertificateAuthority)
 		}
 
 		br.client = &http.Client{
@@ -128,33 +150,34 @@ func (br *BoshResolver) setup() error {
 		}
 	}
 
-	log.Info("Discovering BOSH Director endpoint...")
-	response, err := br.client.Get(br.environment.RawDirectorURL + "/info")
+	br.logger.Info("discovering bosh-UAA endpoint")
+	infoEndpoint := br.directorURL.JoinPath("/info").String()
+	response, err := br.client.Get(infoEndpoint)
 
 	if err != nil {
-		return fmt.Errorf("could not fetch BOSH Director API from %s (%s)", br.environment.RawDirectorURL, err)
+		return fmt.Errorf("could not fetch bosh-director API from %v: %w", br.config.RawDirectorURL, err)
 	}
 
 	var apiResponse *bosh.Info
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
-		return fmt.Errorf("could not read BOSH Director API response: %s", err)
+		return fmt.Errorf("could not read bosh-director API response: %s", err)
 	}
 	err = json.Unmarshal(data, &apiResponse)
 	if err != nil {
-		return fmt.Errorf("could not parse BOSH Director API response: %s", err)
+		return fmt.Errorf("could not parse bosh-director API response: %s", err)
 	}
 
 	br.uaaURLs = apiResponse.UserAuthentication.Options.Urls
 
-	log.Infof("Connected to BOSH Director '%s' (%s), version %s on %s. UAA URLs: %v", apiResponse.Name, apiResponse.Uuid, apiResponse.Version, apiResponse.Cpi, br.uaaURLs)
+	br.logger.Info("connected to bosh-director", zap.Any("bosh-director", apiResponse))
 
 	return nil
 }
 
 func (br *BoshResolver) authenticate(authToken string) error {
 
-	allowed, err := VerifyJwt(authToken, "bosh.admin", br.uaaURLs)
+	allowed, err := VerifyJwt(authToken, br.config.TokenScope, br.uaaURLs)
 	if err != nil {
 		return fmt.Errorf("could not verify token %s (%s)", authToken, err)
 	}
@@ -167,8 +190,8 @@ func (br *BoshResolver) authenticate(authToken string) error {
 }
 
 func (br *BoshResolver) getInstances(deployment string, authToken string) ([]bosh.Instance, int, error) {
-	log.Debugf("Checking at %s if deployment %s can be seen by token %s", br.environment.RawDirectorURL, deployment, authToken)
-	instancesURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", br.environment.RawDirectorURL, deployment))
+	br.logger.Debug("checking token-permissions", zap.String("director-url", br.directorURL.String()), zap.String("deployment", deployment)) //, zap.String("token", authToken)) //TODO authToken is userspecific
+	instancesURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", br.directorURL, deployment))
 	if err != nil {
 		return nil, 0, err
 	}

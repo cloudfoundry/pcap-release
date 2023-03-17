@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 
 	"github.com/google/gopacket"
@@ -45,6 +44,9 @@ func (m *mockCaptureStream) CloseSend() error {
 func (m *mockCaptureStream) Context() context.Context {
 	return nil
 }
+
+// TODO: TestValidateConfig?
+
 func TestReadMsg(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -196,21 +198,21 @@ func TestStopCmd(t *testing.T) {
 			wantErr:     true,
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			ctx, cancel := WithCancelCause(ctx)
-			stopCmd(cancel, test.recv)
+			stopCmd(cancel, tt.recv)
 			<-ctx.Done()
 
 			err := Cause(ctx)
 
-			if (err != nil) != test.wantErr {
-				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
 			}
 
-			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
-				t.Errorf("expectedErr = %v, error = %v", test.expectedErr, err)
+			if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
+				t.Errorf("expectedErr = %v, error = %v", tt.expectedErr, err)
 			}
 		})
 	}
@@ -378,16 +380,13 @@ func TestAPIRegisterHandler(t *testing.T) {
 	jwtapi, _ := test.MockJwtAPI()
 	boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
 
-	boshResolver, err := NewBoshResolver(bosh.Environment{
-		AccessToken:     "",
-		AccessTokenType: "",
-		Alias:           "bosh",
-		CaCert:          "",
-		RefreshToken:    "",
-		RawDirectorURL:  boshAPI.URL,
-		DirectorURL:     test.MustParseURL(boshAPI.URL),
-		UaaURL:          test.MustParseURL(jwtapi.URL),
-	}, 8083)
+	config := BoshResolverConfig{
+		RawDirectorURL:   boshAPI.URL,
+		EnvironmentAlias: "bosh",
+		MTLS:             MutualTLS{},
+		AgentPort:        8083,
+	}
+	boshResolver, err := NewBoshResolver(config)
 	if err != nil {
 		panic(err)
 	}
@@ -402,7 +401,7 @@ func TestAPIRegisterHandler(t *testing.T) {
 			name:               "Register bosh handler and check the handler with correct name",
 			resolver:           boshResolver,
 			wantRegistered:     true,
-			wantedResolverName: "bosh",
+			wantedResolverName: "bosh/bosh",
 		},
 		{
 			name:               "Register cf handler and check the handler with correct name",

@@ -3,13 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
-	"github.com/cloudfoundry/pcap-release/src/pcap/test"
-	"github.com/jessevdk/go-flags"
-	log "github.com/sirupsen/logrus"
 	"io/fs"
 	"os"
 	"time"
+
+	"github.com/jessevdk/go-flags"
+	log "github.com/sirupsen/logrus"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 )
 
 type options struct {
@@ -82,10 +84,12 @@ common_config:
   listen:
     port: 8080
 agents:
-  port: 8083
+  listen: 8080
 bosh_environments:
   - alias: "bosh"
-    url: "%v"
+    director_url: "%v"
+    agent_port: 8083
+    token_scope: "bosh.admin"
 drain_timeout: 10s
 concurrent_captures: 5
 `, boshURL)

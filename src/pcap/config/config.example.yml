@@ -25,7 +25,6 @@ api:
       ca: pcap-ca.pem
 
   agents:
-    port: 9494
     mtls:
       common_name: pcap-agent.service.cf.internal
       skip_verify: false
@@ -44,7 +43,7 @@ api:
       private_key: cc-client-key.key
       ca: cc-ca.pem
   bosh: # -> *pcap.BoshHandler `yaml:omitempty`
-    - bootstrap_bosh:
+    - alias: bootstrap_bosh
       director_url: https://
       token_scope: bosh.admin
       mtls:
@@ -54,7 +53,7 @@ api:
         certificate: bosh-client-cert.pem
         private_key: bosh-client-key.key
         ca: bosh-ca.pem
-    - bosh:
+    - alias: bosh
       director_url: https://
       token_scope: bosh.admin
       mtls:

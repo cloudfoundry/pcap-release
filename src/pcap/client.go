@@ -73,19 +73,6 @@ func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 		return fmt.Errorf("could not connect to pcap-api (%v)", apiURL)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	statusResponse, err := c.Status(ctx, &StatusRequest{})
-	if err != nil {
-		return fmt.Errorf("could not fetch api status: %w", err)
-	}
-
-	if !statusResponse.GetHealthy() {
-		return fmt.Errorf("pcap-api reported unhealthy status")
-	}
-	// TODO: check errorhandling if endpointRequestType (bosh/cf) is not supported by api
-
 	return nil
 }
 
@@ -230,7 +217,7 @@ func (c *Client) logProgress(ctx context.Context) {
 				logger.Debug("pcap output file already closed: ", zap.Error(err))
 				return
 			}
-			logger.Info(fmt.Sprintf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size()))))
+			logger.Debug(fmt.Sprintf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size()))))
 		case <-ctx.Done():
 			return
 		}

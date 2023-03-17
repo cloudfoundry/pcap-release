@@ -74,8 +74,7 @@ message StatusResponse {
   bool healthy = 1;
   int64 compatibilityLevel = 2;
   string message = 3;
-  optional bool bosh = 4;
-  optional bool cf = 5;
+  repeated string resolvers = 4;
 }
 
 message StatusRequest {}
@@ -115,6 +114,7 @@ message BoshRequest {
   string deployment = 2;
   repeated string groups = 3;
   repeated string instances = 4;
+  string environment = 5;
 }
 
 message CloudfoundryRequest {
