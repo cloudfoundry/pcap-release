@@ -1,22 +1,27 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"regexp"
 	"time"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
-
 	"github.com/jessevdk/go-flags"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v3"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 var (
@@ -89,7 +94,7 @@ func main() {
 	if err != nil {
 		return
 	}
-	boshConfig, err := getBoshConfigFromFile(opts.BoshConfigFilename)
+	boshConfig, err := configFromFile(opts.BoshConfigFilename)
 	if err != nil {
 		return
 	}
@@ -194,16 +199,16 @@ func setLogLevel(verbose []bool) {
 	logger.Debug("set log-level", zap.String("log-level", logLevel.String()))
 }
 
-// getBoshConfigFromFile fetches the content of the specified bosh-config file under path configFilename
-// and returns a bosh.Config struct.
-func getBoshConfigFromFile(configFilename string) (*bosh.Config, error) {
+// configFromFile fetches the content of the specified bosh-config file under path configFilename
+// and returns a Config struct.
+func configFromFile(configFilename string) (*Config, error) {
 	var err error
 	configFilename = os.ExpandEnv(configFilename)
 	configReader, err := os.Open(configFilename)
 	if err != nil {
 		return nil, fmt.Errorf("could not open bosh-config %w", err)
 	}
-	config := &bosh.Config{}
+	config := &Config{}
 	err = yaml.NewDecoder(configReader).Decode(config)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse the provided bosh-config %w", err)
@@ -238,10 +243,10 @@ func parseAPIURL(urlString string) (*url.URL, error) {
 	return parsedURL, nil
 }
 
-// getEnvironment searches the provided bosh.Config (config) for the environmentAlias.
+// getEnvironment searches the provided Config for the environmentAlias.
 //
 // Returns a matching environment if one exists.
-func getEnvironment(environmentAlias string, config *bosh.Config) (*bosh.Environment, error) {
+func getEnvironment(environmentAlias string, config *Config) (*Environment, error) {
 	for _, environment := range config.Environments {
 		if environment.Alias == environmentAlias {
 			logger.Debug("found matching bosh-environment", zap.String("environment-alias", environment.Alias))
@@ -295,8 +300,8 @@ func createCaptureOptions(device string, filter string, snaplen uint32) *pcap.Ca
 	return captureOptions
 }
 
-// writeBoshConfig writes the bosh.Config (config) to the config-file under configFileName.
-func writeBoshConfig(config *bosh.Config, configFileName string) error {
+// writeBoshConfig writes the Config to the config-file under configFileName.
+func writeBoshConfig(config *Config, configFileName string) error {
 	configWriter, err := os.Create(configFileName)
 	if err != nil {
 		return fmt.Errorf("failed to create bosh-config file %w", err)
@@ -307,5 +312,157 @@ func writeBoshConfig(config *bosh.Config, configFileName string) error {
 		return fmt.Errorf("failed to update bosh-config file %w", err)
 	}
 	logger.Info("wrote updated bosh config/tokens to file", zap.String("config-file", configFileName))
+	return nil
+}
+
+// Config represents the content of the bosh config-file (default location: ~/.bosh/config).
+//
+// It contains a list of bosh Environments.
+type Config struct {
+	Environments []Environment `yaml:"environments"`
+}
+
+// Environment contains all the necessary information to connect to a specifig bosh-director
+type Environment struct {
+	AccessToken     string       `yaml:"access_token" validate:"required"`
+	AccessTokenType string       `yaml:"access_token_type" validate:"required"`
+	Alias           string       `yaml:"alias" validate:"required"`
+	CaCert          string       `yaml:"ca_cert" validate:"required"`
+	RefreshToken    string       `yaml:"refresh_token" validate:"required"`
+	URL             string       `yaml:"url" validate:"required,url"`
+	DirectorURL     *url.URL     `yaml:"-"`
+	UaaURL          *url.URL     `yaml:"-"`
+	client          *http.Client `yaml:"-"`
+}
+
+// UpdateTokens is the public wrapper func for the bosh Environment struct
+//
+// It fetches the bosh-uaa URLs from the bosh-director (if necessary)
+// and refreshes the bosh authentication tokens.
+func (e *Environment) UpdateTokens() error {
+	if e.UaaURL == nil {
+		err := e.init()
+		if err != nil {
+			return err
+		}
+		err = e.fetchUAAURL()
+		if err != nil {
+			return err
+		}
+	}
+	err := e.refreshTokens()
+	if err != nil {
+		return fmt.Errorf("failed to refresh bosh access token %w", err)
+	}
+	return nil
+}
+
+// init sets up a Bosh environment by parsing the bosh-director URL (string) from the config-file
+// and then sets up the http client for use with either TLS or plain HTTP
+func (e *Environment) init() error {
+	var err error
+	logger := zap.L()
+
+	e.DirectorURL, err = url.Parse(e.URL)
+	if err != nil {
+		return fmt.Errorf("error parsing environment url (%v) %w", e.URL, err)
+	}
+
+	if e.DirectorURL.Scheme == "https" {
+		logger.Info("using TLS-encrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
+		boshCA := x509.NewCertPool()
+		ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
+		if !ok {
+			return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed %v", e.CaCert) //TODO really output cert here?
+		}
+
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSClientConfig.RootCAs = boshCA
+
+		e.client = &http.Client{
+			Transport: transport,
+		}
+	} else {
+		logger.Warn("using unencrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
+		e.client = http.DefaultClient
+	}
+	return nil
+}
+
+// fetchUAAURL connects to the bosh-director API to fetch the bosh-uaa API URL.
+func (e *Environment) fetchUAAURL() error {
+	res, err := e.client.Do(&http.Request{
+		Method: http.MethodGet,
+		URL: &url.URL{
+			Scheme: e.DirectorURL.Scheme,
+			Host:   e.DirectorURL.Host,
+			Path:   "/info",
+		},
+		Header: http.Header{
+			"Accept": {"application/json"},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("could not get response from bosh-director %w", err)
+	}
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code %d from bosh-director", res.StatusCode)
+	}
+
+	defer res.Body.Close()
+
+	var info pcap.BoshInfo
+	err = json.NewDecoder(res.Body).Decode(&info)
+	if err != nil {
+		return err
+	}
+
+	uaaURL, err := url.Parse(info.UserAuthentication.Options.Url)
+	if err != nil {
+		return err
+	}
+	e.UaaURL = uaaURL
+
+	return nil
+}
+
+// refreshTokens connects to the bosh-uaa API to fetch updated bosh access- & refresh-token.
+func (e *Environment) refreshTokens() error { //TODO: logging
+	req := http.Request{
+		Method: http.MethodPost,
+		URL: &url.URL{
+			Scheme: e.UaaURL.Scheme,
+			Host:   e.UaaURL.Host,
+			Path:   "/oauth/token",
+		},
+		Header: http.Header{
+			"Accept":        {"application/json"},
+			"Content-Type":  {"application/x-www-form-urlencoded"},
+			"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("bosh_cli:")))}, // TODO: the client name is also written in the token
+		},
+		Body: io.NopCloser(bytes.NewReader([]byte(url.Values{
+			"grant_type":    {"refresh_token"},
+			"refresh_token": {e.RefreshToken},
+		}.Encode()))),
+	}
+	res, err := e.client.Do(&req)
+	if err != nil {
+		return err
+	}
+
+	var newTokens struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&newTokens)
+	if err != nil {
+		return err
+	}
+
+	e.RefreshToken = newTokens.RefreshToken
+	e.AccessTokenType = newTokens.TokenType
+	e.AccessToken = newTokens.AccessToken
+
 	return nil
 }

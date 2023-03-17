@@ -10,11 +10,39 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
-
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 )
+
+type BoshInfo struct {
+	Name            string `json:"name"`
+	Uuid            string `json:"uuid"`
+	Version         string `json:"version"`
+	Cpi             string `json:"cpi"`
+	StemcellOs      string `json:"stemcell_os"`
+	StemcellVersion string `json:"stemcell_version"`
+
+	UserAuthentication struct {
+		Type    string `json:"type"`
+		Options struct {
+			Url  string   `json:"url"`
+			Urls []string `json:"urls"`
+		} `json:"options"`
+	} `json:"user_authentication"`
+}
+
+type BoshInstance struct {
+	AgentId     string    `json:"agent_id"`
+	Cid         string    `json:"cid"`
+	Job         string    `json:"job"`
+	Index       int       `json:"index"`
+	Id          string    `json:"id"`
+	Az          string    `json:"az"`
+	Ips         []string  `json:"ips"`
+	VmCreatedAt time.Time `json:"vm_created_at"`
+	ExpectsVm   bool      `json:"expects_vm"`
+}
 
 type BoshResolverConfig struct {
 	RawDirectorURL   string    `yaml:"director_url" validate:"required,url"`
@@ -158,7 +186,7 @@ func (br *BoshResolver) setup() error {
 		return fmt.Errorf("could not fetch bosh-director API from %v: %w", br.config.RawDirectorURL, err)
 	}
 
-	var apiResponse *bosh.Info
+	var apiResponse *BoshInfo
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
 		return fmt.Errorf("could not read bosh-director API response: %s", err)
@@ -189,7 +217,7 @@ func (br *BoshResolver) authenticate(authToken string) error {
 	return nil
 }
 
-func (br *BoshResolver) getInstances(deployment string, authToken string) ([]bosh.Instance, int, error) {
+func (br *BoshResolver) getInstances(deployment string, authToken string) ([]BoshInstance, int, error) {
 	br.logger.Debug("checking token-permissions", zap.String("director-url", br.directorURL.String()), zap.String("deployment", deployment)) //, zap.String("token", authToken)) //TODO authToken is userspecific
 	instancesURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", br.directorURL, deployment))
 	if err != nil {
@@ -220,7 +248,7 @@ func (br *BoshResolver) getInstances(deployment string, authToken string) ([]bos
 		return nil, res.StatusCode, fmt.Errorf("expected status code %d but got status code %d: %s", http.StatusOK, res.StatusCode, string(data))
 	}
 
-	var response []bosh.Instance
+	var response []BoshInstance
 
 	err = json.Unmarshal(data, &response)
 	if err != nil {

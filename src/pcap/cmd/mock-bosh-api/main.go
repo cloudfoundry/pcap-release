@@ -10,7 +10,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
+	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 )
 
@@ -51,7 +51,7 @@ func prepareMockBoshDirectorResponse() map[string]string {
 	timeString := "2022-09-26T21:28:39Z"
 	timestamp, _ := time.Parse(time.RFC3339, timeString)
 
-	haproxyInstances := []bosh.Instance{
+	haproxyInstances := []pcap.BoshInstance{
 		{
 			AgentId:     "idk",
 			Cid:         "agent_id:a9c3cda6-9cd9-457f-aad4-143405bf69db;resource_group_name:rg-azure-cfn01",

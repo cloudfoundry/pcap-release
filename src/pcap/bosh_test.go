@@ -11,7 +11,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap/bosh"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 )
 
@@ -161,7 +160,7 @@ func TestResolve(t *testing.T) {
 		},
 	}
 
-	var haproxyInstances []bosh.Instance
+	var haproxyInstances []BoshInstance
 
 	timeString := "2022-09-26T21:28:39Z"
 	timestamp, _ := time.Parse(time.RFC3339, timeString)
@@ -169,7 +168,7 @@ func TestResolve(t *testing.T) {
 		parts := strings.Split(endpoint.Identifier, "/")
 		job, id := parts[0], parts[1]
 
-		instance := bosh.Instance{
+		instance := BoshInstance{
 			AgentId:     endpoint.Identifier,
 			Cid:         "agent_id:a9c3cda6-9cd9-457f-aad4-143405bf69db;resource_group_name:rg-azure-cfn01",
 			Job:         job,
