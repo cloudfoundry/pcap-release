@@ -21,6 +21,7 @@ var (
 	errTooManyCaptures   = fmt.Errorf("too many concurrent captures")
 	errDraining          = fmt.Errorf("draining")
 	errUnexpectedMessage = fmt.Errorf("unexpected message")
+	errNoEndpoints       = fmt.Errorf("no matching endpoints found")
 )
 
 // pcapError is an attempt to work around the shortcomings of error handling in the gRPC

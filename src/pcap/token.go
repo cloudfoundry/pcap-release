@@ -24,7 +24,7 @@ type UaaKeyInfo struct {
 	N     string `json:"n"`
 }
 
-// verifyJWt checks the JWT token in tokenString and ensures that it's valid and contains the neededScope as claim.
+// VerifyJwt checks the JWT token in tokenString and ensures that it's valid and contains the neededScope as claim.
 // Validity is determined with the defaults, i.e.
 //   - validity time range
 //   - for RSA signed JWT that the RSA signature is consistent with the key provided by UAA
@@ -34,7 +34,6 @@ type UaaKeyInfo struct {
 //
 // returns a boolean that confirms that the token is valid, from a valid issuer and has the needed scope,
 // and an error in case anything went wrong while verifying the token and its scopes.
-
 func VerifyJwt(tokenString string, neededScope string, issuers []string) (bool, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if jku, ok := token.Header["jku"]; ok {

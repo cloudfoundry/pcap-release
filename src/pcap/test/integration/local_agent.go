@@ -2,10 +2,12 @@ package integration
 
 import (
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"net"
+
 	. "github.com/onsi/ginkgo/v2"
 	"go.uber.org/zap"
-	"net"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 var TestNodeIndex = 0

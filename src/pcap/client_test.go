@@ -80,17 +80,6 @@ func (x *MockAPIWriter) Recv() (*CaptureResponse, error) {
 	return response, err
 }
 
-//
-//func TestMain(m *testing.M) {
-//	// setup logger
-//	logger, err := zap.NewDevelopment()
-//	if err != nil {
-//		panic(err)
-//	}
-//	zap.ReplaceGlobals(logger)
-//	os.Exit(m.Run())
-//}
-
 func TestHandleStream(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -162,11 +151,11 @@ func TestNewClient(t *testing.T) {
 		expectedErrString string
 	}{
 		{
-			name:       "first run - file does not exist",
+			name:       "output file does not exist",
 			outputFile: outputFile,
 			wantErr:    false,
 		}, {
-			name:              "second run - file does exist",
+			name:              "output file does exist",
 			outputFile:        outputFile,
 			wantErr:           true,
 			expectedErrString: "output file testpcapfile.pcap already exists",
@@ -192,7 +181,7 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-// writes a predefined packet to a pcap-file, parses the file and compares timestamp and destination port
+// TestWritePacket writes a predefined packet to a pcap-file, parses the file and compares timestamp and destination port
 func TestWritePacket(t *testing.T) {
 	filename := "testfile.pcap"
 	file, err := os.Create(filename)

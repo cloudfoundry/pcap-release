@@ -81,7 +81,7 @@ func (a *Agent) Status(_ context.Context, _ *StatusRequest) (*StatusResponse, er
 	return s, nil
 }
 
-// EndpointRequest handler for the pcap-agent. See AgentServer.Capture documentation for details.
+// Capture handler for the pcap-agent. See AgentServer.Capture documentation for details.
 func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 	a.streamsWG.Add(1)
 	defer a.streamsWG.Done()
@@ -234,13 +234,13 @@ func readPackets(ctx context.Context, cancel CancelCauseFunc, handle pcapHandle,
 				return
 			}
 
-			data, ci, err := handle.ReadPacketData()
+			data, captureInfo, err := handle.ReadPacketData()
 			if err != nil {
 				cancel(fmt.Errorf("read packet: %w", err))
 				return
 			}
 
-			out <- newPacketResponse(data, ci)
+			out <- newPacketResponse(data, captureInfo)
 		}
 	}()
 

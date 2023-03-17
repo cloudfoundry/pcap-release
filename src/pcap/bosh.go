@@ -107,7 +107,6 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([
 
 	instances, _, err := br.getInstances(boshRequest.Deployment, boshRequest.Token)
 	if err != nil {
-		logger.Error("failed to get instances from bosh-director", zap.String(LogKeyTarget, ""))
 		return nil, err
 	}
 
@@ -118,7 +117,7 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([
 	}
 
 	if len(endpoints) == 0 {
-		return nil, fmt.Errorf("no matching endpoints found")
+		return nil, errNoEndpoints
 	}
 
 	logger.Debug("received AgentEndpoints from Bosh Director", zap.Any("agent-endpoint", endpoints))
@@ -159,7 +158,7 @@ func (br *BoshResolver) setup() error {
 	} else {
 		data, err := os.ReadFile(br.config.MTLS.CertificateAuthority)
 		if err != nil {
-			return fmt.Errorf("could not load bosh-director ca from %s (%s)", br.config.MTLS.CertificateAuthority, err)
+			return fmt.Errorf("could not load bosh-director ca from %q: %w", br.config.MTLS.CertificateAuthority, err)
 		}
 
 		boshCA := x509.NewCertPool()
@@ -207,7 +206,7 @@ func (br *BoshResolver) authenticate(authToken string) error {
 
 	allowed, err := VerifyJwt(authToken, br.config.TokenScope, br.uaaURLs)
 	if err != nil {
-		return fmt.Errorf("could not verify token %s (%s)", authToken, err)
+		return fmt.Errorf("could not verify token %s: %w", authToken, err) //TODO: let's not log tokens (see also L220?)
 	}
 
 	if !allowed {

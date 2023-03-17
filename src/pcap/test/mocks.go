@@ -21,11 +21,11 @@ import (
 )
 
 func MustParseURL(rawURL string) *url.URL {
-	url, err := url.Parse(rawURL)
+	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		panic(err)
 	}
-	return url
+	return parsedURL
 }
 
 func MockJwtAPI() (*httptest.Server, string) {

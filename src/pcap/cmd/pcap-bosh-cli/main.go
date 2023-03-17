@@ -217,7 +217,7 @@ func configFromFile(configFilename string) (*Config, error) {
 	return config, nil
 }
 
-// urlWithScheme prepends a string with https:// if no scheme is specified.
+// urlWithScheme prepends url with https:// if no scheme is specified.
 //
 // returns url with scheme prefix.
 func urlWithScheme(url string) string {
@@ -322,7 +322,7 @@ type Config struct {
 	Environments []Environment `yaml:"environments"`
 }
 
-// Environment contains all the necessary information to connect to a specifig bosh-director
+// Environment contains all the necessary information to connect to a specific bosh-director
 type Environment struct {
 	AccessToken     string       `yaml:"access_token" validate:"required"`
 	AccessTokenType string       `yaml:"access_token_type" validate:"required"`

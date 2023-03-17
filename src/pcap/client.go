@@ -199,7 +199,6 @@ func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 	zap.L().Info("received packet", zap.Int("bytes", len(packet.Data)), zap.Time("capture-timestamp", packet.Timestamp.AsTime()))
 }
 
-// TODO: still needed?
 func (c *Client) logProgress(ctx context.Context) {
 	logger := zap.L()
 	if c.packetFile == os.Stdout {
@@ -217,7 +216,7 @@ func (c *Client) logProgress(ctx context.Context) {
 				logger.Debug("pcap output file already closed: ", zap.Error(err))
 				return
 			}
-			logger.Debug(fmt.Sprintf("\033[2K\rWrote %s bytes to disk.", bytefmt.ByteSize(uint64(info.Size()))))
+			logger.Debug(fmt.Sprintf("%s bytes written to disk (total).", bytefmt.ByteSize(uint64(info.Size()))))
 		case <-ctx.Done():
 			return
 		}

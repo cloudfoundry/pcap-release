@@ -10,13 +10,14 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/google/gopacket"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"net"
 	"os"
 	"strings"
 	"sync"
 	"unicode"
+
+	"github.com/google/gopacket"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
