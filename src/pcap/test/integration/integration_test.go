@@ -484,14 +484,14 @@ var _ = Describe("Using LocalResolver", func() {
 
 				go func() {
 					time.Sleep(5 * time.Second)
-					fmt.Printf("sending cancel\n")
-					cancel(nil)
+					fmt.Printf("sending Stop\n")
+					client.StopRequest()
 				}()
 
 				err = client.HandleRequest(ctx, endpointRequest, captureOptions, cancel)
 				Expect(err).To(BeNil())
 
-				validatePcapFile(file)
+				validatePcapFile(file, 10*time.Second)
 			})
 		})
 
@@ -499,10 +499,10 @@ var _ = Describe("Using LocalResolver", func() {
 
 })
 
-func validatePcapFile(fileName string) {
+func validatePcapFile(fileName string, maxAge time.Duration) {
 	Expect(fileName).To(BeAnExistingFile())
 	handle, err := gopcap.OpenOffline(fileName)
-	Expect(err).To(BeNil())
+	Expect(err).ToNot(HaveOccurred())
 
 	defer handle.Close()
 
@@ -517,10 +517,10 @@ func validatePcapFile(fileName string) {
 
 	Expect(packets).ToNot(BeEmpty())
 
-	actualTimestamp := packets[0].Metadata().Timestamp
-	Expect(actualTimestamp).ToNot(BeNil())
-	delta := time.Since(actualTimestamp)
-	Expect(delta).To(BeNumerically(">", 5*time.Second))
+	firstTimestamp := packets[0].Metadata().Timestamp
+	Expect(firstTimestamp).ToNot(BeNil())
+	delta := time.Since(firstTimestamp)
+	Expect(delta).To(BeNumerically("<", maxAge), "Expected %s to be %s before %s", firstTimestamp, maxAge, time.Now())
 
 	//transportLayer := packets[0].TransportLayer()
 	//dstPort := transportLayer.TransportFlow().Dst().String()

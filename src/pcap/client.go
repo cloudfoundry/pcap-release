@@ -31,6 +31,7 @@ type Client struct {
 	// messageOut   *os.File  // TODO: may be required later to set message output target
 	// tlsCredentials credentials.TransportCredentials
 	aPIClient
+	stream API_CaptureClient
 }
 
 func NewClient(outputFile string, logger *zap.Logger) (*Client, error) {
@@ -94,20 +95,19 @@ func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointReq
 		},
 	}
 
-	var stream API_CaptureClient
-	stream, err = c.Capture(ctx)
+	c.stream, err = c.Capture(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = stream.Send(captureRequest)
+	err = c.stream.Send(captureRequest)
 	if err != nil {
 		return err
 	}
 
 	copyWg := &sync.WaitGroup{}
 	copyWg.Add(1)
-	go handleStream(stream, packetWriter, copyWg, cancel)
+	go handleStream(c.stream, packetWriter, copyWg, cancel)
 
 	go c.logProgress(ctx)
 
@@ -132,10 +132,18 @@ func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointReq
 	return nil
 }
 
+func (c *Client) StopRequest() {
+	err := c.stream.SendMsg(makeStopRequest())
+	if err != nil {
+		zap.L().Panic("could not stop")
+	}
+
+}
+
 func handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel CancelCauseFunc) {
 	logger := zap.L().With(zap.String(LogKeyHandler, "handleStream"))
 	for {
-		time.Sleep(handleStreamWait)
+		// time.Sleep(handleStreamWait)
 
 		res, err := stream.Recv()
 		if errors.Is(err, io.EOF) {

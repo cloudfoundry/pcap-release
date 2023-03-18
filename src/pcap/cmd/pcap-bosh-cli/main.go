@@ -142,7 +142,7 @@ func main() {
 	// set up capture request
 	ctx := context.Background()
 	ctx, cancel := pcap.WithCancelCause(ctx)
-	setupContextCancel(cancel)
+	setupContextCancel(client)
 	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups, environment.Alias)
 	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, 65_000) // TODO: get snaplen from config or parameters
 
@@ -290,7 +290,7 @@ func getEnvironment(environmentAlias string, config *Config) (*Environment, erro
 // setupContextCancel starts a goroutine to capture the SIGINT signal that's sent if the user sends CTRL+C.
 //
 // It then stops the capture using the pcap.CancelCauseFunc cancel.
-func setupContextCancel(cancel pcap.CancelCauseFunc) {
+func setupContextCancel(client *pcap.Client) {
 	logger.Debug("registering signal handler for SIGINT")
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
@@ -300,7 +300,7 @@ func setupContextCancel(cancel pcap.CancelCauseFunc) {
 		<-sigChan
 
 		logger.Info("received SIGINT, stopping capture")
-		cancel(nil)
+		client.StopRequest()
 	}()
 }
 
