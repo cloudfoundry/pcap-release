@@ -32,7 +32,7 @@ var (
 
 type options struct {
 	File               string   `short:"o" long:"file" description:"The output file. Written in binary pcap format." required:"true"`
-	ForceOverwriteFile bool     `short:"F" long:"force-overwrite-output-file" description:"Overwrites the output file if it already exists."`
+	ForceOverwriteFile bool     `short:"F" long:"force-overwrite" description:"Overwrites the output file if it already exists."`
 	PcapAPIURL         string   `short:"u" long:"pcap-api-url" description:"The URL of the PCAP API, e.g. pcap.cf.$LANDSCAPE_DOMAIN" env:"PCAP_API" required:"true"`
 	Filter             string   `short:"f" long:"filter" description:"Allows to provide a filter expression in pcap filter format." required:"false"`
 	Interface          string   `short:"i" long:"interface" description:"Specifies the network interface to listen on." default:"eth0" required:"false"`
@@ -88,11 +88,12 @@ func main() {
 		return
 	}
 
-	setLogLevel(opts.Verbose, opts.Quiet) // we cannot log to Debug before this point
+	// we cannot log to Debug before this point
+	setLogLevel(opts.Verbose, opts.Quiet)
 
 	logger.Debug("pcap-bosh-cli initialized", zap.Int64("compatibilityLevel", pcap.CompatibilityLevel))
 
-	err = checkOutputFile(opts.File, opts.ForceOverwriteFile) // TODO: we risk deleting a valid previous capture-file if "-f" is used and the capture fails. to prevent this, we'd have to pass ForceOverwriteFile to the client. Worth it?
+	err = checkOutputFile(opts.File, opts.ForceOverwriteFile)
 	if err != nil {
 		return
 	}

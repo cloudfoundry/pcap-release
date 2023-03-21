@@ -189,7 +189,9 @@ func writeMessage(message *Message) {
 	case MessageType_CONNECTION_ERROR:
 		logLevel = zapcore.ErrorLevel
 	}
-	zap.L().Log(logLevel, "received message", zap.String("message-type", message.Type.String()), zap.Any("message", message.Message))
+	// TODO: Find a way to assign the proper log level.
+	_ = logLevel
+	zap.S().Infof("%s(%s): %s", message.Origin, message.Type, message.Message)
 }
 
 func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
