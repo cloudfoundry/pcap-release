@@ -53,14 +53,16 @@ func main() {
 		var resolver *pcap.BoshResolver
 		resolver, err = pcap.NewBoshResolver(env)
 		if err != nil {
-			log.Warn("failed to setup BoshResolver", zap.Error(err)) // TODO: we only want to warn if a resolver is nonfunctional. Is this the correct way to do this?
-			break
+			log.Fatal("failed to setup BoshResolver", zap.Error(err))
 		}
 		api.RegisterResolver(resolver)
 	}
 
 	//TODO: CFAgentResolver
-	//TODO: Check if there are working resolvers, otherwise fail?
+
+	if len(api.RegisteredResolverNames()) == 0 {
+		log.Fatal("could not register any AgentResolvers")
+	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Listen.Port))
 	if err != nil {

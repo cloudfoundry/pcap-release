@@ -22,7 +22,7 @@ func (cf *CloudfoundryResolver) Resolve(request *EndpointRequest, log *zap.Logge
 	log = log.With(zap.String("handler", cf.Name()))
 	log.Info("Handling request")
 
-	// TODO Validate & get targets from bosh
+	// TODO Validate & get targets from cloud-controller
 
 	_ = cf.Config.Targets
 

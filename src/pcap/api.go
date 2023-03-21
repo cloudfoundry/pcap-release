@@ -84,7 +84,7 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 		Healthy:            !api.draining(),
 		CompatibilityLevel: 0,
 		Message:            "Ready.",
-		Resolvers:          api.resolverNames(),
+		Resolvers:          api.RegisteredResolverNames(),
 	}
 
 	if api.draining() {
@@ -94,8 +94,8 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	return apiStatus, nil
 }
 
-func (api *API) resolverNames() []string {
-	//TODO alternative? registeredHandlerNames := reflect.ValueOf(api.resolvers).MapKeys()
+func (api *API) RegisteredResolverNames() []string {
+	// TODO alternative? registeredHandlerNames := reflect.ValueOf(api.resolvers).MapKeys()
 	resolverNames := make([]string, len(api.resolvers))
 	i := 0
 	for key := range api.resolvers {

@@ -23,15 +23,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const handleStreamWait = 200 * time.Millisecond
 const logProgressWait = 5 * time.Second
 
 type Client struct {
 	packetFile *os.File
-	// messageOut   *os.File  // TODO: may be required later to set message output target
-	// tlsCredentials credentials.TransportCredentials
+	stream     API_CaptureClient
 	aPIClient
-	stream API_CaptureClient
 }
 
 func NewClient(outputFile string, logger *zap.Logger) (*Client, error) {
@@ -137,7 +134,6 @@ func (c *Client) StopRequest() {
 	if err != nil {
 		zap.L().Panic("could not stop")
 	}
-
 }
 
 func handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel CancelCauseFunc) {
@@ -147,7 +143,7 @@ func handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg 
 
 		res, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
-			logger.Info("clean stop, done") // TODO: fix logger
+			logger.Info("clean stop, done")
 			cancel(nil)
 			break
 		}

@@ -75,8 +75,7 @@ func main() {
 
 	defer func() {
 		if err != nil {
-			//logger.Error("execution failed", zap.Error(err))
-			logger.Error(err.Error())
+			logger.Error("execution failed", zap.Error(err))
 			os.Exit(1)
 		}
 	}()
@@ -89,7 +88,10 @@ func main() {
 	}
 
 	// we cannot log to Debug before this point
-	setLogLevel(opts.Verbose, opts.Quiet)
+	err = setLogLevel(opts.Verbose, opts.Quiet)
+	if err != nil {
+		return
+	}
 
 	logger.Debug("pcap-bosh-cli initialized", zap.Int64("compatibilityLevel", pcap.CompatibilityLevel))
 
