@@ -192,7 +192,9 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 
 	targets, resolveErr := api.resolveAgentEndpoints(opts.Start.Request, log)
 	if errors.Is(resolveErr, errValidationFailed) {
-		return errorf(codes.InvalidArgument, "capture targets not found: %w", err)
+		return errorf(codes.InvalidArgument, "capture targets not found: %w", resolveErr)
+	} else if resolveErr != nil {
+		return errorf(codes.Unknown, "could not resolve agent endpoints: %w", resolveErr)
 	}
 
 	// Start capture
@@ -240,22 +242,22 @@ func loadTLSCredentials(agentMTLS *MutualTLS) (credentials.TransportCredentials,
 }
 
 // resolveAgentEndpoints tries all registered api.resolvers until one responds or none can be found that
-// support this capture request. The responsible handler is then queried for the applicable pcap-agent endpoints corresponding to this capture request.
-func (api *API) resolveAgentEndpoints(capture *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
+// support this EndpointRequest. The responsible resolver is then queried for the applicable pcap-agent endpoints corresponding to this EndpointRequest.
+func (api *API) resolveAgentEndpoints(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
 	for name, resolver := range api.resolvers {
-		if resolver.CanResolve(capture) {
+		if resolver.CanResolve(request) {
 			log.Debug("resolving agent endpoints")
 
-			agents, err := resolver.Resolve(capture, log)
+			agents, err := resolver.Resolve(request, log)
 			if err != nil {
-				return nil, fmt.Errorf("error while handling %v via %s: %w", capture, name, err)
+				return nil, fmt.Errorf("error while resolving request via %s: %w", name, err)
 			}
 
 			return agents, nil
 		}
 	}
 
-	return nil, fmt.Errorf("no resolver for %v", capture)
+	return nil, fmt.Errorf("no resolver for %v", request)
 }
 
 func checkAgentStatus(statusRes *StatusResponse, err error, target AgentEndpoint) error {

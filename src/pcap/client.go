@@ -31,18 +31,23 @@ type Client struct {
 	aPIClient
 }
 
+// NewClient sets up logging for the client and creates the outputFile.
+// It assumes that the outputFile does not pre-exist and that the path is writeable (should be checked by CLI).
+//
+// NewClient returns a new Client if there are no issues with outputFile creation.
 func NewClient(outputFile string, logger *zap.Logger) (*Client, error) {
 	var err error
 
 	client := &Client{}
 
-	logger = logger.With(zap.String(LogKeyTarget, "client"))
+	// TODO (discussion) distinguishing between cli and client is irrelevant for cli-user. We don't need to specify target: client
+	// logger = logger.With(zap.String(LogKeyTarget, "client"))
 	zap.ReplaceGlobals(logger)
 
 	if len(outputFile) == 0 {
 		client.packetFile = os.Stdout
 	} else {
-		client.packetFile, err = tryCreateOutputFile(outputFile)
+		client.packetFile, err = os.Create(outputFile)
 		if err != nil {
 			return nil, err
 		}
@@ -59,6 +64,9 @@ func (c *Client) Wait() {
 
 }
 
+// ConnectToAPI sets up the grpc-connection between client and pcap-api.
+//
+// Depending on the http scheme in apiURL, it uses plain HTTP or TLS.
 func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 	var (
 		err   error
@@ -82,6 +90,13 @@ func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 	return nil
 }
 
+// TODO: (discussion) We should brainstorm more appropriate names for HandleRequest and handleStream
+
+// HandleRequest is the wrapper function for all operations around an EndpointRequest.
+// It writes the pcap-header to the outputFile, sends the CaptureRequest to the pcap-api
+// and handles the cleanup after the capture is done.
+// It then delegates writing individual packets and logging messages from the api to handleStream.
+// logProgress is called in another goroutine to asynchronously write out the bytes written to the outputFile.
 func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointRequest, options *CaptureOptions, cancel CancelCauseFunc) error {
 	logger := zap.L().With(zap.String(LogKeyHandler, "HandleRequest"))
 	// setup output/pcap-file
@@ -144,11 +159,12 @@ func (c *Client) StopRequest() {
 	}
 }
 
+// handleStream reads CaptureResponse's from the api in a loop and delegates writing/logging messages & packets to writeMessage / writePacket.
+//
+// It terminates if an error or clean stop-message is received.
 func handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel CancelCauseFunc) {
 	logger := zap.L().With(zap.String(LogKeyHandler, "handleStream"))
 	for {
-		// time.Sleep(handleStreamWait)
-
 		res, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
 			logger.Info("clean stop, done")
@@ -172,6 +188,7 @@ func handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg 
 	copyWg.Done()
 }
 
+// writeMessage accepts a Message and writes a log-line using a log-level corresponding to the severity of the message.
 func writeMessage(message *Message) {
 	var logLevel zapcore.Level
 
@@ -198,6 +215,7 @@ func writeMessage(message *Message) {
 	zap.S().Infof("%s(%s): %s", message.Origin, message.Type, message.Message)
 }
 
+// writePacket writes a Packet to the outputFile (in packetWriter).
 func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 	log := zap.L()
 	captureInfo := gopacket.CaptureInfo{
@@ -216,6 +234,7 @@ func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 	}
 }
 
+// logProgress logs out the size of the outputFile every 5 seconds (see logProgressWait).
 func (c *Client) logProgress(ctx context.Context) {
 	logger := zap.L()
 	if c.packetFile == os.Stdout {
@@ -224,7 +243,8 @@ func (c *Client) logProgress(ctx context.Context) {
 		return
 	}
 
-	ticker := time.Tick(logProgressWait)
+	// this is an endless function, so it's ok to use time.Tick()
+	ticker := time.Tick(logProgressWait) //nolint
 	for {
 		select {
 		case <-ticker:
@@ -238,11 +258,4 @@ func (c *Client) logProgress(ctx context.Context) {
 			return
 		}
 	}
-}
-
-func tryCreateOutputFile(outputFile string) (*os.File, error) {
-	if _, err := os.Stat(outputFile); os.IsNotExist(err) {
-		return os.Create(outputFile)
-	}
-	return nil, fmt.Errorf("output file %s already exists", outputFile)
 }
