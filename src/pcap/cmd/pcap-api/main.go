@@ -33,45 +33,38 @@ func main() {
 	}
 
 	if err != nil {
-		log.Fatal("unable to initialize", zap.Error(err))
+		log.Panic("Unable to initialize", zap.Error(err))
 	}
 
 	err = config.validate()
 	if err != nil {
-		log.Fatal("unable to validate config", zap.Error(err))
+		log.Panic("Failed to validate config", zap.Error(err))
 	}
 
 	cmd.SetLogLevel(log, config.LogLevel)
 
 	api, err := pcap.NewAPI(config.Buffer, *config.Agents, config.ID, config.ConcurrentCaptures)
 	if err != nil {
-		log.Fatal("unable to create api", zap.Error(err))
+		log.Panic("Unable to create api", zap.Error(err))
 	}
 
 	// set up a BoshResolver for each bosh environment
-	for _, env := range config.BoshResolverConfigs {
-		var resolver *pcap.BoshResolver
-		resolver, err = pcap.NewBoshResolver(env)
-		if err != nil {
-			log.Fatal("failed to setup BoshResolver", zap.Error(err))
-		}
-		api.RegisterResolver(resolver)
-	}
+	registerBoshResolvers(config.BoshResolverConfigs, log, api)
 
 	//TODO: CFAgentResolver
 
 	if len(api.RegisteredResolverNames()) == 0 {
-		log.Fatal("could not register any AgentResolvers")
+		log.Panic("Could not register any AgentResolvers")
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Listen.Port))
 	if err != nil {
-		log.Fatal("unable to create listener", zap.Error(err))
+		log.Panic("unable to create listener", zap.Error(err))
 	}
 
 	tlsCredentials, err := cmd.LoadTLSCredentials(config.CommonConfig)
 	if err != nil {
-		log.Fatal("unable to load provided TLS credentials", zap.Error(err))
+		log.Panic("unable to load provided TLS credentials", zap.Error(err))
 	}
 	server := grpc.NewServer(grpc.Creds(tlsCredentials))
 	pcap.RegisterAPIServer(server, api)
@@ -81,8 +74,21 @@ func main() {
 	log.Info("starting server")
 	err = server.Serve(lis)
 	if err != nil {
-		log.Fatal("serve returned unsuccessfully", zap.Error(err))
+		log.Panic("serve returned unsuccessfully", zap.Error(err))
 	}
 
 	log.Info("serve returned successfully")
+}
+
+// registerBoshResolvers tries to register all BoshResolvers defined in configs and registers them in api.
+//
+// Logs an error if the resolver could not be initialized.
+func registerBoshResolvers(configs []pcap.BoshResolverConfig, log *zap.Logger, api *pcap.API) {
+	for _, env := range configs {
+		resolver, err := pcap.NewBoshResolver(env)
+		if err != nil {
+			log.Error("Failed to setup BoshResolver", zap.String(pcap.LogKeyResolver, env.EnvironmentAlias), zap.Error(err))
+		}
+		api.RegisterResolver(resolver)
+	}
 }
