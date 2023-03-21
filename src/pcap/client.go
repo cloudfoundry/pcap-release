@@ -199,6 +199,7 @@ func writeMessage(message *Message) {
 }
 
 func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
+	log := zap.L()
 	captureInfo := gopacket.CaptureInfo{
 		Timestamp:      packet.Timestamp.AsTime(),
 		CaptureLength:  len(packet.Data),
@@ -208,10 +209,10 @@ func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 	}
 	err := packetWriter.WritePacket(captureInfo, packet.Data)
 	if err != nil {
-		zap.L().Error("writing packet to file failed", zap.Error(err))
+		log.Error("writing packet to file failed", zap.Error(err))
 	}
-	if zap.L().Level() <= zap.DebugLevel {
-		zap.L().Debug("received packet", zap.Int("bytes", len(packet.Data)), zap.Time("capture-timestamp", packet.Timestamp.AsTime()))
+	if log.Level().Enabled(zap.DebugLevel) {
+		log.Debug("received packet", zap.Int("bytes", len(packet.Data)), zap.Time("capture-timestamp", packet.Timestamp.AsTime()))
 	}
 }
 
