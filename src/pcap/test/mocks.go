@@ -28,12 +28,12 @@ func MustParseURL(rawURL string) *url.URL {
 	return parsedURL
 }
 
-func MockJwtAPI() (*httptest.Server, string) {
-	type JwtAPIMock struct {
+func MockJWTAPI() (*httptest.Server, string) {
+	type JWTAPIMock struct {
 		UAAUrl string
 	}
 
-	var JwtApi JwtAPIMock
+	var JWTAPI JWTAPIMock //TODO: (discussion) linter deadlock?
 
 	mux := http.NewServeMux()
 	ts := httptest.NewServer(mux)
@@ -58,7 +58,7 @@ func MockJwtAPI() (*httptest.Server, string) {
 		writer.Write([]byte(response))
 	})
 
-	JwtApi.UAAUrl = ts.URL
+	JWTAPI.UAAUrl = ts.URL
 
 	return ts, token
 }

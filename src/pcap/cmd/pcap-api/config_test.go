@@ -54,7 +54,7 @@ func TestAPIConfig(t *testing.T) {
 				EnvironmentAlias: "bootstrap_bosh",
 				AgentPort:        9494,
 				TokenScope:       "bosh.admin",
-				MTLS: pcap.MutualTLS{
+				MTLS: &pcap.MutualTLS{
 					TLS: pcap.TLS{
 						Certificate:          "bootstrap-bosh-client-cert.pem",
 						PrivateKey:           "bootstrap-bosh-client-key.key",
@@ -69,7 +69,7 @@ func TestAPIConfig(t *testing.T) {
 				EnvironmentAlias: "bosh",
 				AgentPort:        9494,
 				TokenScope:       "bosh.admin",
-				MTLS: pcap.MutualTLS{
+				MTLS: &pcap.MutualTLS{
 					TLS: pcap.TLS{
 						Certificate:          "bosh-client-cert.pem",
 						PrivateKey:           "bosh-client-key.key",

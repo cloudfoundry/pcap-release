@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"regexp"
 	"time"
@@ -293,23 +292,6 @@ func getEnvironment(environmentAlias string, config *Config) (*Environment, erro
 	return nil, fmt.Errorf("could not find bosh-environment %s in config", environmentAlias)
 }
 
-// setupContextCancel starts a goroutine to capture the SIGINT signal that's sent if the user sends CTRL+C.
-//
-// It then stops the capture using the pcap.CancelCauseFunc cancel.
-func setupContextCancel(client *pcap.Client) {
-	logger.Debug("registering signal handler for SIGINT")
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
-
-	go func() {
-		logger.Debug("waiting for SIGINT to be sent")
-		<-sigChan
-
-		logger.Info("received SIGINT, stopping capture")
-		client.StopRequest()
-	}()
-}
-
 // createEndpointRequest is a helper function to create a pcap.EndpointRequest from parameters.
 func createEndpointRequest(token string, deployment string, instanceGroups []string, environmentAlias string) *pcap.EndpointRequest {
 	endpointRequest := &pcap.EndpointRequest{
@@ -454,7 +436,7 @@ func (e *Environment) fetchUAAURL() error {
 		return err
 	}
 
-	uaaURL, err := url.Parse(info.UserAuthentication.Options.Url)
+	uaaURL, err := url.Parse(info.UserAuthentication.Options.URL)
 	if err != nil {
 		return err
 	}

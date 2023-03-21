@@ -73,9 +73,9 @@ type NodeConfig struct {
 //
 // Note: the TLS version is currently hard-coded to TLSv1.3.
 func (c NodeConfig) TLSCredentials() (credentials.TransportCredentials, error) {
-	if tls := c.Listen.TLS; tls != nil {
+	if tlsConfig := c.Listen.TLS; tlsConfig != nil {
 		// FIXME: peerCommonName should be known for mTLS?
-		return LoadTLSCredentials(tls.Certificate, tls.PrivateKey, &tls.CertificateAuthority, nil, nil)
+		return LoadTLSCredentials(tlsConfig.Certificate, tlsConfig.PrivateKey, &tlsConfig.CertificateAuthority, nil, nil)
 	}
 	return insecure.NewCredentials(), nil
 
@@ -83,11 +83,7 @@ func (c NodeConfig) TLSCredentials() (credentials.TransportCredentials, error) {
 
 // LoadTLSCredentials creates TLS transport credentials from the given parameters.
 func LoadTLSCredentials(certFile, keyFile string, caFile *string, peerCAFile *string, peerCommonName *string) (credentials.TransportCredentials, error) {
-	tlsConf := &tls.Config{
-		MinVersion: tls.VersionTLS13,
-		MaxVersion: tls.VersionTLS13,
-		ClientAuth: tls.RequireAndVerifyClientCert,
-	}
+	tlsConf := SecureDefaultTLSConfig(nil) //TODO: (discussion) we reduced MinVersion from tls.VersionTLS13 to VersionTLS12 here
 
 	if certFile != "" && keyFile != "" {
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
@@ -147,4 +143,13 @@ func createCAPool(certificateAuthorityFile string) (*x509.CertPool, error) {
 		caPool.AddCert(ca)
 	}
 	return caPool, nil
+}
+
+func SecureDefaultTLSConfig(rootCAs *x509.CertPool) *tls.Config {
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		MaxVersion: tls.VersionTLS13,
+		ClientAuth: tls.RequireAndVerifyClientCert,
+		RootCAs:    rootCAs,
+	}
 }

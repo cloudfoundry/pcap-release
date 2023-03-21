@@ -15,12 +15,11 @@ import (
 )
 
 func NewResolverWithMockBoshAPI(responses map[string]string) (*BoshResolver, error) {
-	jwtapi, _ := test.MockJwtAPI()
+	jwtapi, _ := test.MockJWTAPI()
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
 	config := BoshResolverConfig{
 		RawDirectorURL:   boshAPI.URL,
 		EnvironmentAlias: "bosh",
-		MTLS:             MutualTLS{},
 		AgentPort:        8083,
 		TokenScope:       "bosh.admin", // TODO Test for other scopes?
 	}
@@ -33,7 +32,7 @@ func NewResolverWithMockBoshAPI(responses map[string]string) (*BoshResolver, err
 }
 
 func TestNewBoshResolver(t *testing.T) {
-	jwtapi, _ := test.MockJwtAPI()
+	jwtapi, _ := test.MockJWTAPI()
 	boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
 
 	tests := []struct {
@@ -169,20 +168,23 @@ func TestResolve(t *testing.T) {
 		job, id := parts[0], parts[1]
 
 		instance := BoshInstance{
-			AgentId:     endpoint.Identifier,
+			AgentID:     endpoint.Identifier,
 			Cid:         "agent_id:a9c3cda6-9cd9-457f-aad4-143405bf69db;resource_group_name:rg-azure-cfn01",
 			Job:         job,
 			Index:       0,
-			Id:          id,
+			ID:          id,
 			Az:          "z1",
 			Ips:         []string{endpoint.IP},
-			VmCreatedAt: timestamp,
-			ExpectsVm:   true,
+			VMCreatedAt: timestamp,
+			ExpectsVM:   true,
 		}
 		haproxyInstances = append(haproxyInstances, instance)
 	}
 
 	instances, err := json.Marshal(haproxyInstances)
+	if err != nil {
+		panic(err)
+	}
 
 	responses := map[string]string{
 		fmt.Sprintf("/deployments/%v/instances", deploymentName): string(instances),

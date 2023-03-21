@@ -380,13 +380,13 @@ func TestAPIStatus(t *testing.T) {
 }
 
 func TestAPIRegisterHandler(t *testing.T) {
-	jwtapi, _ := test.MockJwtAPI()
+	jwtapi, _ := test.MockJWTAPI()
 	boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
 
 	config := BoshResolverConfig{
 		RawDirectorURL:   boshAPI.URL,
 		EnvironmentAlias: "bosh",
-		MTLS:             MutualTLS{},
+		MTLS:             nil,
 		AgentPort:        8083,
 	}
 	boshResolver, err := NewBoshResolver(config)

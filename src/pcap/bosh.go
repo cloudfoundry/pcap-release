@@ -1,55 +1,55 @@
 package pcap
 
 import (
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v4"
+	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 )
 
 type BoshInfo struct {
 	Name            string `json:"name"`
-	Uuid            string `json:"uuid"`
+	UUID            string `json:"uuid"`
 	Version         string `json:"version"`
 	Cpi             string `json:"cpi"`
-	StemcellOs      string `json:"stemcell_os"`
+	StemcellOS      string `json:"stemcell_os"`
 	StemcellVersion string `json:"stemcell_version"`
 
 	UserAuthentication struct {
 		Type    string `json:"type"`
 		Options struct {
-			Url  string   `json:"url"`
-			Urls []string `json:"urls"`
+			URL  string   `json:"url"`
+			URLs []string `json:"urls"`
 		} `json:"options"`
 	} `json:"user_authentication"`
 }
 
 type BoshInstance struct {
-	AgentId     string    `json:"agent_id"`
+	AgentID     string    `json:"agent_id"`
 	Cid         string    `json:"cid"`
 	Job         string    `json:"job"`
 	Index       int       `json:"index"`
-	Id          string    `json:"id"`
+	ID          string    `json:"id"`
 	Az          string    `json:"az"`
 	Ips         []string  `json:"ips"`
-	VmCreatedAt time.Time `json:"vm_created_at"`
-	ExpectsVm   bool      `json:"expects_vm"`
+	VMCreatedAt time.Time `json:"vm_created_at"`
+	ExpectsVM   bool      `json:"expects_vm"`
 }
 
 type BoshResolverConfig struct {
-	RawDirectorURL   string    `yaml:"director_url" validate:"required,url"`
-	EnvironmentAlias string    `yaml:"alias" validate:"required"`
-	AgentPort        int       `yaml:"agent_port" validate:"required,gt=0,lte=65535"` //TODO: what about api.agents.port?
-	TokenScope       string    `yaml:"token_scope" validate:"required"`
-	MTLS             MutualTLS `yaml:"mtls" validate:"omitempty,structonly"` // TODO: this skips validation of the nested fields
+	RawDirectorURL   string     `yaml:"director_url" validate:"required,url"`
+	EnvironmentAlias string     `yaml:"alias" validate:"required"`
+	AgentPort        int        `yaml:"agent_port" validate:"required,gt=0,lte=65535"`
+	TokenScope       string     `yaml:"token_scope" validate:"required"`
+	MTLS             *MutualTLS `yaml:"mtls" validate:"omitempty"`
 }
 
 type BoshResolver struct {
@@ -58,6 +58,7 @@ type BoshResolver struct {
 	config      BoshResolverConfig
 	directorURL *url.URL
 	logger      *zap.Logger
+	boshRootCAs *x509.CertPool
 }
 
 func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
@@ -66,10 +67,19 @@ func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 		return nil, fmt.Errorf("cannot initialize BoshResolver for environment %s. %w", config.EnvironmentAlias, err)
 	}
 
+	var boshRootCAs *x509.CertPool
+	if config.MTLS != nil {
+		boshRootCAs, err = createCAPool(config.MTLS.CertificateAuthority)
+		if err != nil {
+			return nil, fmt.Errorf("could not create bosh CA pool: %w", err)
+		}
+	}
+
 	resolver := &BoshResolver{
 		logger:      zap.L().With(zap.String(LogKeyHandler, config.EnvironmentAlias)),
 		config:      config,
 		directorURL: directorURL,
+		boshRootCAs: boshRootCAs,
 	}
 
 	err = resolver.setup()
@@ -112,7 +122,7 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([
 
 	var endpoints []AgentEndpoint
 	for _, instance := range instances {
-		identifier := strings.Join([]string{instance.Job, instance.Id}, "/")
+		identifier := strings.Join([]string{instance.Job, instance.ID}, "/")
 		endpoints = append(endpoints, AgentEndpoint{IP: instance.Ips[0], Port: br.config.AgentPort, Identifier: identifier})
 	}
 
@@ -153,49 +163,46 @@ func (br *BoshResolver) validate(endpointRequest *EndpointRequest) error {
 func (br *BoshResolver) setup() error {
 	br.logger.Info("setting Up BoshResolver", zap.Any("resolver-config", br.config))
 
-	if br.config.MTLS.CertificateAuthority == "" {
+	if br.config.MTLS == nil {
 		br.client = http.DefaultClient
 	} else {
-		data, err := os.ReadFile(br.config.MTLS.CertificateAuthority)
-		if err != nil {
-			return fmt.Errorf("could not load bosh-director ca from %q: %w", br.config.MTLS.CertificateAuthority, err)
-		}
-
-		boshCA := x509.NewCertPool()
-		ok := boshCA.AppendCertsFromPEM(data)
-
-		if !ok {
-			return fmt.Errorf("could not add bosh-director ca from %s, adding to the cert pool failed", br.config.MTLS.CertificateAuthority)
-		}
-
 		br.client = &http.Client{
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					RootCAs: boshCA,
-				},
+				TLSClientConfig: SecureDefaultTLSConfig(br.boshRootCAs),
 			},
 		}
 	}
 
 	br.logger.Info("discovering bosh-UAA endpoint")
-	infoEndpoint := br.directorURL.JoinPath("/info").String()
-	response, err := br.client.Get(infoEndpoint)
+	ptr := &br.directorURL
+	infoEndpoint := *ptr
+	infoEndpoint.Path = "/info"
+	// TODO: (discussion) weird. br.directorURL.JoinPath("/info") is buggy: https://github.com/golang/go/issues/58605
 
+	response, err := br.client.Do(&http.Request{
+		Method: http.MethodGet,
+		URL:    infoEndpoint,
+	})
 	if err != nil {
 		return fmt.Errorf("could not fetch bosh-director API from %v: %w", br.config.RawDirectorURL, err)
 	}
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("received non-OK response from bosh-director: %s", response.Status)
+	}
+
+	defer response.Body.Close()
 
 	var apiResponse *BoshInfo
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
-		return fmt.Errorf("could not read bosh-director API response: %s", err)
+		return fmt.Errorf("could not read bosh-director API response: %w", err)
 	}
 	err = json.Unmarshal(data, &apiResponse)
 	if err != nil {
-		return fmt.Errorf("could not parse bosh-director API response: %s", err)
+		return fmt.Errorf("could not parse bosh-director API response: %w", err)
 	}
 
-	br.uaaURLs = apiResponse.UserAuthentication.Options.Urls
+	br.uaaURLs = apiResponse.UserAuthentication.Options.URLs
 
 	br.logger.Info("connected to bosh-director", zap.Any("bosh-director", apiResponse))
 
@@ -203,10 +210,9 @@ func (br *BoshResolver) setup() error {
 }
 
 func (br *BoshResolver) authenticate(authToken string) error {
-
-	allowed, err := VerifyJwt(authToken, br.config.TokenScope, br.uaaURLs)
+	allowed, err := br.verifyJWT(authToken)
 	if err != nil {
-		return fmt.Errorf("could not verify token %s: %w", authToken, err) //TODO: let's not log tokens (see also L220?)
+		return fmt.Errorf("could not verify token: %w", err)
 	}
 
 	if !allowed {
@@ -217,7 +223,7 @@ func (br *BoshResolver) authenticate(authToken string) error {
 }
 
 func (br *BoshResolver) getInstances(deployment string, authToken string) ([]BoshInstance, int, error) {
-	br.logger.Debug("checking token-permissions", zap.String("director-url", br.directorURL.String()), zap.String("deployment", deployment)) //, zap.String("token", authToken)) //TODO authToken is userspecific
+	br.logger.Debug("checking token-permissions", zap.String("director-url", br.directorURL.String()), zap.String("deployment", deployment))
 	instancesURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", br.directorURL, deployment))
 	if err != nil {
 		return nil, 0, err
@@ -255,4 +261,148 @@ func (br *BoshResolver) getInstances(deployment string, authToken string) ([]Bos
 	}
 
 	return response, res.StatusCode, nil
+}
+
+// UaaKeyInfo holds the response of the UAA /token_keys endpoint.
+type UaaKeyInfo struct {
+	Kty   string `json:"kty"`
+	E     string `json:"e"`
+	Use   string `json:"use"`
+	Kid   string `json:"kid"`
+	Alg   string `json:"alg"`
+	Value string `json:"value"`
+	N     string `json:"n"`
+}
+
+// verifyJWT checks the JWT token in tokenString and ensures that it's valid and contains the neededScope as claim.
+// Validity is determined with the defaults, i.e.
+//   - validity time range
+//   - for RSA signed JWT that the RSA signature is consistent with the key provided by UAA
+//   - that there is a claim 'scope' that contains one entry that matches neededScope.
+//
+// Limitations: only RSA signed tokens are supported.
+//
+// returns a boolean that confirms that the token is valid, from a valid issuer and has the needed scope,
+// and an error in case anything went wrong while verifying the token and its scopes.
+func (br *BoshResolver) verifyJWT(tokenString string) (bool, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if jku, ok := token.Header["jku"]; ok {
+			jkuURL, err := url.Parse(jku.(string))
+			if err != nil {
+				return nil, err
+			}
+
+			for _, issuer := range br.uaaURLs {
+				var issuerURL *url.URL
+				issuerURL, err = url.Parse(issuer)
+				if err != nil {
+					log.Warnf("could not parse URL %s: %v", issuer, err)
+					continue
+				}
+
+				if strings.HasPrefix(jkuURL.String(), issuerURL.String()) {
+					return br.parseRsaToken(token)
+				}
+			}
+			return nil, fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, br.uaaURLs)
+		}
+		return nil, fmt.Errorf("header 'jku' missing from token, cannot verify signature")
+	})
+
+	if err != nil || !token.Valid {
+		return false, err
+	}
+
+	if claims, claimsOk := token.Claims.(jwt.MapClaims); claimsOk {
+		if scopes, ok := claims["scope"].([]interface{}); ok {
+			for _, scope := range scopes {
+				if scope.(string) == br.config.TokenScope {
+					return true, nil
+				}
+			}
+		}
+	}
+
+	return false, fmt.Errorf("could not find scope %q in token claims", br.config.TokenScope)
+}
+
+// parseRsaToken uses the token information for RSA signed JWT tokens and retrieves
+// the public key information from the 'jku' header in order to retrieve key information
+// (key ID, RSA public key), which is used to verify the token.
+//
+// Limitation: only supports RSA tokens using the 'jku' header, which points to a URL
+// that can be used to retrieve key information.
+func (br *BoshResolver) parseRsaToken(token *jwt.Token) (interface{}, error) {
+	if rsa, ok := token.Method.(*jwt.SigningMethodRSA); ok {
+		// with the RSA signing method, the key is a public key / certificate that can be
+		// retrieved from the JKU endpoint (among other places).
+		if rawKeyInfoURL, ok := token.Header["jku"].(string); ok {
+			var kid string
+			if kid, ok = token.Header["kid"].(string); ok {
+				keyInfoURL, err := url.Parse(rawKeyInfoURL)
+				if err != nil {
+					return nil, err
+				}
+
+				key, err := br.fetchPublicKey(keyInfoURL, kid)
+				if err != nil {
+					return nil, err
+				}
+
+				if rsa.Alg() != key.Alg {
+					return nil, fmt.Errorf("signature algorithm %q does not match expected token key information %q", rsa.Alg(), key.Alg)
+				}
+
+				// the RSA public key returned here is used to check the JWT token signature.
+				// It is provided by the URL encoded in the token (in the 'jku' header).
+				// For valid tokens, this URL is verified against the UAA URLs reported by BOSH Director later.
+				return jwt.ParseRSAPublicKeyFromPEM([]byte(key.Value))
+			}
+		}
+
+		return nil, fmt.Errorf("could not find key information URL in token headers: %+v", token.Header)
+	}
+
+	return nil, fmt.Errorf("unsupported signing method: %v", token.Header["alg"])
+}
+
+// fetchPublicKey fetches the token key information from url and returns the key with the Key ID (kid).
+//
+// returns an error if no key can be found with the requested kid or an error arises while communicating with url.
+//
+// Limitation: This will only fetch keys with RSA as signature algorithm.
+func (br *BoshResolver) fetchPublicKey(url *url.URL, kid string) (*UaaKeyInfo, error) {
+
+	res, err := br.client.Do(&http.Request{
+		Method: http.MethodGet,
+		URL:    url,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	keys := struct {
+		Keys []UaaKeyInfo
+	}{}
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(data, &keys)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, key := range keys.Keys {
+		if key.Kty == "RSA" && key.Kid == kid {
+			matchingKey := key
+			return &matchingKey, nil
+		}
+	}
+
+	return nil, fmt.Errorf("key info of type RSA for kid %q not found in token keys endpoint", kid)
 }

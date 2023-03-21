@@ -31,7 +31,7 @@ func init() {
 }
 
 func main() {
-	jwtapi, _ := test.MockJwtAPI()
+	jwtapi, _ := test.MockJWTAPI()
 	responses := prepareMockBoshDirectorResponse()
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
 	defer boshAPI.Close()
@@ -53,15 +53,15 @@ func prepareMockBoshDirectorResponse() map[string]string {
 
 	haproxyInstances := []pcap.BoshInstance{
 		{
-			AgentId:     "idk",
+			AgentID:     "idk",
 			Cid:         "agent_id:a9c3cda6-9cd9-457f-aad4-143405bf69db;resource_group_name:rg-azure-cfn01",
 			Job:         "ha_proxy_z1",
 			Index:       0,
-			Id:          "1234",
+			ID:          "1234",
 			Az:          "z1",
 			Ips:         []string{"127.0.0.1"},
-			VmCreatedAt: timestamp,
-			ExpectsVm:   true,
+			VMCreatedAt: timestamp,
+			ExpectsVM:   true,
 		},
 	}
 
