@@ -42,6 +42,7 @@ type options struct {
 	Deployment         string   `short:"d" long:"deployment" description:"The name of the deployment in which you would like to capture." required:"true"`
 	InstanceGroups     []string `short:"g" long:"instance-group" description:"The name of an instance group in the deployment in which you would like to capture. Can be defined multiple times." required:"true"`
 	InstanceIds        []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"`
+	SnapLength         uint16   `short:"l" long:"snaplen" description:"Snap Length, defining the captured length of the packet, with the remainder truncated. The real packet length is recorded." default:"65535"`
 	Verbose            bool     `short:"v" long:"verbose" description:"Show verbose debug information"`
 	Quiet              bool     `short:"q" long:"quiet" description:"Show only warnings and errors"`
 }
@@ -145,9 +146,11 @@ func main() {
 	// set up capture request
 	ctx := context.Background()
 	ctx, cancel := pcap.WithCancelCause(ctx)
-	setupContextCancel(client)
+
+	go pcap.WaitForSignal(logger, client, nil)
+
 	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups, environment.Alias)
-	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, 65_000) // TODO: get snaplen from config or parameters
+	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, uint32(opts.SnapLength))
 
 	// perform capture request
 	err = client.HandleRequest(ctx, endpointRequest, captureOptions, cancel)
@@ -166,17 +169,18 @@ func main() {
 }
 
 // checkOutputFile checks if the specified output-file already exists.
-// If it does exist and forceOverwriteFile is specified, it will be deleted.
+// If it does exist and overwrite is specified, it will be deleted.
 // If it doesn't exist and the parent-directory is invalid an error is returned.
-func checkOutputFile(file string, forceOverwriteFile bool) error {
+func checkOutputFile(file string, overwrite bool) error {
 	// Check if the file already exists
 	_, err := os.Stat(file)
-	if err == nil { //File already exists
-		if forceOverwriteFile {
+
+	//File already exists
+	if err == nil {
+		if overwrite {
 			return os.Remove(file)
-		} else {
-			return fmt.Errorf("outputfile %s already exists (Use option '-F' to overwrite file)", file)
 		}
+		return fmt.Errorf("outputfile %s already exists (Use option '-F' to overwrite file)", file)
 	}
 	// File doesn't exist, check if path is valid
 	fileInfo, err := os.Stat(filepath.Dir(file))
@@ -191,7 +195,6 @@ func checkOutputFile(file string, forceOverwriteFile bool) error {
 // Using the clients connection to the pcap-api it checks whether the api endpoint is healthy in general
 // and if it supports requests to the Bosh Environment specified in environmentAlias.
 func checkAPIHealth(c *pcap.Client, environmentAlias string) error {
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -247,7 +250,7 @@ func configFromFile(configFilename string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not parse the provided bosh-config %w", err)
 	}
-	logger.Debug("read bosh-config", zap.Any("bosh-config", config))
+	logger.Debug("read bosh-config")
 	return config, nil
 }
 

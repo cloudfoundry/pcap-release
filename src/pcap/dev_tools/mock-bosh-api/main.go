@@ -75,23 +75,23 @@ func prepareMockBoshDirectorResponse() map[string]string {
 
 func updateAPIConfig(file string, boshURL string) {
 	config := fmt.Sprintf(`log_level: debug
-buffer:
-  size: 100
-  upperLimit: 95
-  lowerLimit: 90
-common_config:
+agent:
+  buffer:
+    size: 100
+    upperLimit: 95
+    lowerLimit: 90
   id: "testapi"
   listen:
     port: 8080
-agents:
-  listen: 8080
-bosh_environments:
+  agents:
+    listen: 8080
+  bosh_environments:
   - alias: "bosh"
     director_url: "%v"
     agent_port: 8083
     token_scope: "bosh.admin"
-drain_timeout: 10s
-concurrent_captures: 5
+  drain_timeout: 10s
+  concurrent_captures: 5
 `, boshURL)
 
 	err := os.WriteFile(file, []byte(config), fs.ModePerm)

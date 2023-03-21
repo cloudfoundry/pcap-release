@@ -51,6 +51,14 @@ func NewClient(outputFile string, logger *zap.Logger) (*Client, error) {
 	return client, nil
 }
 
+func (c *Client) Stop() {
+	c.StopRequest()
+}
+
+func (c *Client) Wait() {
+
+}
+
 func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 	var (
 		err   error
@@ -202,7 +210,9 @@ func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 	if err != nil {
 		zap.L().Error("writing packet to file failed", zap.Error(err))
 	}
-	zap.L().Info("received packet", zap.Int("bytes", len(packet.Data)), zap.Time("capture-timestamp", packet.Timestamp.AsTime()))
+	if zap.L().Level() <= zap.DebugLevel {
+		zap.L().Debug("received packet", zap.Int("bytes", len(packet.Data)), zap.Time("capture-timestamp", packet.Timestamp.AsTime()))
+	}
 }
 
 func (c *Client) logProgress(ctx context.Context) {

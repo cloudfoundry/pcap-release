@@ -28,14 +28,14 @@ type API struct {
 	// id of the instance where the api is located.
 	id string
 
-	maxConcurrentCaptures int
+	maxConcurrentCaptures uint
 	concurrentStreams     atomic.Int32
 	tlsCredentials        credentials.TransportCredentials
 
 	UnimplementedAPIServer
 }
 
-func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int) (*API, error) {
+func NewAPI(bufConf BufferConf, agentmTLS *MutualTLS, id string, maxConcurrentCaptures uint) (*API, error) {
 	var err error
 
 	api := &API{
@@ -230,12 +230,12 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	return nil
 }
 
-func loadTLSCredentials(agents AgentMTLS) (credentials.TransportCredentials, error) {
-	if agents.MTLS == nil || agents.MTLS.SkipVerify {
+func loadTLSCredentials(agentMTLS *MutualTLS) (credentials.TransportCredentials, error) {
+	if agentMTLS == nil || agentMTLS.SkipVerify {
 		return insecure.NewCredentials(), nil
 	}
 
-	mTLS := agents.MTLS
+	mTLS := *agentMTLS
 	return LoadTLSCredentials(mTLS.Certificate, mTLS.PrivateKey, nil, &mTLS.CertificateAuthority, &mTLS.CommonName)
 }
 

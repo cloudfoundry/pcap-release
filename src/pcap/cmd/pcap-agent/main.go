@@ -10,11 +10,10 @@ import (
 	"net"
 	"os"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
-
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 func main() {
@@ -47,7 +46,7 @@ func main() {
 		log.Fatal("unable to create listener", zap.Error(err))
 	}
 
-	tlsCredentials, err := cmd.LoadTLSCredentials(config.CommonConfig)
+	tlsCredentials, err := config.TLSCredentials()
 	if err != nil {
 		log.Fatal("unable to load provided TLS credentials", zap.Error(err))
 	}
@@ -55,7 +54,7 @@ func main() {
 	server := grpc.NewServer(grpc.Creds(tlsCredentials))
 	pcap.RegisterAgentServer(server, agent)
 
-	go cmd.WaitForSignal(log, agent, server)
+	go pcap.WaitForSignal(log, agent, server)
 
 	log.Info("starting server")
 	err = server.Serve(lis)

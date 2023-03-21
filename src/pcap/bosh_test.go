@@ -199,13 +199,15 @@ func TestResolve(t *testing.T) {
 	}
 
 	request := &EndpointRequest{
-		Request: &EndpointRequest_Bosh{Bosh: &BoshRequest{
-			Token:       validToken,
-			Deployment:  deploymentName,
-			Groups:      []string{"test-instance-group"},
-			Instances:   nil,
-			Environment: "bosh",
-		}},
+		Request: &EndpointRequest_Bosh{
+			Bosh: &BoshRequest{
+				Token:       validToken,
+				Deployment:  deploymentName,
+				Groups:      []string{"test-instance-group"},
+				Instances:   nil,
+				Environment: "bosh",
+			},
+		},
 	}
 
 	agentEndpoints, err := boshResolver.Resolve(request, log)
@@ -306,8 +308,10 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 			expectedErr: errEmptyField,
 		},
 		{
-			name:        "Valid request",
-			req:         &BoshRequest{Token: "123d24", Deployment: "cf", Groups: []string{"router"}, Environment: "bosh"},
+			name: "Valid request",
+			req: &BoshRequest{
+				Token: "123d24", Deployment: "cf", Groups: []string{"router"}, Environment: "bosh",
+			},
 			wantErr:     false,
 			expectedErr: nil,
 		},

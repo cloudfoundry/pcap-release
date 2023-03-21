@@ -1,0 +1,55 @@
+id: pcap-api/234
+log_level: debug
+buffer:
+  size: 100
+  upper_limit: 95
+  lower_limit: 90
+concurrent_captures: 5
+drain_timeout: 10s
+listen:
+  port: 8080
+  tls: # omitempty -> nil == tls off
+    certificate: api-cert.pem
+    private_key: api-cert.key
+    ca: pcap-ca.pem
+
+agents_mtls:
+  common_name: pcap-agent.service.cf.internal
+  skip_verify: false
+
+  certificate: api-client-cert.pem
+  private_key: api-client-cert.key
+  ca: pcap-ca.pem
+
+cf: # -> *pcap.CfHandlerConfig `yaml:omitempty`
+  cc_url: https://...
+  mtls:
+    common_name: cloud-controller.service.cf.internal
+    skip_verify: false
+
+    certificate: cc-client-cert.pem
+    private_key: cc-client-key.key
+    ca: cc-ca.pem
+bosh: # -> *pcap.BoshHandler `yaml:omitempty`
+  - alias: bootstrap_bosh
+    director_url: https://bosh:8080
+    token_scope: bosh.admin
+    agent_port: 9494
+    mtls:
+      common_name: bootstrap-bosh
+      skip_verify: false
+
+      certificate: bootstrap-bosh-client-cert.pem
+      private_key: bootstrap-bosh-client-key.key
+      ca: bootstrap-bosh-ca.pem
+  - alias: bosh
+    director_url: https://bosh.service.cf.internal:8080
+    token_scope: bosh.admin
+    agent_port: 9494
+    mtls:
+      common_name: bosh.service.cf.internal
+      skip_verify: false
+
+      certificate: bosh-client-cert.pem
+      private_key: bosh-client-key.key
+      ca: bosh-ca.pem

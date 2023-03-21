@@ -37,7 +37,7 @@ import (
 
 var apiClient pcap.APIClient
 
-var MaxConcurrentCaptures = 2
+var MaxConcurrentCaptures = uint(2)
 
 var port = 8110 // used for various server listen ports, automatically incremented
 
@@ -81,7 +81,7 @@ var _ = Describe("Using LocalResolver", func() {
 	var agentServer1 *grpc.Server
 	var agentServer2 *grpc.Server
 	var apiServer *grpc.Server
-	var apiID = "123asd"
+	var apiID = "pcap-api/1234-5678-9000"
 	var agentID1 = "router/1abc"
 	var agentID2 = "router/2abc"
 	var agentTarget1 pcap.AgentEndpoint
@@ -103,7 +103,7 @@ var _ = Describe("Using LocalResolver", func() {
 				agentServer2, agentTarget2, _ = createAgent(nextFreePort(), agentID2, nil)
 				targets = append(targets, agentTarget2)
 
-				agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
+				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 				apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180}
 				apiClient, apiServer, api = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
 
@@ -260,7 +260,7 @@ var _ = Describe("Using LocalResolver", func() {
 				agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
 				targets = append(targets, agentTarget1)
 
-				agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
+				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 				apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 90}
 				apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
 				apiPort++
@@ -308,7 +308,7 @@ var _ = Describe("Using LocalResolver", func() {
 
 				agentServer2, agentTarget2, _ = createAgent(nextFreePort(), agentID2, nil)
 				targets = append(targets, agentTarget2)
-				agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
+				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 				apiBuffConf := pcap.BufferConf{Size: 7, UpperLimit: 6, LowerLimit: 4}
 				apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
 				apiPort++
@@ -362,14 +362,12 @@ var _ = Describe("Using LocalResolver", func() {
 				agentServer1, target, agent1 = createAgent(nextFreePort(), agentID1, mTLSConfig)
 				targets = append(targets, target)
 
-				agentTLSConf := pcap.AgentMTLS{
-					MTLS: &pcap.MutualTLS{
-						SkipVerify: false,
-						CommonName: agentServerCertCN,
-						TLS: pcap.TLS{
-							Certificate: clientCertFile,
-							PrivateKey:  clientKeyFile, CertificateAuthority: caPath,
-						},
+				agentTLSConf := &pcap.MutualTLS{
+					SkipVerify: false,
+					CommonName: agentServerCertCN,
+					TLS: pcap.TLS{
+						Certificate: clientCertFile,
+						PrivateKey:  clientKeyFile, CertificateAuthority: caPath,
 					},
 				}
 				apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}
@@ -441,8 +439,8 @@ var _ = Describe("Using LocalResolver", func() {
 			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
 			targets = append(targets, agentTarget1)
 
-			agentTLSConf := pcap.AgentMTLS{MTLS: &pcap.MutualTLS{SkipVerify: true}}
-			apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 90}
+			agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
+			apiBuffConf := pcap.BufferConf{Size: 100000, UpperLimit: 99000, LowerLimit: 90000}
 			apiClient, apiServer, api = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
 
 		})
@@ -456,7 +454,7 @@ var _ = Describe("Using LocalResolver", func() {
 				file := "bosh_e2e_integration_test.pcap"
 				_ = os.Remove(file) // remove test-file
 
-				logger, _ := zap.NewDevelopment()
+				logger, _ := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
 				client, err := pcap.NewClient(file, logger)
 				Expect(err).To(BeNil())
 				apiURL := test.MustParseURL(fmt.Sprintf("http://localhost:%d", APIPort))
@@ -684,7 +682,7 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	var err error
 	var server *grpc.Server
 
-	agent := pcap.NewAgent(pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}, id)
+	agent := pcap.NewAgent(pcap.BufferConf{Size: 10000, UpperLimit: 9800, LowerLimit: 8000}, id)
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	Expect(err).NotTo(HaveOccurred())
@@ -715,7 +713,7 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	return server, target, agent
 }
 
-func createAPI(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig pcap.AgentMTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API) {
+func createAPI(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig *pcap.MutualTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API) {
 	var server *grpc.Server
 	api, err := pcap.NewAPI(bufConf, mTLSConfig, id, MaxConcurrentCaptures)
 	Expect(err).NotTo(HaveOccurred())
@@ -774,7 +772,7 @@ func logCaptureResponse(writer GinkgoWriterInterface, response *pcap.CaptureResp
 	}
 }
 
-// contains checks if a string is present in a slice.
+// containsMsgTypeWithOrigin checks if a string is present in a slice and with the given origin.
 func containsMsgTypeWithOrigin(messages []*pcap.CaptureResponse, msgType pcap.MessageType, origin string) bool {
 	for _, msg := range messages {
 		if msg.GetPacket() == nil && msg.GetMessage().GetType() == msgType && msg.GetMessage().GetOrigin() == origin {

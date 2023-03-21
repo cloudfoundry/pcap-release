@@ -5,15 +5,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
-
 	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v3"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 var DefaultAPIConfig = APIConfig{
-	CommonConfig: cmd.CommonConfig{
+	NodeConfig: pcap.NodeConfig{
 		Listen: pcap.Listen{Port: 8080}, //nolint:gomnd // default port
 		Buffer: pcap.BufferConf{
 			Size:       100, //nolint:gomnd // default size
@@ -23,20 +22,18 @@ var DefaultAPIConfig = APIConfig{
 		LogLevel: "debug",
 		ID:       "test-api",
 	},
-	Agents: &pcap.AgentMTLS{
-		MTLS: nil,
-	},
+	AgentsMTLS:         nil,
 	DrainTimeout:       10 * time.Second,
 	ConcurrentCaptures: 5,
 }
 
 type APIConfig struct {
-	cmd.CommonConfig   `yaml:"common_config"` // fixme: workaround by a18e to be able to parse a config file again, may not be desired
-	Agents             *pcap.AgentMTLS        `yaml:"agents" validate:"omitempty"`
-	ConcurrentCaptures int                    `yaml:"concurrent_captures"`
-	DrainTimeout       time.Duration          `yaml:"drain_timeout"`
+	pcap.NodeConfig    `yaml:"-,inline"`
+	AgentsMTLS         *pcap.MutualTLS `yaml:"agents_mtls" validate:"omitempty"`
+	ConcurrentCaptures uint            `yaml:"concurrent_captures"`
+	DrainTimeout       time.Duration   `yaml:"drain_timeout"`
 
-	BoshResolverConfigs []pcap.BoshResolverConfig `yaml:"bosh_environments" validate:"required,dive"`
+	BoshResolverConfigs []pcap.BoshResolverConfig `yaml:"bosh,omitempty" validate:"dive"`
 	// TODO: Add CF specific config fragments
 }
 

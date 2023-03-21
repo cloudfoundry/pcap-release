@@ -17,12 +17,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
-
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/cloudfoundry/pcap-release/src/pcap/dev_tools"
 )
 
 func main() {
@@ -68,7 +68,7 @@ func main() {
 		log.Panic("unable to start capture", zap.Error(err))
 	}
 
-	cmd.ReadN(10, stream) //nolint:gomnd // default value used for testing
+	dev_tools.ReadN(10, stream) //nolint:gomnd // default value used for testing
 
 	err = stream.Send(&pcap.AgentRequest{
 		Payload: &pcap.AgentRequest_Stop{},
@@ -77,5 +77,5 @@ func main() {
 		log.Panic("unable to stop capture", zap.Error(err))
 	}
 
-	cmd.ReadN(10_000, stream) //nolint:gomnd // default value used for testing
+	dev_tools.ReadN(10_000, stream) //nolint:gomnd // default value used for testing
 }

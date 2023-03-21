@@ -186,8 +186,11 @@ func TestStopCmd(t *testing.T) {
 			wantErr:     true,
 		},
 		{
-			name:        "Invalid payload type",
-			recv:        &mockRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Request: &EndpointRequest{Request: &EndpointRequest_Bosh{Bosh: &BoshRequest{}}}}}}, err: nil},
+			name: "Invalid payload type",
+			recv: &mockRequestReceiver{
+				req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Request: &EndpointRequest{Request: &EndpointRequest_Bosh{Bosh: &BoshRequest{}}}}}},
+				err: nil,
+			},
 			expectedErr: errInvalidPayload,
 			wantErr:     true,
 		},
@@ -308,7 +311,7 @@ func TestCapture(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, nil, origin, 1)
 			if err != nil {
 				t.Errorf("capture() unexpected error during api creation: %v", err)
 			}
@@ -357,7 +360,7 @@ func TestAPIStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, nil, origin, 1)
 			if err != nil {
 				t.Errorf("Status() unexpected error during api creation: %v", err)
 			}
@@ -404,8 +407,16 @@ func TestAPIRegisterHandler(t *testing.T) {
 			wantedResolverName: "bosh/bosh",
 		},
 		{
-			name:               "Register cf handler and check the handler with correct name",
-			resolver:           &CloudfoundryResolver{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
+			name: "Register cf handler and check the handler with correct name",
+			resolver: &CloudfoundryResolver{
+				Config: ManualEndpoints{
+					Targets: []AgentEndpoint{
+						{
+							IP: "localhost", Port: 8083, Identifier: "test-agent/1",
+						},
+					},
+				},
+			},
 			wantRegistered:     true,
 			wantedResolverName: "cf",
 		},
@@ -419,7 +430,7 @@ func TestAPIRegisterHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var api *API
-			api, err = NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
+			api, err = NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, nil, origin, 1)
 			if err != nil {
 				t.Errorf("RegisterResolver() unexpected error during api creation: %v", err)
 			}
@@ -465,7 +476,7 @@ func TestAPICapture(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, nil, origin, 1)
 			if err != nil {
 				t.Errorf("Capture() unexpected error during api creation: %v", err)
 			}
