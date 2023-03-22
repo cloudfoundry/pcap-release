@@ -1,6 +1,7 @@
 package pcap
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
@@ -168,16 +169,21 @@ func (br *BoshResolver) setup() error {
 	} else {
 		br.client = &http.Client{
 			Transport: &http.Transport{
-				TLSClientConfig: SecureDefaultTLSConfig(br.boshRootCAs),
+				TLSClientConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
+					MaxVersion: tls.VersionTLS13,
+					ClientAuth: tls.RequireAndVerifyClientCert,
+					RootCAs:    br.boshRootCAs,
+				},
 			},
 		}
 	}
 
 	br.logger.Info("discovering bosh-UAA endpoint")
-	ptr := &br.directorURL
-	infoEndpoint := *ptr
+	ptr := *br.directorURL
+	infoEndpoint := &ptr
 	infoEndpoint.Path = "/info"
-	// TODO: (discussion) weird. br.directorURL.JoinPath("/info") is buggy: https://github.com/golang/go/issues/58605
+	//TODO: (discussion) weird. br.directorURL.JoinPath("/info") is buggy: https://github.com/golang/go/issues/58605
 
 	response, err := br.client.Do(&http.Request{
 		Method: http.MethodGet,

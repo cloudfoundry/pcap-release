@@ -207,7 +207,7 @@ func TestResolve(t *testing.T) {
 				Deployment:  deploymentName,
 				Groups:      []string{"test-instance-group"},
 				Instances:   nil,
-				Environment: "bosh",
+				Environment: "bosh/bosh",
 			},
 		},
 	}

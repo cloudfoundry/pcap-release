@@ -40,8 +40,6 @@ func NewClient(outputFile string, logger *zap.Logger) (*Client, error) {
 
 	client := &Client{}
 
-	// TODO (discussion) distinguishing between cli and client is irrelevant for cli-user. We don't need to specify target: client
-	// logger = logger.With(zap.String(LogKeyTarget, "client"))
 	zap.ReplaceGlobals(logger)
 
 	if len(outputFile) == 0 {

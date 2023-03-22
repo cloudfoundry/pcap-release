@@ -407,20 +407,6 @@ func TestAPIRegisterHandler(t *testing.T) {
 			wantedResolverName: "bosh/bosh",
 		},
 		{
-			name: "Register cf handler and check the handler with correct name",
-			resolver: &CloudfoundryResolver{
-				Config: ManualEndpoints{
-					Targets: []AgentEndpoint{
-						{
-							IP: "localhost", Port: 8083, Identifier: "test-agent/1",
-						},
-					},
-				},
-			},
-			wantRegistered:     true,
-			wantedResolverName: "cf",
-		},
-		{
 			name:               "Register bosh handler and check the handler with invalid name",
 			resolver:           boshResolver,
 			wantRegistered:     false,

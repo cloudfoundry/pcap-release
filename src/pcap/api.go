@@ -95,7 +95,6 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 }
 
 func (api *API) RegisteredResolverNames() []string {
-	// TODO alternative? registeredHandlerNames := reflect.ValueOf(api.resolvers).MapKeys()
 	resolverNames := make([]string, len(api.resolvers))
 	i := 0
 	for key := range api.resolvers {

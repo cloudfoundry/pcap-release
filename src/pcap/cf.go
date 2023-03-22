@@ -7,7 +7,6 @@ import (
 )
 
 type CloudfoundryResolver struct {
-	Config ManualEndpoints
 }
 
 func (cf *CloudfoundryResolver) Name() string {
@@ -23,8 +22,6 @@ func (cf *CloudfoundryResolver) Resolve(request *EndpointRequest, log *zap.Logge
 	log.Info("Handling request")
 
 	// TODO Validate & get targets from cloud-controller
-
-	_ = cf.Config.Targets
 
 	_ = request
 	// TODO: Add the static IP addresses here, if needed

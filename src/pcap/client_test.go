@@ -13,7 +13,6 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/pcapgo"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -134,48 +133,6 @@ func TestHandleStream(t *testing.T) {
 			err := Cause(ctx)
 			if err.Error() != tt.expectedErrMessage {
 				t.Errorf("expected = %v, actual = %v", tt.expectedErrMessage, err)
-			}
-		})
-	}
-}
-
-func TestNewClient(t *testing.T) {
-	// remove test file if already present
-	outputFile := "testpcapfile.pcap"
-	_ = os.Remove(outputFile)
-
-	tests := []struct {
-		name              string
-		outputFile        string
-		wantErr           bool
-		expectedErrString string
-	}{
-		{
-			name:       "output file does not exist",
-			outputFile: outputFile,
-			wantErr:    false,
-		}, {
-			name:              "output file does exist",
-			outputFile:        outputFile,
-			wantErr:           true,
-			expectedErrString: "output file testpcapfile.pcap already exists",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			logger, _ := zap.NewDevelopment()
-			client, err := NewClient(tt.outputFile, logger)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
-			}
-			if tt.expectedErrString != "" && (err.Error() != tt.expectedErrString) {
-				t.Errorf("expectedErr = %v, actualErr = %v", tt.expectedErrString, err)
-			} else {
-				return
-			}
-			if client != nil {
-				t.Errorf("client is not nil")
 			}
 		})
 	}

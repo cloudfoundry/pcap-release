@@ -86,8 +86,7 @@ func registerBoshResolvers(configs []pcap.BoshResolverConfig, log *zap.Logger, a
 	for _, env := range configs {
 		resolver, err := pcap.NewBoshResolver(env)
 		if err != nil {
-			log.Error("Failed to setup BoshResolver", zap.String(pcap.LogKeyResolver, env.EnvironmentAlias), zap.Error(err))
-			continue // TODO: (discussion) pcap-api should fail here (log.panic()?)
+			log.Panic("Failed to setup BoshResolver", zap.String(pcap.LogKeyResolver, env.EnvironmentAlias), zap.Error(err))
 		}
 		api.RegisterResolver(resolver)
 	}
