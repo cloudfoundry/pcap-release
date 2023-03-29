@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/dev_tools"
+	"github.com/cloudfoundry/pcap-release/src/pcap/devtools"
 )
 
 func main() {
@@ -79,7 +79,7 @@ func main() {
 
 	// keep receiving some data long enough to start a manual drain
 	for i := 0; i < 10000; i++ {
-		dev_tools.ReadN(1000, stream)      //nolint:gomnd // default value used for testing
+		devtools.ReadN(1000, stream)       //nolint:gomnd // default value used for testing
 		time.Sleep(200 * time.Millisecond) //nolint:gomnd // default value used for testing
 	}
 
@@ -92,5 +92,5 @@ func main() {
 		log.Panic("unable to stop capture", zap.Error(err))
 	}
 
-	dev_tools.ReadN(10_000, stream) //nolint:gomnd // default value used for testing
+	devtools.ReadN(10_000, stream) //nolint:gomnd // default value used for testing
 }

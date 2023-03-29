@@ -96,7 +96,7 @@ func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 // It then delegates writing individual packets and logging messages from the api to handleStream.
 // logProgress is called in another goroutine to asynchronously write out the bytes written to the outputFile.
 func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointRequest, options *CaptureOptions, cancel CancelCauseFunc) error {
-	logger := zap.L().With(zap.String(LogKeyHandler, "HandleRequest"))
+	logger := c.log.With(zap.String(LogKeyHandler, "HandleRequest"))
 	// setup output/pcap-file
 	packetWriter := pcapgo.NewWriter(c.packetFile)
 	err := packetWriter.WriteFileHeader(options.SnapLen, layers.LinkTypeEthernet)
@@ -153,15 +153,15 @@ func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointReq
 func (c *Client) StopRequest() {
 	err := c.stream.SendMsg(makeStopRequest())
 	if err != nil {
-		zap.L().Panic("could not stop")
+		c.log.Error("could not stop")
 	}
 }
 
 // handleStream reads CaptureResponse's from the api in a loop and delegates writing/logging messages & packets to writeMessage / writePacket.
 //
 // It terminates if an error or clean stop-message is received.
-func handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel CancelCauseFunc) {
-	logger := zap.L().With(zap.String(LogKeyHandler, "handleStream"))
+func (c *Client) handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel CancelCauseFunc) {
+	logger := c.log.With(zap.String(LogKeyHandler, "handleStream"))
 	for {
 		res, err := stream.Recv()
 		if errors.Is(err, io.EOF) {

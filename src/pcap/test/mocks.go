@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -50,12 +51,18 @@ func MockJWTAPI() (*httptest.Server, string) {
 	mux.HandleFunc("/token_keys", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 
-		writer.Write([]byte(jsonString))
+		_, err := writer.Write([]byte(jsonString))
+		if err != nil {
+			zap.L().Warn("failed to write token_keys response", zap.Error(err))
+		}
 	})
 
 	mux.HandleFunc("/oauth/token", func(writer http.ResponseWriter, request *http.Request) {
 		response := fmt.Sprintf(`{"access_token": "%v","refresh_token": "%v","token_type": "bearer"}`, token, token)
-		writer.Write([]byte(response))
+		_, err := writer.Write([]byte(response))
+		if err != nil {
+			zap.L().Warn("failed to write /oauth/token response", zap.Error(err))
+		}
 	})
 
 	JWTAPI.UAAUrl = ts.URL
@@ -95,7 +102,7 @@ func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Serv
 		writer.Header().Set("Content-Type", "application/json")
 		err := responseTemplate.Execute(writer, boshapi)
 		if err != nil {
-			panic(err)
+			zap.L().Panic("failed to write bosh /info response", zap.Error(err))
 		}
 	})
 
@@ -105,11 +112,13 @@ func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Serv
 		response, ok := responses[request.URL.Path]
 		if !ok {
 			writer.WriteHeader(http.StatusNotFound)
-
 			return
 		}
 
-		writer.Write([]byte(response))
+		_, err := writer.Write([]byte(response))
+		if err != nil {
+			zap.L().Panic("failed to write bosh / response", zap.Error(err))
+		}
 	})
 
 	ts := httptest.NewServer(mux)
@@ -119,7 +128,6 @@ func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Serv
 }
 
 func verifyJWTTokenMock(jku string) (string, string) {
-
 	type payload struct {
 		Scope     []string  `json:"scope"`
 		ClientId  string    `json:"client_id"`
@@ -181,7 +189,9 @@ func verifyJWTTokenMock(jku string) (string, string) {
 	token.Header["jku"] = jku
 	token.Header["kid"] = "uaa-jwt-key-1"
 	ss, err := token.SignedString(privateKey)
-	//fmt.Printf("%v %v", ss, err)
+	if err != nil {
+		zap.L().Panic("unable to write signed string", zap.Error(err))
+	}
 
 	return string(publicPem), ss
 }
@@ -197,7 +207,7 @@ func GetValidToken(uaaURL string) (string, error) {
 		Header: http.Header{
 			"Accept":        {"application/json"},
 			"Content-Type":  {"application/x-www-form-urlencoded"},
-			"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("bosh_cli:")))}, // TODO: the client name is also written in the token
+			"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("bosh_cli:")))},
 		},
 		Body: io.NopCloser(bytes.NewReader([]byte(url.Values{
 			"grant_type": {"refresh_token"},
@@ -225,96 +235,3 @@ func GetValidToken(uaaURL string) (string, error) {
 
 	return newTokens.AccessToken, nil
 }
-
-//TODO: unused code (so far) - remove?
-
-//func MockCfAPI(responses map[string]string) *httptest.Server {
-//	json := `
-//{
-//  "links": {
-//    "self": {
-//      "href": "{{.BaseURL}}"
-//    },
-//    "cloud_controller_v3": {
-//      "href": "{{.CCV3URL}}",
-//      "meta": {
-//        "version": "3.115.0"
-//      }
-//    },
-//    "uaa": {
-//      "href": "{{.UaaURL}}"
-//    }
-//  }
-//}`
-//	type CfApiMock struct {
-//		BaseURL, CCV3URL, UaaURL string
-//	}
-//	var cfapi CfApiMock
-//	responseTemplate := template.Must(template.New("cfapi").Parse(json))
-//
-//	mux := http.NewServeMux()
-//
-//	mux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-//		writer.Header().Set("Content-Type", "application/json")
-//		err := responseTemplate.Execute(writer, cfapi)
-//		if err != nil {
-//			panic(err)
-//		}
-//	})
-//
-//	mux.HandleFunc("/v3/", func(writer http.ResponseWriter, request *http.Request) {
-//		writer.Header().Set("Content-Type", "application/json")
-//
-//		response := responses[request.URL.Path]
-//		if response == "" {
-//			writer.WriteHeader(http.StatusNotFound)
-//
-//			return
-//		}
-//		writer.Write([]byte(response))
-//	})
-//
-//	ts := httptest.NewServer(mux)
-//	cfapi = CfApiMock{
-//		BaseURL: ts.URL,
-//		CCV3URL: ts.URL + "/v3",
-//		UaaURL:  ts.URL + "/uaa",
-//	}
-//
-//	return ts
-//}
-//
-//type MockPcapAgent struct {
-//	*httptest.Server
-//	Host string
-//	Port string
-//}
-//
-//func NewMockPcapAgent(responses map[string]string) *MockPcapAgent {
-//	mux := http.NewServeMux()
-//	mux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-//		response := responses[request.URL.Path+"?"+request.URL.RawQuery]
-//		if response == "" {
-//			writer.WriteHeader(http.StatusNotFound)
-//
-//			return
-//		}
-//		file, err := os.Open(response)
-//		if err != nil {
-//			panic(err)
-//		}
-//		nbytes, err := io.Copy(writer, file)
-//		if err != nil {
-//			panic(err)
-//		}
-//		log.Infof("wrote %s with %d bytes", response, nbytes)
-//	})
-//
-//	mockup := MockPcapAgent{Server: httptest.NewTLSServer(mux)}
-//
-//	pcapAgentUrl, _ := url.Parse(mockup.URL)
-//	mockup.Host = pcapAgentUrl.Hostname()
-//	mockup.Port = pcapAgentUrl.Port()
-//
-//	return &mockup
-//}

@@ -46,7 +46,7 @@ func (l LocalResolver) CanResolve(request *pcap.EndpointRequest) bool {
 	return request.GetRequest() != nil
 }
 
-func (l LocalResolver) Resolve(request *pcap.EndpointRequest, logger *zap.Logger) ([]pcap.AgentEndpoint, error) {
+func (l LocalResolver) Resolve(_ *pcap.EndpointRequest, _ *zap.Logger) ([]pcap.AgentEndpoint, error) {
 	if l.manualEndpoints != nil {
 		return l.manualEndpoints, nil
 	}

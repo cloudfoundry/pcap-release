@@ -1,4 +1,4 @@
-package dev_tools
+package devtools
 
 import (
 	"errors"

@@ -23,8 +23,7 @@ func TestCancelCauseWorks(t *testing.T) {
 }
 
 func TestCancelCauseReturnsFirstError(t *testing.T) {
-	ctx := context.Background()
-	ctx, cancel := WithCancelCause(ctx)
+	ctx, cancel := WithCancelCause(context.Background())
 
 	originalErr := fmt.Errorf("something")
 	cancel(originalErr)

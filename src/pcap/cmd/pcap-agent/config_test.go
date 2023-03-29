@@ -9,7 +9,6 @@ import (
 )
 
 func TestConfig(t *testing.T) {
-
 	cfg, err := parseConfig("../../config/agent.example.yml")
 
 	if err != nil {

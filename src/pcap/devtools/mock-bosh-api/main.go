@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
 	"io/fs"
 	"os"
 	"time"
 
 	"github.com/jessevdk/go-flags"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test"
@@ -27,7 +27,6 @@ func init() {
 		return
 	}
 
-	log.SetLevel(log.DebugLevel)
 }
 
 func main() {
@@ -36,10 +35,10 @@ func main() {
 	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
 	defer boshAPI.Close()
 
-	log.Infof("jwtapi listening on %v\n", jwtapi.URL)
-	log.Infof("boshapi listening on %v\n", boshAPI.URL)
-
+	zap.L().Info("jwtapi listening", zap.String("url", jwtapi.URL))
 	updateAPIConfig(opts.APIConfigFile, boshAPI.URL)
+
+	zap.L().Info("boshapi listening", zap.String("url", boshAPI.URL))
 	updateBoshCLIConfig(opts.BoshCLIConfigFile, boshAPI.URL, jwtapi.URL)
 
 	for {
@@ -93,18 +92,20 @@ agent:
   drain_timeout: 10s
   concurrent_captures: 5
 `, boshURL)
+	log := zap.L().With(zap.String("file", file))
 
 	err := os.WriteFile(file, []byte(config), fs.ModePerm)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic("Failed to write api config file", zap.Error(err))
 		return
 	}
-	log.Infof("Wrote api config to %v\n", file)
+	log.Info("Wrote api config file")
 }
 func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
+	log := zap.L().With(zap.String("file", file))
 	token, err := test.GetValidToken(jwtAPIurl)
 	if err != nil {
-		log.Fatalf("could not generate valid token %v", err.Error())
+		log.Panic("Failed to write api config file", zap.Error(err))
 	}
 
 	config := fmt.Sprintf(`environments:
@@ -154,9 +155,9 @@ func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 
 	err = os.WriteFile(file, []byte(config), fs.ModePerm)
 	if err != nil {
-		log.Fatal(err)
-		return
+		log.Panic("Failed to write output file", zap.Error(err))
 	}
-	log.Infof("Wrote bosh CLI config to %v\n", file)
-	log.Infof("Generated Token %v\n", token)
+
+	log.Info("Wrote bosh CLI config")
+	log.Info("Generated Token", zap.String("token", token))
 }

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
-	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 )
 
@@ -162,7 +161,7 @@ func (br *BoshResolver) validate(endpointRequest *EndpointRequest) error {
 }
 
 func (br *BoshResolver) setup() error {
-	br.logger.Info("setting Up BoshResolver", zap.Any("resolver-config", br.config))
+	br.logger.Info("setting up BoshResolver", zap.Any("resolver-config", br.config))
 
 	if br.config.MTLS == nil {
 		br.client = http.DefaultClient

@@ -27,10 +27,6 @@ type Config struct {
 	pcap.NodeConfig `yaml:"-,inline"`
 }
 
-/*func NewConfig(genericConfig cmd.NodeConfig) *Config {
-	return &Config{NodeConfig: genericConfig}
-}*/
-
 func (c Config) validate() error {
 	return validator.New().Struct(c)
 }
