@@ -3,6 +3,7 @@ package pcap
 import (
 	"bytes"
 	"context"
+	"go.uber.org/zap"
 	"io"
 	"os"
 	"sync"
@@ -124,7 +125,8 @@ func TestHandleStream(t *testing.T) {
 			copyWg.Add(1)
 			stream := &MockAPIWriter{messages: tt.messages}
 			ctx, cancel := WithCancelCause(context.Background())
-			go handleStream(stream, writer, copyWg, cancel)
+			c := Client{log: zap.L().With(zap.String("test", tt.name))}
+			go c.handleStream(stream, writer, copyWg, cancel)
 			if tt.clientError != nil {
 				cancel(tt.clientError)
 			}

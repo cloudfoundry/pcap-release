@@ -94,6 +94,10 @@ func (br *BoshResolver) Name() string {
 }
 
 func (br *BoshResolver) CanResolve(request *EndpointRequest) bool {
+	if request == nil {
+		return false
+	}
+
 	if boshRequest := request.GetBosh(); boshRequest != nil {
 		return boshRequest.Environment == br.config.EnvironmentAlias
 	}
@@ -195,7 +199,7 @@ func (br *BoshResolver) setup() error {
 		return fmt.Errorf("received non-OK response from bosh-director: %s", response.Status)
 	}
 
-	defer response.Body.Close()
+	defer CloseQuietly(response.Body)
 
 	var apiResponse *BoshInfo
 	data, err := io.ReadAll(response.Body)
@@ -247,7 +251,7 @@ func (br *BoshResolver) getInstances(deployment string, authToken string) ([]Bos
 		return nil, 0, fmt.Errorf("request to Bosh-director failed: %v", zap.Error(err))
 	}
 
-	defer res.Body.Close()
+	defer CloseQuietly(res.Body)
 
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -301,7 +305,7 @@ func (br *BoshResolver) verifyJWT(tokenString string) (bool, error) {
 				var issuerURL *url.URL
 				issuerURL, err = url.Parse(issuer)
 				if err != nil {
-					log.Warnf("could not parse URL %s: %v", issuer, err)
+					br.logger.Warn("could not parse URL %s: %v", zap.String("issuer", issuer), zap.Error(err))
 					continue
 				}
 
@@ -386,7 +390,7 @@ func (br *BoshResolver) fetchPublicKey(url *url.URL, kid string) (*UaaKeyInfo, e
 		return nil, err
 	}
 
-	defer res.Body.Close()
+	defer CloseQuietly(res.Body)
 
 	keys := struct {
 		Keys []UaaKeyInfo

@@ -25,22 +25,64 @@ import (
 
 const logProgressWait = 5 * time.Second
 
+type MessageWriter interface {
+	writeMessage(message *Message)
+}
+
+type ConsoleMessageWriter struct {
+	Log *zap.Logger
+}
+
+// writeMessage accepts a Message and writes a log-line using a log-level corresponding to the severity of the message.
+func (c ConsoleMessageWriter) writeMessage(message *Message) {
+	formattedMessage := fmt.Sprintf("%s(%s): %s", message.Origin, message.Type, message.Message)
+	c.Log.Log(MessageLogLevel(message), formattedMessage)
+}
+
+// MessageLogLevel translates the message types to appropropriate default log levels.
+func MessageLogLevel(message *Message) zapcore.Level {
+	switch message.Type {
+	case MessageType_UNKNOWN:
+		return zapcore.WarnLevel
+	case MessageType_INSTANCE_UNAVAILABLE:
+		return zapcore.WarnLevel
+	case MessageType_START_CAPTURE_FAILED:
+		return zapcore.WarnLevel
+	case MessageType_INVALID_REQUEST:
+		return zapcore.ErrorLevel
+	case MessageType_CONGESTED:
+		return zapcore.WarnLevel
+	case MessageType_LIMIT_REACHED:
+		return zapcore.WarnLevel
+	case MessageType_CAPTURE_STOPPED:
+		return zapcore.InfoLevel
+	case MessageType_CONNECTION_ERROR:
+		return zapcore.ErrorLevel
+	}
+	return zapcore.ErrorLevel
+}
+
+// Client provides a reusable client for issuing capture requests against the pcap-api.
 type Client struct {
-	packetFile *os.File
-	stream     API_CaptureClient
+	packetFile    *os.File
+	log           *zap.Logger
+	stream        API_CaptureClient
+	messageWriter MessageWriter
 	aPIClient
+}
+
+func CloseQuietly(closer io.Closer) {
+	_ = closer.Close()
 }
 
 // NewClient sets up logging for the client and creates the outputFile.
 // It assumes that the outputFile does not pre-exist and that the path is writeable (should be checked by CLI).
 //
 // NewClient returns a new Client if there are no issues with outputFile creation.
-func NewClient(outputFile string, logger *zap.Logger) (*Client, error) {
+func NewClient(outputFile string, logger *zap.Logger, writer MessageWriter) (*Client, error) {
 	var err error
 
-	client := &Client{}
-
-	zap.ReplaceGlobals(logger)
+	client := &Client{log: logger, messageWriter: writer}
 
 	if len(outputFile) == 0 {
 		client.packetFile = os.Stdout
@@ -125,7 +167,7 @@ func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointReq
 
 	copyWg := &sync.WaitGroup{}
 	copyWg.Add(1)
-	go handleStream(c.stream, packetWriter, copyWg, cancel)
+	go c.handleStream(c.stream, packetWriter, copyWg, cancel)
 
 	go c.logProgress(ctx)
 
@@ -178,39 +220,12 @@ func (c *Client) handleStream(stream API_CaptureClient, packetWriter *pcapgo.Wri
 
 		switch p := res.Payload.(type) {
 		case *CaptureResponse_Message:
-			writeMessage(p.Message)
+			c.messageWriter.writeMessage(p.Message)
 		case *CaptureResponse_Packet:
 			writePacket(p.Packet, packetWriter)
 		}
 	}
 	copyWg.Done()
-}
-
-// writeMessage accepts a Message and writes a log-line using a log-level corresponding to the severity of the message.
-func writeMessage(message *Message) {
-	var logLevel zapcore.Level
-
-	switch message.Type {
-	case MessageType_UNKNOWN:
-		logLevel = zapcore.WarnLevel
-	case MessageType_INSTANCE_UNAVAILABLE:
-		logLevel = zapcore.WarnLevel
-	case MessageType_START_CAPTURE_FAILED:
-		logLevel = zapcore.WarnLevel
-	case MessageType_INVALID_REQUEST:
-		logLevel = zapcore.ErrorLevel
-	case MessageType_CONGESTED:
-		logLevel = zapcore.WarnLevel
-	case MessageType_LIMIT_REACHED:
-		logLevel = zapcore.WarnLevel
-	case MessageType_CAPTURE_STOPPED:
-		logLevel = zapcore.InfoLevel
-	case MessageType_CONNECTION_ERROR:
-		logLevel = zapcore.ErrorLevel
-	}
-	// TODO: Find a way to assign the proper log level.
-	_ = logLevel
-	zap.S().Infof("%s(%s): %s", message.Origin, message.Type, message.Message)
 }
 
 // writePacket writes a Packet to the outputFile (in packetWriter).
@@ -242,7 +257,7 @@ func (c *Client) logProgress(ctx context.Context) {
 	}
 
 	// this is an endless function, so it's ok to use time.Tick()
-	ticker := time.Tick(logProgressWait) //nolint
+	ticker := time.Tick(logProgressWait) // nolint
 	for {
 		select {
 		case <-ticker:

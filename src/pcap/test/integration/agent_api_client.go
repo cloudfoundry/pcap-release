@@ -455,7 +455,7 @@ var _ = Describe("Using LocalResolver", func() {
 				_ = os.Remove(file) // remove test-file
 
 				logger, _ := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
-				client, err := pcap.NewClient(file, logger)
+				client, err := pcap.NewClient(file, logger, pcap.ConsoleMessageWriter{Log: logger})
 				Expect(err).To(BeNil())
 				apiURL := test.MustParseURL(fmt.Sprintf("http://localhost:%d", APIPort))
 				err = client.ConnectToAPI(apiURL)

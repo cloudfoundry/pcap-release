@@ -21,7 +21,7 @@ agents_mtls:
   private_key: api-client-cert.key
   ca: pcap-ca.pem
 
-cf: # -> *pcap.CfHandlerConfig `yaml:omitempty`
+cf:
   cc_url: https://...
   mtls:
     common_name: cloud-controller.service.cf.internal
@@ -30,7 +30,8 @@ cf: # -> *pcap.CfHandlerConfig `yaml:omitempty`
     certificate: cc-client-cert.pem
     private_key: cc-client-key.key
     ca: cc-ca.pem
-bosh: # -> *pcap.BoshHandler `yaml:omitempty`
+bosh:
+  # TODO: check if this will be terrible to populate via boshrelease spec / ERB.
   - alias: bootstrap_bosh
     director_url: https://bosh:8080
     token_scope: bosh.admin

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,12 +17,10 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/jessevdk/go-flags"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/yaml.v3"
-
-	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 var (
@@ -52,7 +51,7 @@ func init() {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	outputPaths := []string{"stderr"} //TODO: make configurable?
+	outputPaths := []string{"stderr"}
 	zapConfig := zap.Config{
 		Level:             atomicLogLevel,
 		DisableCaller:     true,
@@ -125,7 +124,7 @@ func main() {
 	logger.Debug("bosh-config and tokens successfully updated")
 
 	// set up pcap-client/pcap-api connection
-	client, err := pcap.NewClient(opts.File, logger)
+	client, err := pcap.NewClient(opts.File, logger, pcap.ConsoleMessageWriter{Log: logger})
 	if err != nil {
 		err = fmt.Errorf("could not set up pcap-client %w", err)
 		return
@@ -428,7 +427,7 @@ func (e *Environment) fetchUAAURL() error {
 		return fmt.Errorf("unexpected status code %d from bosh-director", res.StatusCode)
 	}
 
-	defer res.Body.Close()
+	defer pcap.CloseQuietly(res.Body)
 
 	var info pcap.BoshInfo
 	err = json.NewDecoder(res.Body).Decode(&info)
