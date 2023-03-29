@@ -127,7 +127,9 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([
 	var endpoints []AgentEndpoint
 	for _, instance := range instances {
 		identifier := strings.Join([]string{instance.Job, instance.ID}, "/")
-		endpoints = append(endpoints, AgentEndpoint{IP: instance.Ips[0], Port: br.config.AgentPort, Identifier: identifier})
+		endpoints = append(endpoints, AgentEndpoint{
+			IP: instance.Ips[0], Port: br.config.AgentPort, Identifier: identifier,
+		})
 	}
 
 	if len(endpoints) == 0 {
@@ -186,7 +188,7 @@ func (br *BoshResolver) setup() error {
 	ptr := *br.directorURL
 	infoEndpoint := &ptr
 	infoEndpoint.Path = "/info"
-	//TODO: (discussion) weird. br.directorURL.JoinPath("/info") is buggy: https://github.com/golang/go/issues/58605
+	// TODO: (discussion) weird. br.directorURL.JoinPath("/info") is buggy: https://github.com/golang/go/issues/58605
 
 	response, err := br.client.Do(&http.Request{
 		Method: http.MethodGet,

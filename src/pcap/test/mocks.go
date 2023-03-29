@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +16,8 @@ import (
 	"regexp"
 	"text/template"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/golang-jwt/jwt/v4"
 )
@@ -34,7 +35,7 @@ func MockJWTAPI() (*httptest.Server, string) {
 		UAAUrl string
 	}
 
-	var JWTAPI JWTAPIMock //TODO: (discussion) linter deadlock?
+	var JWTAPI JWTAPIMock
 
 	mux := http.NewServeMux()
 	ts := httptest.NewServer(mux)
@@ -147,8 +148,10 @@ func verifyJWTTokenMock(jku string) (string, string) {
 	// Create the claims
 	claims := payload{
 
-		Scope: []string{"openid",
-			"bosh.admin"},
+		Scope: []string{
+			"openid",
+			"bosh.admin",
+		},
 		ClientId:  "bosh_cli",
 		Cid:       "bosh_cli",
 		Azp:       "bosh_cli",
