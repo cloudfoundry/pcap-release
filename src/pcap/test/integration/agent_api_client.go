@@ -3,6 +3,8 @@ package integration
 import (
 	"context"
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test"
+	"net"
 	"os"
 	"time"
 
@@ -14,7 +16,6 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 )
 
 var apiClient pcap.APIClient
@@ -26,6 +27,11 @@ var port = 8110
 
 var APIPort = 8080
 
+func createAPIwithLocalResolver(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig *pcap.MutualTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
+	resolver := NewLocalResolver(targets)
+	return createAPI(resolver, bufConf, mTLSConfig, id)
+}
+
 var _ = Describe("Using LocalResolver", func() {
 	var agentServer1 *grpc.Server
 	var agentServer2 *grpc.Server
@@ -35,9 +41,9 @@ var _ = Describe("Using LocalResolver", func() {
 	var agentID2 = "router/2abc"
 	var agentTarget1 pcap.AgentEndpoint
 	var agentTarget2 pcap.AgentEndpoint
-	var stop *pcap.CaptureRequest
 	var defaultOptions *pcap.CaptureOptions
 	var api *pcap.API
+	var apiAddr net.Addr
 	var agent1 *pcap.Agent
 	loopback := findLoopback().Name
 
@@ -46,20 +52,15 @@ var _ = Describe("Using LocalResolver", func() {
 		Context("with two agents and one API", func() {
 			BeforeEach(func() {
 				var targets []pcap.AgentEndpoint
-				// fixme: The BoshResolver can't support agent-specific Ports, as that information is not returned by the bosh director. We need to find another way to integration test multiple agents
-				agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
+				agentServer1, agentTarget1, agent1 = createAgent(9494, agentID1, nil)
 				targets = append(targets, agentTarget1)
 
-				agentServer2, agentTarget2, _ = createAgent(nextFreePort(), agentID2, nil)
+				agentServer2, agentTarget2, _ = createAgent(9494, agentID2, nil)
 				targets = append(targets, agentTarget2)
 
 				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 				apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180}
-				apiClient, apiServer, api = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
-
-				stop = &pcap.CaptureRequest{
-					Operation: &pcap.CaptureRequest_Stop{},
-				}
+				apiClient, apiServer, api, _ = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, apiID)
 
 				defaultOptions = &pcap.CaptureOptions{
 					Device:  loopback,
@@ -80,7 +81,7 @@ var _ = Describe("Using LocalResolver", func() {
 
 				readAndExpectFirstMessages(stream)
 
-				err = stream.Send(stop)
+				err = stream.Send(pcap.MakeStopRequest())
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
 				_ = readAndExpectCleanEnd(stream)
@@ -104,7 +105,7 @@ var _ = Describe("Using LocalResolver", func() {
 				Expect(errCode).To(Equal(codes.ResourceExhausted))
 
 				for _, stream := range streams {
-					err = stream.Send(stop)
+					err = stream.Send(pcap.MakeStopRequest())
 					Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
 					_ = readAndExpectCleanEnd(stream)
@@ -122,7 +123,7 @@ var _ = Describe("Using LocalResolver", func() {
 				Expect(errCode).To(Equal(codes.OK))
 
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
-				err = stream.Send(stop)
+				err = stream.Send(pcap.MakeStopRequest())
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 				_ = readAndExpectCleanEnd(stream)
 			})
@@ -152,7 +153,7 @@ var _ = Describe("Using LocalResolver", func() {
 				code, messages, _ := recvCapture(500, stream)
 				Expect(code).To(Equal(codes.OK))
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget2.Identifier)).To(BeTrue())
-				err = stream.Send(stop)
+				err = stream.Send(pcap.MakeStopRequest())
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
 				_ = readAndExpectCleanEnd(stream)
@@ -171,7 +172,7 @@ var _ = Describe("Using LocalResolver", func() {
 				_, messages, _ := recvCapture(500, stream)
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_INSTANCE_UNAVAILABLE, agentTarget1.Identifier)).To(BeTrue())
 
-				err = stream.Send(stop)
+				err = stream.Send(pcap.MakeStopRequest())
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
 				messages = readAndExpectCleanEnd(stream)
@@ -212,12 +213,8 @@ var _ = Describe("Using LocalResolver", func() {
 
 				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 				apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 90}
-				apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
+				apiClient, apiServer, _, _ = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, apiID)
 				apiPort++
-
-				stop = &pcap.CaptureRequest{
-					Operation: &pcap.CaptureRequest_Stop{},
-				}
 
 				defaultOptions = &pcap.CaptureOptions{
 					Device:  loopback,
@@ -260,12 +257,8 @@ var _ = Describe("Using LocalResolver", func() {
 				targets = append(targets, agentTarget2)
 				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 				apiBuffConf := pcap.BufferConf{Size: 7, UpperLimit: 6, LowerLimit: 4}
-				apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
+				apiClient, apiServer, _, _ = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, apiID)
 				apiPort++
-
-				stop = &pcap.CaptureRequest{
-					Operation: &pcap.CaptureRequest_Stop{},
-				}
 
 				defaultOptions = &pcap.CaptureOptions{
 					Device:  loopback,
@@ -287,7 +280,7 @@ var _ = Describe("Using LocalResolver", func() {
 				GinkgoWriter.Printf("receive non-OK code: %s\n", errCode.String())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(containsMsgTypeWithOrigin(messages, pcap.MessageType_CONGESTED, apiID)).To(BeTrue())
-				err = stream.Send(stop)
+				err = stream.Send(pcap.MakeStopRequest())
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
 				_ = readAndExpectCleanEnd(stream)
@@ -321,11 +314,7 @@ var _ = Describe("Using LocalResolver", func() {
 					},
 				}
 				apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}
-				apiClient, apiServer, _ = createAPI(targets, apiBuffConf, agentTLSConf, agentID1)
-
-				stop = &pcap.CaptureRequest{
-					Operation: &pcap.CaptureRequest_Stop{},
-				}
+				apiClient, apiServer, _, _ = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, agentID1)
 
 				defaultOptions = &pcap.CaptureOptions{
 					Device:  loopback,
@@ -351,7 +340,7 @@ var _ = Describe("Using LocalResolver", func() {
 
 				readAndExpectFirstMessages(stream)
 
-				err = stream.Send(stop)
+				err = stream.Send(pcap.MakeStopRequest())
 
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
@@ -372,7 +361,7 @@ var _ = Describe("Using LocalResolver", func() {
 				Expect(err).NotTo(HaveOccurred(), "Receiving the first 10 messages")
 				Expect(capture).NotTo(BeNil())
 				Expect(messages).To(HaveLen(10))
-				err = stream.Send(stop)
+				err = stream.Send(pcap.MakeStopRequest())
 				Expect(err).NotTo(HaveOccurred(), "Sending stop message")
 
 				_ = readAndExpectCleanEnd(stream)
@@ -391,7 +380,7 @@ var _ = Describe("Using LocalResolver", func() {
 
 			agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 			apiBuffConf := pcap.BufferConf{Size: 100000, UpperLimit: 99000, LowerLimit: 90000}
-			apiClient, apiServer, api = createAPI(targets, apiBuffConf, agentTLSConf, apiID)
+			apiClient, apiServer, api, apiAddr = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, apiID)
 
 		})
 
@@ -407,7 +396,8 @@ var _ = Describe("Using LocalResolver", func() {
 				logger, _ := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
 				client, err := pcap.NewClient(file, logger, pcap.ConsoleMessageWriter{Log: logger})
 				Expect(err).To(BeNil())
-				apiURL := test.MustParseURL(fmt.Sprintf("http://localhost:%d", APIPort))
+
+				apiURL := test.MustParseURL(fmt.Sprintf("http://%s", apiAddr.String()))
 				err = client.ConnectToAPI(apiURL)
 				Expect(err).To(BeNil())
 

@@ -149,8 +149,8 @@ func getVcapFromMD(md metadata.MD) (*string, error) {
 	return nil, errNoVcapID
 }
 
-// makeStopRequest creates the generic stop CaptureRequest that can be sent to api and agent.
-func makeStopRequest() *CaptureRequest {
+// MakeStopRequest creates the generic stop CaptureRequest that can be sent to api and agent.
+func MakeStopRequest() *CaptureRequest {
 	return &CaptureRequest{Operation: &CaptureRequest_Stop{Stop: &StopCapture{}}}
 }
 

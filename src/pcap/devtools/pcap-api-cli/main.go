@@ -83,11 +83,7 @@ func main() {
 		time.Sleep(200 * time.Millisecond) //nolint:gomnd // default value used for testing
 	}
 
-	stop := &pcap.CaptureRequest{
-		Operation: &pcap.CaptureRequest_Stop{},
-	}
-
-	err = stream.Send(stop)
+	err = stream.Send(pcap.MakeStopRequest())
 	if err != nil {
 		log.Panic("unable to stop capture", zap.Error(err))
 	}

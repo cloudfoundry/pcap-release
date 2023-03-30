@@ -196,7 +196,7 @@ func TestStopCmd(t *testing.T) {
 		},
 		{
 			name:        "Happy path",
-			recv:        &mockRequestReceiver{req: makeStopRequest(), err: nil},
+			recv:        &mockRequestReceiver{req: MakeStopRequest(), err: nil},
 			expectedErr: context.Canceled,
 			wantErr:     true,
 		},
@@ -454,7 +454,7 @@ func TestAPICapture(t *testing.T) {
 		},
 		{
 			name:           "Incoming Request is invalid",
-			stream:         mockRequestReceiver{makeStopRequest(), nil, nil, context.Background()},
+			stream:         mockRequestReceiver{MakeStopRequest(), nil, nil, context.Background()},
 			apiRunning:     true,
 			wantErr:        true,
 			wantStatusCode: codes.InvalidArgument,

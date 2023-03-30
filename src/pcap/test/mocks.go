@@ -83,16 +83,16 @@ func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Serv
 		"user_authentication": {
 		  "type": "uaa",
 		  "options": {
-			"url": "{{.URL}}",
+			"url": "{{.UaaURL}}",
 			"urls": [
-			  "{{.URL}}"
+			  "{{.UaaURL}}"
 			]
 		  }
 		}
 	}`
 
 	type BoshApiMock struct {
-		URL string
+		UaaURL string
 	}
 	var boshapi BoshApiMock
 
@@ -123,7 +123,7 @@ func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Serv
 	})
 
 	ts := httptest.NewServer(mux)
-	boshapi.URL = url
+	boshapi.UaaURL = url
 
 	return ts
 }

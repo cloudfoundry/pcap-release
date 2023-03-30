@@ -243,8 +243,10 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 
 	agent := pcap.NewAgent(pcap.BufferConf{Size: 10000, UpperLimit: 9800, LowerLimit: 8000}, id)
 
-	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
-	Expect(err).NotTo(HaveOccurred())
+	//listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	//Expect(err).NotTo(HaveOccurred())
+
+	listener := localNodeListener(port)
 	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
 	Expect(ok).To(BeTrue())
 	GinkgoWriter.Printf("create agent with listener  %s\n", listener.Addr())
@@ -272,33 +274,35 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	return server, target, agent
 }
 
-func createAPI(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig *pcap.MutualTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API) {
+func createAPI(resolver pcap.AgentResolver, bufConf pcap.BufferConf, mTLSConfig *pcap.MutualTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
 	var server *grpc.Server
 	api, err := pcap.NewAPI(bufConf, mTLSConfig, id, MaxConcurrentCaptures)
 	Expect(err).NotTo(HaveOccurred())
 
-	resolver := NewLocalResolver(targets)
 	api.RegisterResolver(resolver)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", APIPort))
-	Expect(err).NotTo(HaveOccurred())
-	GinkgoWriter.Printf("create api with listener  %s\n", lis.Addr())
+	//lis, err := net.Listen("tcp", fmt.Sprintf(":%d", APIPort))
+	//Expect(err).NotTo(HaveOccurred())
+
+	listener := localNodeListener(APIPort)
+
+	GinkgoWriter.Printf("create api with listener  %s\n", listener.Addr())
 
 	server = grpc.NewServer()
 	pcap.RegisterAPIServer(server, api)
 
 	go func() {
-		err = server.Serve(lis)
+		err = server.Serve(listener)
 		if err != nil {
 			GinkgoWriter.Printf("error occurred during api creation: %v", err)
 		}
 	}()
 
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.Dial(listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	Expect(err).NotTo(HaveOccurred())
 
 	client := pcap.NewAPIClient(cc)
-	return client, server, api
+	return client, server, api, listener.Addr()
 }
 
 func recvCapture(n int, stream pcap.API_CaptureClient) (codes.Code, []*pcap.CaptureResponse, error) {

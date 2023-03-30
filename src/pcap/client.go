@@ -193,7 +193,7 @@ func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointReq
 }
 
 func (c *Client) StopRequest() {
-	err := c.stream.SendMsg(makeStopRequest())
+	err := c.stream.SendMsg(MakeStopRequest())
 	if err != nil {
 		c.log.Error("could not stop")
 	}
