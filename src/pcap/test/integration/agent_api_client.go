@@ -412,7 +412,7 @@ var _ = Describe("Using LocalResolver", func() {
 				Expect(err).To(BeNil())
 
 				ctx := context.Background()
-				ctx, cancel := pcap.WithCancelCause(ctx)
+				ctx, cancel := context.WithCancelCause(ctx)
 
 				endpointRequest := &pcap.EndpointRequest{
 					Request: &pcap.EndpointRequest_Bosh{

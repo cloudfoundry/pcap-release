@@ -80,7 +80,7 @@ func TestReadMsg(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
+			ctx, cancel := context.WithCancelCause(ctx)
 			if tt.contextCancelled {
 				cancel(nil)
 			}
@@ -204,11 +204,11 @@ func TestStopCmd(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
+			ctx, cancel := context.WithCancelCause(ctx)
 			stopCmd(cancel, tt.recv)
 			<-ctx.Done()
 
-			err := Cause(ctx)
+			err := context.Cause(ctx)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)

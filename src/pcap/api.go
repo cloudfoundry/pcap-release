@@ -157,7 +157,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		return errorf(codes.Unavailable, "api is draining")
 	}
 
-	ctx, cancel := WithCancelCause(stream.Context())
+	ctx, cancel := context.WithCancelCause(stream.Context())
 	defer func() {
 		cancel(nil)
 	}()
@@ -219,7 +219,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		// just to be sure that the error was already propagated
 		<-ctx.Done()
 	}
-	err = Cause(ctx)
+	err = context.Cause(ctx)
 	// Cancelling the context with nil causes context.Cancelled to be set
 	// which is a non-error in our case.
 	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, errDraining) {
@@ -416,7 +416,7 @@ type requestReceiver interface {
 // stopCmd reads the next message from the stream. It ensures that the message
 // has a payload of StopCapture. If any error is encountered or the payload is
 // of a different type an appropriate cause is set and the cancel function is called.
-func stopCmd(cancel CancelCauseFunc, stream requestReceiver) {
+func stopCmd(cancel context.CancelCauseFunc, stream requestReceiver) {
 	go func() {
 		msg, err := stream.Recv()
 		if err != nil {

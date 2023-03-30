@@ -143,7 +143,7 @@ func main() {
 
 	// set up capture request
 	ctx := context.Background()
-	ctx, cancel := pcap.WithCancelCause(ctx)
+	ctx, cancel := context.WithCancelCause(ctx)
 
 	go pcap.WaitForSignal(logger, client, nil)
 
@@ -158,7 +158,7 @@ func main() {
 	}
 
 	// handle results of capture request
-	cause := pcap.Cause(ctx)
+	cause := context.Cause(ctx)
 	if cause != nil && !errors.Is(cause, context.Canceled) {
 		err = fmt.Errorf("finished with error %w", cause)
 		return

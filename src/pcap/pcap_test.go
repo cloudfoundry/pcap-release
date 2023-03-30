@@ -470,7 +470,7 @@ func TestForwardToStream(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
+			ctx, cancel := context.WithCancelCause(ctx)
 			src := make(chan *CaptureResponse, bufSize)
 			defer close(src)
 			go func() {
@@ -486,7 +486,7 @@ func TestForwardToStream(t *testing.T) {
 
 			<-ctx.Done()
 
-			err := Cause(ctx)
+			err := context.Cause(ctx)
 			if err == nil {
 				t.Errorf("Expected error to finish test")
 			}

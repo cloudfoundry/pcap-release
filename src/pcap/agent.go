@@ -93,7 +93,7 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 		}
 	}()
 
-	ctx, cancel := WithCancelCause(stream.Context())
+	ctx, cancel := context.WithCancelCause(stream.Context())
 	defer cancel(nil)
 
 	ctx, log = setVcapID(ctx, log, nil)
@@ -143,7 +143,7 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 		<-ctx.Done()
 	}
 
-	err = Cause(ctx)
+	err = context.Cause(ctx)
 	// Cancelling the context with nil causes context.Cancelled to be set
 	// which is a non-error in our case.
 	if err != nil && !errors.Is(err, context.Canceled) {
@@ -216,7 +216,7 @@ type pcapHandle interface {
 // channel. If the given context errors the loop breaks with the next read.
 // If an error is encountered while reading packets the cancel function is
 // called and the loop is stopped.
-func readPackets(ctx context.Context, cancel CancelCauseFunc, handle pcapHandle, bufSize int) <-chan *CaptureResponse {
+func readPackets(ctx context.Context, cancel context.CancelCauseFunc, handle pcapHandle, bufSize int) <-chan *CaptureResponse {
 	out := make(chan *CaptureResponse, bufSize)
 
 	go func() {
@@ -260,7 +260,7 @@ type agentRequestReceiver interface {
 // agentStopCmd reads the next message from the stream. It ensures that the message
 // has a payload of StopAgentCapture. If any error is encountered or the payload is
 // of a different type an appropriate cause is set and the cancel function is called.
-func agentStopCmd(cancel CancelCauseFunc, stream agentRequestReceiver) {
+func agentStopCmd(cancel context.CancelCauseFunc, stream agentRequestReceiver) {
 	go func() {
 		msg, err := stream.Recv()
 		if err != nil {

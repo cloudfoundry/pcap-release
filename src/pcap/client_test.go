@@ -124,7 +124,7 @@ func TestHandleStream(t *testing.T) {
 			copyWg := &sync.WaitGroup{}
 			copyWg.Add(1)
 			stream := &MockAPIWriter{messages: tt.messages}
-			ctx, cancel := WithCancelCause(context.Background())
+			ctx, cancel := context.WithCancelCause(context.Background())
 			c := Client{log: zap.L().With(zap.String("test", tt.name))}
 			go c.handleStream(stream, writer, copyWg, cancel)
 			if tt.clientError != nil {
@@ -132,7 +132,7 @@ func TestHandleStream(t *testing.T) {
 			}
 			copyWg.Wait()
 
-			err := Cause(ctx)
+			err := context.Cause(ctx)
 			if err.Error() != tt.expectedErrMessage {
 				t.Errorf("expected = %v, actual = %v", tt.expectedErrMessage, err)
 			}

@@ -157,7 +157,7 @@ func makeStopRequest() *CaptureRequest {
 // forwardToStream reads Packets from src until it's closed and writes them to stream.
 // If it encounters an error while doing so the error is set to cause and the cancel function
 // is called. Any data left in src is discarded after a write-error occurred.
-func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, bufConf BufferConf, wg *sync.WaitGroup, id string) {
+func forwardToStream(cancel context.CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, bufConf BufferConf, wg *sync.WaitGroup, id string) {
 	go func() {
 		// After this function returns we want to make sure that this channel is
 		// drained properly if there is anything left in it. This avoids responses
