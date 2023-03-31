@@ -1,4 +1,4 @@
-package test
+package mock
 
 import (
 	"bytes"
@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strings"
 	"text/template"
 	"time"
 
@@ -69,6 +71,58 @@ func MockJWTAPI() (*httptest.Server, string) {
 	JWTAPI.UAAUrl = ts.URL
 
 	return ts, token
+}
+
+func NewResolverWithMockBoshAPI(responses map[string]string) (*pcap.BoshResolver, error) {
+	jwtapi, _ := MockJWTAPI()
+	boshAPI := MockBoshDirectorAPI(responses, jwtapi.URL)
+	config := pcap.BoshResolverConfig{
+		RawDirectorURL:   boshAPI.URL,
+		EnvironmentAlias: "bosh",
+		AgentPort:        8083,
+		TokenScope:       "bosh.admin", // TODO Test for other scopes?
+	}
+	boshResolver, err := pcap.NewBoshResolver(config)
+	if err != nil {
+		return nil, err
+	}
+	boshResolver.UaaURLs = []string{jwtapi.URL}
+	return boshResolver, nil
+}
+
+func NewResolverWithMockBoshAPIWithEndpoints(endpoints []pcap.AgentEndpoint, deploymentName string) (*pcap.BoshResolver, error) {
+	var haproxyInstances []pcap.BoshInstance
+
+	timeString := "2022-09-26T21:28:39Z"
+	timestamp, _ := time.Parse(time.RFC3339, timeString)
+	for _, endpoint := range endpoints {
+		parts := strings.Split(endpoint.Identifier, "/")
+		job, id := parts[0], parts[1]
+
+		instance := pcap.BoshInstance{
+			AgentID:     endpoint.Identifier,
+			Cid:         "agent_id:a9c3cda6-9cd9-457f-aad4-143405bf69db;resource_group_name:rg-azure-cfn01",
+			Job:         job,
+			Index:       0,
+			ID:          id,
+			Az:          "z1",
+			Ips:         []string{endpoint.IP},
+			VMCreatedAt: timestamp,
+			ExpectsVM:   true,
+		}
+		haproxyInstances = append(haproxyInstances, instance)
+	}
+
+	instances, err := json.Marshal(haproxyInstances)
+	if err != nil {
+		panic(err)
+	}
+
+	responses := map[string]string{
+		fmt.Sprintf("/deployments/%v/instances", deploymentName): string(instances),
+	}
+
+	return NewResolverWithMockBoshAPI(responses)
 }
 
 func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Server {

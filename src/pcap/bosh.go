@@ -54,9 +54,9 @@ type BoshResolverConfig struct {
 
 type BoshResolver struct {
 	client      *http.Client
-	uaaURLs     []string
-	config      BoshResolverConfig
-	directorURL *url.URL
+	UaaURLs     []string
+	Config      BoshResolverConfig
+	DirectorURL *url.URL
 	logger      *zap.Logger
 	boshRootCAs *x509.CertPool
 }
@@ -77,8 +77,8 @@ func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 
 	resolver := &BoshResolver{
 		logger:      zap.L().With(zap.String(LogKeyHandler, config.EnvironmentAlias)),
-		config:      config,
-		directorURL: directorURL,
+		Config:      config,
+		DirectorURL: directorURL,
 		boshRootCAs: boshRootCAs,
 	}
 
@@ -90,7 +90,7 @@ func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 }
 
 func (br *BoshResolver) Name() string {
-	return fmt.Sprintf("bosh/%s", br.config.EnvironmentAlias)
+	return fmt.Sprintf("bosh/%s", br.Config.EnvironmentAlias)
 }
 
 func (br *BoshResolver) CanResolve(request *EndpointRequest) bool {
@@ -99,7 +99,7 @@ func (br *BoshResolver) CanResolve(request *EndpointRequest) bool {
 	}
 
 	if boshRequest := request.GetBosh(); boshRequest != nil {
-		return boshRequest.Environment == br.config.EnvironmentAlias
+		return boshRequest.Environment == br.Config.EnvironmentAlias
 	}
 	return false
 }
@@ -107,14 +107,14 @@ func (br *BoshResolver) CanResolve(request *EndpointRequest) bool {
 func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([]AgentEndpoint, error) { // TODO why do we pass the logger here?
 	logger.Info("resolving endpoints for bosh request")
 
-	err := br.validate(request)
+	err := br.Validate(request)
 	if err != nil {
 		return nil, err
 	}
 
 	boshRequest := request.GetBosh()
 
-	err = br.authenticate(boshRequest.Token)
+	err = br.Authenticate(boshRequest.Token)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([
 	for _, instance := range instances {
 		identifier := strings.Join([]string{instance.Job, instance.ID}, "/")
 		endpoints = append(endpoints, AgentEndpoint{
-			IP: instance.Ips[0], Port: br.config.AgentPort, Identifier: identifier,
+			IP: instance.Ips[0], Port: br.Config.AgentPort, Identifier: identifier,
 		})
 	}
 
@@ -140,7 +140,7 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([
 	return endpoints, nil
 }
 
-func (br *BoshResolver) validate(endpointRequest *EndpointRequest) error {
+func (br *BoshResolver) Validate(endpointRequest *EndpointRequest) error {
 	boshRequest := endpointRequest.GetBosh()
 
 	if boshRequest == nil {
@@ -167,9 +167,9 @@ func (br *BoshResolver) validate(endpointRequest *EndpointRequest) error {
 }
 
 func (br *BoshResolver) setup() error {
-	br.logger.Info("setting up BoshResolver", zap.Any("resolver-config", br.config))
+	br.logger.Info("setting up BoshResolver", zap.Any("resolver-config", br.Config))
 
-	if br.config.MTLS == nil {
+	if br.Config.MTLS == nil {
 		br.client = http.DefaultClient
 	} else {
 		br.client = &http.Client{
@@ -185,17 +185,17 @@ func (br *BoshResolver) setup() error {
 	}
 
 	br.logger.Info("discovering bosh-UAA endpoint")
-	ptr := *br.directorURL
+	ptr := *br.DirectorURL
 	infoEndpoint := &ptr
 	infoEndpoint.Path = "/info"
-	// TODO: (discussion) weird. br.directorURL.JoinPath("/info") is buggy: https://github.com/golang/go/issues/58605
+	// TODO: (discussion) weird. br.DirectorURL.JoinPath("/info") is buggy: https://github.com/golang/go/issues/58605
 
 	response, err := br.client.Do(&http.Request{
 		Method: http.MethodGet,
 		URL:    infoEndpoint,
 	})
 	if err != nil {
-		return fmt.Errorf("could not fetch bosh-director API from %v: %w", br.config.RawDirectorURL, err)
+		return fmt.Errorf("could not fetch bosh-director API from %v: %w", br.Config.RawDirectorURL, err)
 	}
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("received non-OK response from bosh-director: %s", response.Status)
@@ -213,14 +213,14 @@ func (br *BoshResolver) setup() error {
 		return fmt.Errorf("could not parse bosh-director API response: %w", err)
 	}
 
-	br.uaaURLs = apiResponse.UserAuthentication.Options.URLs
+	br.UaaURLs = apiResponse.UserAuthentication.Options.URLs
 
 	br.logger.Info("connected to bosh-director", zap.Any("bosh-director", apiResponse))
 
 	return nil
 }
 
-func (br *BoshResolver) authenticate(authToken string) error {
+func (br *BoshResolver) Authenticate(authToken string) error {
 	allowed, err := br.verifyJWT(authToken)
 	if err != nil {
 		return fmt.Errorf("could not verify token: %w", err)
@@ -234,8 +234,8 @@ func (br *BoshResolver) authenticate(authToken string) error {
 }
 
 func (br *BoshResolver) getInstances(deployment string, authToken string) ([]BoshInstance, int, error) {
-	br.logger.Debug("checking token-permissions", zap.String("director-url", br.directorURL.String()), zap.String("deployment", deployment))
-	instancesURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", br.directorURL, deployment))
+	br.logger.Debug("checking token-permissions", zap.String("director-url", br.DirectorURL.String()), zap.String("deployment", deployment))
+	instancesURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", br.DirectorURL, deployment))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -303,7 +303,7 @@ func (br *BoshResolver) verifyJWT(tokenString string) (bool, error) {
 				return nil, err
 			}
 
-			for _, issuer := range br.uaaURLs {
+			for _, issuer := range br.UaaURLs {
 				var issuerURL *url.URL
 				issuerURL, err = url.Parse(issuer)
 				if err != nil {
@@ -315,7 +315,7 @@ func (br *BoshResolver) verifyJWT(tokenString string) (bool, error) {
 					return br.parseRsaToken(token)
 				}
 			}
-			return nil, fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, br.uaaURLs)
+			return nil, fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, br.UaaURLs)
 		}
 		return nil, fmt.Errorf("header 'jku' missing from token, cannot verify signature")
 	})
@@ -327,14 +327,14 @@ func (br *BoshResolver) verifyJWT(tokenString string) (bool, error) {
 	if claims, claimsOk := token.Claims.(jwt.MapClaims); claimsOk {
 		if scopes, ok := claims["scope"].([]interface{}); ok {
 			for _, scope := range scopes {
-				if scope.(string) == br.config.TokenScope {
+				if scope.(string) == br.Config.TokenScope {
 					return true, nil
 				}
 			}
 		}
 	}
 
-	return false, fmt.Errorf("could not find scope %q in token claims", br.config.TokenScope)
+	return false, fmt.Errorf("could not find scope %q in token claims", br.Config.TokenScope)
 }
 
 // parseRsaToken uses the token information for RSA signed JWT tokens and retrieves
