@@ -73,7 +73,7 @@ func MockJWTAPI() (*httptest.Server, string) {
 	return ts, token
 }
 
-func NewResolverWithMockBoshAPI(responses map[string]string) (*pcap.BoshResolver, error) {
+func NewResolverWithMockBoshAPI(responses map[string]string) (*pcap.BoshResolver, *httptest.Server, error) {
 	jwtapi, _ := MockJWTAPI()
 	boshAPI := MockBoshDirectorAPI(responses, jwtapi.URL)
 	config := pcap.BoshResolverConfig{
@@ -84,13 +84,13 @@ func NewResolverWithMockBoshAPI(responses map[string]string) (*pcap.BoshResolver
 	}
 	boshResolver, err := pcap.NewBoshResolver(config)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	boshResolver.UaaURLs = []string{jwtapi.URL}
-	return boshResolver, nil
+	return boshResolver, boshAPI, nil
 }
 
-func NewResolverWithMockBoshAPIWithEndpoints(endpoints []pcap.AgentEndpoint, deploymentName string) (*pcap.BoshResolver, error) {
+func NewResolverWithMockBoshAPIWithEndpoints(endpoints []pcap.AgentEndpoint, deploymentName string) (*pcap.BoshResolver, *httptest.Server, error) {
 	var haproxyInstances []pcap.BoshInstance
 
 	timeString := "2022-09-26T21:28:39Z"

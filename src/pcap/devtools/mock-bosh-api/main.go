@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
 	"go.uber.org/zap"
 	"io/fs"
 	"os"
@@ -11,7 +12,6 @@ import (
 	"github.com/jessevdk/go-flags"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/test"
 )
 
 type options struct {
@@ -30,9 +30,9 @@ func init() {
 }
 
 func main() {
-	jwtapi, _ := test.MockJWTAPI()
+	jwtapi, _ := mock.MockJWTAPI()
 	responses := prepareMockBoshDirectorResponse()
-	boshAPI := test.MockBoshDirectorAPI(responses, jwtapi.URL)
+	boshAPI := mock.MockBoshDirectorAPI(responses, jwtapi.URL)
 	defer boshAPI.Close()
 
 	zap.L().Info("jwtapi listening", zap.String("url", jwtapi.URL))
@@ -103,7 +103,7 @@ agent:
 }
 func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 	log := zap.L().With(zap.String("file", file))
-	token, err := test.GetValidToken(jwtAPIurl)
+	token, err := mock.GetValidToken(jwtAPIurl)
 	if err != nil {
 		log.Panic("Failed to write api config file", zap.Error(err))
 	}

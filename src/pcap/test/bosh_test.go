@@ -11,6 +11,10 @@ import (
 	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
 )
 
+var (
+	origin = "pcap-api-1234ab"
+)
+
 func TestNewBoshResolver(t *testing.T) {
 	jwtapi, _ := mock.MockJWTAPI()
 	boshAPI := mock.MockBoshDirectorAPI(nil, jwtapi.URL)
@@ -50,7 +54,6 @@ func TestNewBoshResolver(t *testing.T) {
 			wantErr:     true,
 			expectedErr: nil,
 		},
-		// TODO: test for MTLS
 	}
 
 	for _, tt := range tests {
@@ -71,7 +74,7 @@ func TestNewBoshResolver(t *testing.T) {
 }
 
 func TestAuthenticate(t *testing.T) {
-	bar, err := mock.NewResolverWithMockBoshAPI(nil)
+	bar, _, err := mock.NewResolverWithMockBoshAPI(nil)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -139,7 +142,7 @@ func TestResolve(t *testing.T) {
 		},
 	}
 
-	boshResolver, err := mock.NewResolverWithMockBoshAPIWithEndpoints(expectedAgentEndpoints, deploymentName)
+	boshResolver, _, err := mock.NewResolverWithMockBoshAPIWithEndpoints(expectedAgentEndpoints, deploymentName)
 	if err != nil {
 		t.Errorf("received unexpected error = %v", err)
 	}
@@ -197,7 +200,7 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 		},
 	}
 
-	boshResolver, err := mock.NewResolverWithMockBoshAPI(nil) // NewBoshResolver(bosh.Environment{}, 8083)
+	boshResolver, _, err := mock.NewResolverWithMockBoshAPI(nil) // NewBoshResolver(bosh.Environment{}, 8083)
 	if err != nil {
 		t.Error(err)
 	}
@@ -268,7 +271,7 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 		},
 	}
 
-	boshResolver, err := mock.NewResolverWithMockBoshAPI(nil) // NewBoshResolver(bosh.Environment{}, 8083)
+	boshResolver, _, err := mock.NewResolverWithMockBoshAPI(nil) // NewBoshResolver(bosh.Environment{}, 8083)
 	if err != nil {
 		t.Error(err)
 	}
@@ -283,6 +286,57 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 			}
 			if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
 				t.Errorf("expectedErr = %v, error = %v", tt.expectedErr, err)
+			}
+		})
+	}
+}
+
+func TestAPIRegisterHandler(t *testing.T) {
+	jwtapi, _ := mock.MockJWTAPI()
+	boshAPI := mock.MockBoshDirectorAPI(nil, jwtapi.URL)
+
+	config := pcap.BoshResolverConfig{
+		RawDirectorURL:   boshAPI.URL,
+		EnvironmentAlias: "bosh",
+		MTLS:             nil,
+		AgentPort:        8083,
+	}
+	boshResolver, err := pcap.NewBoshResolver(config)
+	if err != nil {
+		panic(err)
+	}
+
+	tests := []struct {
+		name               string
+		resolver           pcap.AgentResolver
+		wantRegistered     bool
+		wantedResolverName string
+	}{
+		{
+			name:               "Register bosh handler and check the handler with correct name",
+			resolver:           boshResolver,
+			wantRegistered:     true,
+			wantedResolverName: "bosh/bosh",
+		},
+		{
+			name:               "Register bosh handler and check the handler with invalid name",
+			resolver:           boshResolver,
+			wantRegistered:     false,
+			wantedResolverName: "cf",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var api *pcap.API
+			api, err = pcap.NewAPI(pcap.BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, nil, origin, 1)
+			if err != nil {
+				t.Errorf("RegisterResolver() unexpected error during api creation: %v", err)
+			}
+
+			api.RegisterResolver(tt.resolver)
+			registered := api.HasHandler(tt.wantedResolverName)
+			if *registered != tt.wantRegistered {
+				t.Errorf("RegisterResolver() expected registered %v but got %v", tt.wantRegistered, *registered)
 			}
 		})
 	}

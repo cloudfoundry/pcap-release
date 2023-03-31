@@ -3,7 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/test"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
 	"net"
 	"os"
 	"time"
@@ -397,7 +397,7 @@ var _ = Describe("Using LocalResolver", func() {
 				client, err := pcap.NewClient(file, logger, pcap.ConsoleMessageWriter{Log: logger})
 				Expect(err).To(BeNil())
 
-				apiURL := test.MustParseURL(fmt.Sprintf("http://%s", apiAddr.String()))
+				apiURL := mock.MustParseURL(fmt.Sprintf("http://%s", apiAddr.String()))
 				err = client.ConnectToAPI(apiURL)
 				Expect(err).To(BeNil())
 

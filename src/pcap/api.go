@@ -104,9 +104,9 @@ func (api *API) RegisteredResolverNames() []string {
 	return resolverNames
 }
 
-// resolverRegistered checks if handler is registered.
+// HasHandler checks if handler is registered.
 // returns false, if the handler is not registered.
-func (api *API) resolverRegistered(handler string) *bool {
+func (api *API) HasHandler(handler string) *bool {
 	_, ok := api.resolvers[handler]
 	return &ok
 }

@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap/test"
-
 	"github.com/google/gopacket"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -374,57 +372,6 @@ func TestAPIStatus(t *testing.T) {
 			}
 			if got.Healthy != tt.wantHealth {
 				t.Errorf("Status() healthy = %v, wantHealth %v", got.Healthy, tt.wantHealth)
-			}
-		})
-	}
-}
-
-func TestAPIRegisterHandler(t *testing.T) {
-	jwtapi, _ := test.MockJWTAPI()
-	boshAPI := test.MockBoshDirectorAPI(nil, jwtapi.URL)
-
-	config := BoshResolverConfig{
-		RawDirectorURL:   boshAPI.URL,
-		EnvironmentAlias: "bosh",
-		MTLS:             nil,
-		AgentPort:        8083,
-	}
-	boshResolver, err := NewBoshResolver(config)
-	if err != nil {
-		panic(err)
-	}
-
-	tests := []struct {
-		name               string
-		resolver           AgentResolver
-		wantRegistered     bool
-		wantedResolverName string
-	}{
-		{
-			name:               "Register bosh handler and check the handler with correct name",
-			resolver:           boshResolver,
-			wantRegistered:     true,
-			wantedResolverName: "bosh/bosh",
-		},
-		{
-			name:               "Register bosh handler and check the handler with invalid name",
-			resolver:           boshResolver,
-			wantRegistered:     false,
-			wantedResolverName: "cf",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var api *API
-			api, err = NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, nil, origin, 1)
-			if err != nil {
-				t.Errorf("RegisterResolver() unexpected error during api creation: %v", err)
-			}
-
-			api.RegisterResolver(tt.resolver)
-			registered := api.resolverRegistered(tt.wantedResolverName)
-			if *registered != tt.wantRegistered {
-				t.Errorf("RegisterResolver() expected registered %v but got %v", tt.wantRegistered, *registered)
 			}
 		})
 	}
