@@ -72,6 +72,8 @@ type AgentResolver interface {
 	CanResolve(*EndpointRequest) bool
 	// Resolve either resolves and returns the agents targeted by Capture or provides an error
 	Resolve(*EndpointRequest, *zap.Logger) ([]AgentEndpoint, error)
+	// Healthy determines, whether this handler is healthy or not
+	Healthy() bool
 }
 
 func (api *API) RegisterResolver(resolver AgentResolver) {
@@ -79,12 +81,17 @@ func (api *API) RegisterResolver(resolver AgentResolver) {
 }
 
 // Status provides the current status information for the pcap-api service.
+//
+// The service is marked unhealthy when there are no healthy resolvers available, or the API is draining (shutting down).
 func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
+	healthyResolvers := api.RegisteredResolverNames(true)
+	isHealthy := !api.draining() && len(healthyResolvers) > 0
+
 	apiStatus := &StatusResponse{
-		Healthy:            !api.draining(),
+		Healthy:            isHealthy,
 		CompatibilityLevel: 0,
 		Message:            "Ready.",
-		Resolvers:          api.RegisteredResolverNames(),
+		Resolvers:          healthyResolvers,
 	}
 
 	if api.draining() {
@@ -94,21 +101,24 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	return apiStatus, nil
 }
 
-func (api *API) RegisteredResolverNames() []string {
+func (api *API) RegisteredResolverNames(onlyHealthy bool) []string {
 	resolverNames := make([]string, len(api.resolvers))
 	i := 0
-	for key := range api.resolvers {
-		resolverNames[i] = key
+	for name, resolver := range api.resolvers {
+		if onlyHealthy && !resolver.Healthy() {
+			continue
+		}
+		resolverNames[i] = name
 		i++
 	}
 	return resolverNames
 }
 
-// HasHandler checks if handler is registered.
+// HasResolver checks if handler is registered.
 // returns false, if the handler is not registered.
-func (api *API) HasHandler(handler string) *bool {
+func (api *API) HasResolver(handler string) bool {
 	_, ok := api.resolvers[handler]
-	return &ok
+	return ok
 }
 
 // Stop the server. This will gracefully stop any captures that are currently running
@@ -190,10 +200,10 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	}
 
 	targets, resolveErr := api.resolveAgentEndpoints(opts.Start.Request, log)
-	if errors.Is(resolveErr, errValidationFailed) {
+	if errors.Is(resolveErr, ErrValidationFailed) {
 		return errorf(codes.InvalidArgument, "capture targets not found: %w", resolveErr)
 	} else if resolveErr != nil {
-		return errorf(codes.Unknown, "could not resolve agent endpoints: %w", resolveErr)
+		return errorf(codes.InvalidArgument, "could not resolve agent endpoints: %w", resolveErr)
 	}
 
 	// Start capture
@@ -246,6 +256,9 @@ func (api *API) resolveAgentEndpoints(request *EndpointRequest, log *zap.Logger)
 	for name, resolver := range api.resolvers {
 		if resolver.CanResolve(request) {
 			log.Debug("resolving agent endpoints")
+			if !resolver.Healthy() {
+				return nil, fmt.Errorf("error while resolving request via %s: %w", name, ErrResolverUnhealthy)
+			}
 
 			agents, err := resolver.Resolve(request, log)
 			if err != nil {

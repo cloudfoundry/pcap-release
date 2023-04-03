@@ -394,7 +394,7 @@ var _ = Describe("Using LocalResolver", func() {
 				_ = os.Remove(file) // remove test-file
 
 				logger, _ := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
-				client, err := pcap.NewClient(file, logger, pcap.ConsoleMessageWriter{Log: logger})
+				client, err := pcap.NewClient(file, logger, pcap.LogMessageWriter{Log: logger})
 				Expect(err).To(BeNil())
 
 				apiURL := mock.MustParseURL(fmt.Sprintf("http://%s", apiAddr.String()))
@@ -426,7 +426,7 @@ var _ = Describe("Using LocalResolver", func() {
 					client.StopRequest()
 				}()
 
-				err = client.HandleRequest(ctx, endpointRequest, captureOptions, cancel)
+				err = client.ProcessCapture(ctx, endpointRequest, captureOptions, cancel)
 				Expect(err).To(BeNil())
 				validateAge := func(packets []gopacket.Packet) {
 					maxAge := 10 * time.Second

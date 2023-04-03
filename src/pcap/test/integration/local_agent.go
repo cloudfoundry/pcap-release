@@ -38,6 +38,10 @@ type LocalResolver struct {
 	manualEndpoints []pcap.AgentEndpoint
 }
 
+func (l LocalResolver) Healthy() bool {
+	return true
+}
+
 func (l LocalResolver) Name() string {
 	return "local"
 }

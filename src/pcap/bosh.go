@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -104,6 +105,15 @@ func (br *BoshResolver) CanResolve(request *EndpointRequest) bool {
 	return false
 }
 
+// Resolve returns applicable AgentEndpoint s for request
+//
+// Fails if:
+//   - the token could not be verified
+//   - no endpoints match the query.
+//
+// No endpoints are found if:
+//   - none of the instance groups in the request have instances or the instance groups are not found
+//   - the provided instance IDs don't match any of the existing ID in selected instance groups
 func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([]AgentEndpoint, error) { // TODO why do we pass the logger here?
 	logger.Info("resolving endpoints for bosh request")
 
@@ -126,6 +136,15 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([
 
 	var endpoints []AgentEndpoint
 	for _, instance := range instances {
+
+		if !matchesInstanceGroups(instance, boshRequest.Groups) {
+			continue
+		}
+
+		if len(boshRequest.Instances) > 0 && !matchesInstanceIDs(instance, boshRequest.Instances) {
+			continue
+		}
+
 		identifier := strings.Join([]string{instance.Job, instance.ID}, "/")
 		endpoints = append(endpoints, AgentEndpoint{
 			IP: instance.Ips[0], Port: br.Config.AgentPort, Identifier: identifier,
@@ -133,11 +152,31 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([
 	}
 
 	if len(endpoints) == 0 {
-		return nil, errNoEndpoints
+		return nil, ErrNoEndpoints
 	}
 
 	logger.Debug("received AgentEndpoints from Bosh Director", zap.Any("agent-endpoint", endpoints))
 	return endpoints, nil
+}
+
+// matchesInstanceGroups determines whether the instance matches one of the selected groups.
+func matchesInstanceGroups(instance BoshInstance, groups []string) bool {
+	for _, validGroup := range groups {
+		if instance.Job == validGroup {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesInstanceGroups determines whether the instance matches one of the selected instance IDs.
+func matchesInstanceIDs(instance BoshInstance, ids []string) bool {
+	for _, validID := range ids {
+		if instance.ID == validID {
+			return true
+		}
+	}
+	return false
 }
 
 func (br *BoshResolver) Validate(endpointRequest *EndpointRequest) error {
@@ -167,57 +206,87 @@ func (br *BoshResolver) Validate(endpointRequest *EndpointRequest) error {
 }
 
 func (br *BoshResolver) setup() error {
-	br.logger.Info("setting up BoshResolver", zap.Any("resolver-config", br.Config))
+	br.logger.Debug("setting up BoshResolver", zap.Any("resolver-config", br.Config))
 
-	if br.Config.MTLS == nil {
-		br.client = http.DefaultClient
-	} else {
-		br.client = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					MinVersion: tls.VersionTLS12,
-					MaxVersion: tls.VersionTLS13,
-					ClientAuth: tls.RequireAndVerifyClientCert,
-					RootCAs:    br.boshRootCAs,
-				},
-			},
+	var tlsConfig *tls.Config = nil
+	if br.Config.MTLS != nil {
+		tlsConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			MaxVersion: tls.VersionTLS13,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+			RootCAs:    br.boshRootCAs,
 		}
 	}
 
-	br.logger.Info("discovering bosh-UAA endpoint")
-	ptr := *br.DirectorURL
-	infoEndpoint := &ptr
+	br.client = &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: 500 * time.Millisecond,
+			}).DialContext,
+			TLSHandshakeTimeout:   500 * time.Millisecond,
+			ResponseHeaderTimeout: 500 * time.Millisecond,
+			ExpectContinueTimeout: 500 * time.Millisecond,
+			DisableKeepAlives:     true,
+			MaxIdleConnsPerHost:   -1,
+			TLSClientConfig:       tlsConfig,
+		},
+		Timeout: time.Second,
+	}
+
+	br.logger.Debug("discovering bosh-UAA endpoint", zap.String("bosh-director", br.DirectorURL.String()))
+	apiResponse, err := br.info()
+	if err != nil {
+		return err
+	}
+
+	br.UaaURLs = apiResponse.UserAuthentication.Options.URLs
+	br.logger.Info("connected to bosh-director", zap.Any("bosh-director", br.DirectorURL.String()))
+	return nil
+}
+
+// info retrieves the BOSH director /info endpoint.
+//
+// Used for startup and health check.
+func (br *BoshResolver) info() (*BoshInfo, error) {
+	// FIXME: Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
+	infoEndpoint := *br.DirectorURL
 	infoEndpoint.Path = "/info"
-	// TODO: (discussion) weird. br.DirectorURL.JoinPath("/info") is buggy: https://github.com/golang/go/issues/58605
 
 	response, err := br.client.Do(&http.Request{
 		Method: http.MethodGet,
-		URL:    infoEndpoint,
+		URL:    &infoEndpoint,
 	})
 	if err != nil {
-		return fmt.Errorf("could not fetch bosh-director API from %v: %w", br.Config.RawDirectorURL, err)
-	}
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("received non-OK response from bosh-director: %s", response.Status)
+		return nil, fmt.Errorf("could not fetch Bosh Director API from %v: %w", br.Config.RawDirectorURL, err)
 	}
 
 	defer CloseQuietly(response.Body)
 
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("received non-OK response from Bosh Director: %s", response.Status)
+	}
+
 	var apiResponse *BoshInfo
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
-		return fmt.Errorf("could not read bosh-director API response: %w", err)
+		return nil, fmt.Errorf("could not read bosh-director API response: %w", err)
 	}
 	err = json.Unmarshal(data, &apiResponse)
 	if err != nil {
-		return fmt.Errorf("could not parse bosh-director API response: %w", err)
+		return nil, fmt.Errorf("could not parse bosh-director API response: %w", err)
+	}
+	return apiResponse, nil
+}
+
+// Healthy returns true if the resolver ran setup() and can connect to the BOSH director
+func (br *BoshResolver) Healthy() bool {
+	if br.client == nil {
+		// not initialized yet
+		return false
 	}
 
-	br.UaaURLs = apiResponse.UserAuthentication.Options.URLs
-
-	br.logger.Info("connected to bosh-director", zap.Any("bosh-director", apiResponse))
-
-	return nil
+	_, err := br.info()
+	return err == nil
 }
 
 func (br *BoshResolver) Authenticate(authToken string) error {

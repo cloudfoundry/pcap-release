@@ -73,25 +73,40 @@ func MockJWTAPI() (*httptest.Server, string) {
 	return ts, token
 }
 
-func NewResolverWithMockBoshAPI(responses map[string]string) (*pcap.BoshResolver, *httptest.Server, error) {
-	jwtapi, _ := MockJWTAPI()
-	boshAPI := MockBoshDirectorAPI(responses, jwtapi.URL)
+func NewResolverWithMockBoshAPI(responses map[string]string) (*pcap.BoshResolver, *httptest.Server, *httptest.Server, error) {
 	config := pcap.BoshResolverConfig{
-		RawDirectorURL:   boshAPI.URL,
 		EnvironmentAlias: "bosh",
 		AgentPort:        8083,
-		TokenScope:       "bosh.admin", // TODO Test for other scopes?
+		TokenScope:       "bosh.admin",
 	}
-	boshResolver, err := pcap.NewBoshResolver(config)
-	if err != nil {
-		return nil, nil, err
-	}
-	boshResolver.UaaURLs = []string{jwtapi.URL}
-	return boshResolver, boshAPI, nil
+	return NewResolverWithMockBoshAPIWithConfig(responses, config)
 }
 
-func NewResolverWithMockBoshAPIWithEndpoints(endpoints []pcap.AgentEndpoint, deploymentName string) (*pcap.BoshResolver, *httptest.Server, error) {
-	var haproxyInstances []pcap.BoshInstance
+func NewResolverWithMockBoshAPIWithConfig(responses map[string]string, config pcap.BoshResolverConfig) (*pcap.BoshResolver, *httptest.Server, *httptest.Server, error) {
+	jwtapi, _ := MockJWTAPI()
+	boshAPI := MockBoshDirectorAPI(responses, jwtapi.URL)
+
+	config.RawDirectorURL = boshAPI.URL
+
+	boshResolver, err := pcap.NewBoshResolver(config)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	boshResolver.UaaURLs = []string{jwtapi.URL}
+	return boshResolver, boshAPI, jwtapi, nil
+}
+
+func NewDefaultResolverWithMockBoshAPIWithEndpoints(endpoints []pcap.AgentEndpoint, deploymentName string) (*pcap.BoshResolver, *httptest.Server, *httptest.Server, error) {
+	config := pcap.BoshResolverConfig{
+		EnvironmentAlias: "bosh",
+		AgentPort:        8083,
+		TokenScope:       "bosh.admin",
+	}
+	return NewResolverWithMockBoshAPIWithEndpoints(endpoints, config, deploymentName)
+}
+
+func NewResolverWithMockBoshAPIWithEndpoints(endpoints []pcap.AgentEndpoint, config pcap.BoshResolverConfig, deploymentName string) (*pcap.BoshResolver, *httptest.Server, *httptest.Server, error) {
+	var deploymentInstances []pcap.BoshInstance
 
 	timeString := "2022-09-26T21:28:39Z"
 	timestamp, _ := time.Parse(time.RFC3339, timeString)
@@ -110,10 +125,10 @@ func NewResolverWithMockBoshAPIWithEndpoints(endpoints []pcap.AgentEndpoint, dep
 			VMCreatedAt: timestamp,
 			ExpectsVM:   true,
 		}
-		haproxyInstances = append(haproxyInstances, instance)
+		deploymentInstances = append(deploymentInstances, instance)
 	}
 
-	instances, err := json.Marshal(haproxyInstances)
+	instances, err := json.Marshal(deploymentInstances)
 	if err != nil {
 		panic(err)
 	}
@@ -122,7 +137,7 @@ func NewResolverWithMockBoshAPIWithEndpoints(endpoints []pcap.AgentEndpoint, dep
 		fmt.Sprintf("/deployments/%v/instances", deploymentName): string(instances),
 	}
 
-	return NewResolverWithMockBoshAPI(responses)
+	return NewResolverWithMockBoshAPIWithConfig(responses, config)
 }
 
 func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Server {

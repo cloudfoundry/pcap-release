@@ -74,7 +74,7 @@ func TestNewBoshResolver(t *testing.T) {
 }
 
 func TestAuthenticate(t *testing.T) {
-	bar, _, err := mock.NewResolverWithMockBoshAPI(nil)
+	bar, _, _, err := mock.NewResolverWithMockBoshAPI(nil)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -133,16 +133,16 @@ func TestResolve(t *testing.T) {
 		{
 			IP:         "192.168.0.1",
 			Port:       8083,
-			Identifier: "ha_proxy_z1/Testagent1",
+			Identifier: "test-instance-group/Testagent1",
 		},
 		{
 			IP:         "192.168.0.2",
 			Port:       8083,
-			Identifier: "ha_proxy_z1/Testagent2",
+			Identifier: "test-instance-group/Testagent2",
 		},
 	}
 
-	boshResolver, _, err := mock.NewResolverWithMockBoshAPIWithEndpoints(expectedAgentEndpoints, deploymentName)
+	boshResolver, _, _, err := mock.NewDefaultResolverWithMockBoshAPIWithEndpoints(expectedAgentEndpoints, deploymentName)
 	if err != nil {
 		t.Errorf("received unexpected error = %v", err)
 	}
@@ -200,7 +200,7 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 		},
 	}
 
-	boshResolver, _, err := mock.NewResolverWithMockBoshAPI(nil) // NewBoshResolver(bosh.Environment{}, 8083)
+	boshResolver, _, _, err := mock.NewResolverWithMockBoshAPI(nil) // NewBoshResolver(bosh.Environment{}, 8083)
 	if err != nil {
 		t.Error(err)
 	}
@@ -271,7 +271,7 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 		},
 	}
 
-	boshResolver, _, err := mock.NewResolverWithMockBoshAPI(nil) // NewBoshResolver(bosh.Environment{}, 8083)
+	boshResolver, _, _, err := mock.NewResolverWithMockBoshAPI(nil) // NewBoshResolver(bosh.Environment{}, 8083)
 	if err != nil {
 		t.Error(err)
 	}
@@ -334,9 +334,9 @@ func TestAPIRegisterHandler(t *testing.T) {
 			}
 
 			api.RegisterResolver(tt.resolver)
-			registered := api.HasHandler(tt.wantedResolverName)
-			if *registered != tt.wantRegistered {
-				t.Errorf("RegisterResolver() expected registered %v but got %v", tt.wantRegistered, *registered)
+			registered := api.HasResolver(tt.wantedResolverName)
+			if registered != tt.wantRegistered {
+				t.Errorf("RegisterResolver() expected registered %v but got %v", tt.wantRegistered, registered)
 			}
 		})
 	}

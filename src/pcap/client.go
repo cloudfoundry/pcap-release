@@ -26,15 +26,15 @@ import (
 const logProgressWait = 5 * time.Second
 
 type MessageWriter interface {
-	writeMessage(message *Message)
+	WriteMessage(message *Message)
 }
 
-type ConsoleMessageWriter struct {
+type LogMessageWriter struct {
 	Log *zap.Logger
 }
 
-// writeMessage accepts a Message and writes a log-line using a log-level corresponding to the severity of the message.
-func (c ConsoleMessageWriter) writeMessage(message *Message) {
+// WriteMessage accepts a Message and writes a log-line using a log-level corresponding to the severity of the message.
+func (c LogMessageWriter) WriteMessage(message *Message) {
 	formattedMessage := fmt.Sprintf("%s(%s): %s", message.Origin, message.Type, message.Message)
 	c.Log.Log(MessageLogLevel(message), formattedMessage)
 }
@@ -68,6 +68,7 @@ type Client struct {
 	log           *zap.Logger
 	stream        API_CaptureClient
 	messageWriter MessageWriter
+	stopped       bool
 	aPIClient
 }
 
@@ -130,15 +131,40 @@ func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 	return nil
 }
 
-// TODO: (discussion) We should brainstorm more appropriate names for HandleRequest and handleStream
+func (c *Client) CaptureRequest(endpointRequest *EndpointRequest, options *CaptureOptions) error {
+	// set up capture request
+	ctx, cancel := context.WithCancelCause(context.Background())
 
-// HandleRequest is the wrapper function for all operations around an EndpointRequest.
+	// perform capture request
+	err := c.ProcessCapture(ctx, endpointRequest, options, cancel)
+	if err != nil {
+		return fmt.Errorf("encountered error during request handling: %w", err)
+	}
+
+	// handle results of capture request
+	cause := context.Cause(ctx)
+	if cause != nil && !errors.Is(cause, context.Canceled) {
+		return fmt.Errorf("finished with error: %w", cause)
+	}
+	return nil
+}
+
+// ProcessCapture takes care of the complete lifecycle for a capture request.
 // It writes the pcap-header to the outputFile, sends the CaptureRequest to the pcap-api
 // and handles the cleanup after the capture is done.
-// It then delegates writing individual packets and logging messages from the api to handleStream.
-// logProgress is called in another goroutine to asynchronously write out the bytes written to the outputFile.
-func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointRequest, options *CaptureOptions, cancel context.CancelCauseFunc) error {
-	logger := c.log.With(zap.String(LogKeyHandler, "HandleRequest"))
+//
+// It then delegates writing individual packets and logging messages from the api to ReadCaptureResponse.
+// logProgress is called in another goroutine to asynchronously announce on stderr how many bytes were
+// already written to the outputFile.
+func (c *Client) ProcessCapture(ctx context.Context, endpointRequest *EndpointRequest, options *CaptureOptions, cancel context.CancelCauseFunc) error {
+	logger := c.log.With(zap.String(LogKeyHandler, "ProcessCapture"))
+	if endpointRequest == nil {
+		return fmt.Errorf("endpoint request must not be nil: %w", errInvalidPayload)
+	}
+
+	if options == nil {
+		return fmt.Errorf("capture options request must not be nil: %w", errInvalidPayload)
+	}
 	// setup output/pcap-file
 	packetWriter := pcapgo.NewWriter(c.packetFile)
 	err := packetWriter.WriteFileHeader(options.SnapLen, layers.LinkTypeEthernet)
@@ -167,7 +193,7 @@ func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointReq
 
 	copyWg := &sync.WaitGroup{}
 	copyWg.Add(1)
-	go c.handleStream(c.stream, packetWriter, copyWg, cancel)
+	go c.ReadCaptureResponse(c.stream, packetWriter, copyWg, cancel)
 
 	go c.logProgress(ctx)
 
@@ -193,17 +219,26 @@ func (c *Client) HandleRequest(ctx context.Context, endpointRequest *EndpointReq
 }
 
 func (c *Client) StopRequest() {
+	if c.stream == nil {
+		c.log.Error("client not connected, could not stop")
+		return
+	}
+	if c.stopped {
+		return
+	}
+
 	err := c.stream.SendMsg(MakeStopRequest())
 	if err != nil {
 		c.log.Error("could not stop")
 	}
+	c.stopped = true
 }
 
-// handleStream reads CaptureResponse's from the api in a loop and delegates writing/logging messages & packets to writeMessage / writePacket.
+// ReadCaptureResponse reads CaptureResponse's from the api in a loop and delegates writing/logging messages & packets to WriteMessage / writePacket.
 //
 // It terminates if an error or clean stop-message is received.
-func (c *Client) handleStream(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel context.CancelCauseFunc) {
-	logger := c.log.With(zap.String(LogKeyHandler, "handleStream"))
+func (c *Client) ReadCaptureResponse(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel context.CancelCauseFunc) {
+	logger := c.log.With(zap.String(LogKeyHandler, "ReadCaptureResponse"))
 	for {
 		res, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
@@ -220,7 +255,7 @@ func (c *Client) handleStream(stream API_CaptureClient, packetWriter *pcapgo.Wri
 
 		switch p := res.Payload.(type) {
 		case *CaptureResponse_Message:
-			c.messageWriter.writeMessage(p.Message)
+			c.messageWriter.WriteMessage(p.Message)
 		case *CaptureResponse_Packet:
 			writePacket(p.Packet, packetWriter)
 		}
@@ -271,4 +306,33 @@ func (c *Client) logProgress(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// checkAPIHealth accepts a Client with working client-connection and an environmentAlias.
+//
+// Using the clients connection to the pcap-api it checks whether the api endpoint is healthy in general
+// and if it supports requests to the Bosh Environment specified in environmentAlias.
+func (c *Client) CheckAPIHandler(handler string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	if c.cc == nil {
+		return ErrNotConnected
+	}
+
+	statusResponse, err := c.Status(ctx, &StatusRequest{})
+	if err != nil {
+		return fmt.Errorf("could not fetch api status: %w", err)
+	}
+
+	if !statusResponse.GetHealthy() {
+		return fmt.Errorf("pcap-api reported unhealthy status")
+	}
+
+	for _, resolverName := range statusResponse.Resolvers {
+		if resolverName == handler {
+			return nil
+		}
+	}
+	return fmt.Errorf("pcap-api does not support handler %v", handler)
 }

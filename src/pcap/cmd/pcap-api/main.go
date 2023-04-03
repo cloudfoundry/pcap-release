@@ -52,7 +52,7 @@ func main() {
 
 	//TODO: CFAgentResolver
 
-	if len(api.RegisteredResolverNames()) == 0 {
+	if len(api.RegisteredResolverNames(false)) == 0 {
 		log.Panic("Could not register any AgentResolvers")
 	}
 

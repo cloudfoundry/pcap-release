@@ -17,6 +17,10 @@ func (cf *CloudfoundryResolver) CanResolve(request *EndpointRequest) bool {
 	return request.GetCf() != nil
 }
 
+func (cf *CloudfoundryResolver) Healthy() bool {
+	return true
+}
+
 func (cf *CloudfoundryResolver) Resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
 	log = log.With(zap.String("handler", cf.Name()))
 	log.Info("Handling request")

@@ -339,6 +339,25 @@ func containsMsgType(got <-chan *CaptureResponse, messageType MessageType) bool 
 	return false
 }
 
+type HealthyResolver struct {
+}
+
+func (h HealthyResolver) Name() string {
+	return "healthy"
+}
+
+func (h HealthyResolver) CanResolve(request *EndpointRequest) bool {
+	return true
+}
+
+func (h HealthyResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([]AgentEndpoint, error) {
+	return []AgentEndpoint{}, nil
+}
+
+func (h HealthyResolver) Healthy() bool {
+	return true
+}
+
 func TestAPIStatus(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -359,6 +378,7 @@ func TestAPIStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, nil, origin, 1)
+			api.RegisterResolver(HealthyResolver{})
 			if err != nil {
 				t.Errorf("Status() unexpected error during api creation: %v", err)
 			}

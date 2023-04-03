@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/jessevdk/go-flags"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
@@ -15,12 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"time"
-
-	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/jessevdk/go-flags"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -124,7 +120,7 @@ func main() {
 	logger.Debug("bosh-config and tokens successfully updated")
 
 	// set up pcap-client/pcap-api connection
-	client, err := pcap.NewClient(opts.File, logger, pcap.ConsoleMessageWriter{Log: logger})
+	client, err := pcap.NewClient(opts.File, logger, pcap.LogMessageWriter{Log: logger})
 	if err != nil {
 		err = fmt.Errorf("could not set up pcap-client %w", err)
 		return
@@ -141,28 +137,17 @@ func main() {
 
 	logger.Debug("pcap-client successfully initialized and connected to pcap-api")
 
-	// set up capture request
-	ctx := context.Background()
-	ctx, cancel := context.WithCancelCause(ctx)
-
 	go pcap.WaitForSignal(logger, client, nil)
 
 	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups, environment.Alias)
 	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, uint32(opts.SnapLength))
 
-	// perform capture request
-	err = client.HandleRequest(ctx, endpointRequest, captureOptions, cancel)
+	err = client.CaptureRequest(endpointRequest, captureOptions)
 	if err != nil {
-		err = fmt.Errorf("encountered error during request handling: %w", err)
-		return
+		// caught by the defer and used to exit.
+		err = err
 	}
 
-	// handle results of capture request
-	cause := context.Cause(ctx)
-	if cause != nil && !errors.Is(cause, context.Canceled) {
-		err = fmt.Errorf("finished with error %w", cause)
-		return
-	}
 	logger.Info("capture finished successfully")
 }
 
@@ -193,24 +178,8 @@ func checkOutputFile(file string, overwrite bool) error {
 // Using the clients connection to the pcap-api it checks whether the api endpoint is healthy in general
 // and if it supports requests to the Bosh Environment specified in environmentAlias.
 func checkAPIHealth(c *pcap.Client, environmentAlias string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	statusResponse, err := c.Status(ctx, &pcap.StatusRequest{})
-	if err != nil {
-		return fmt.Errorf("could not fetch api status: %w", err)
-	}
-
-	if !statusResponse.GetHealthy() {
-		return fmt.Errorf("pcap-api reported unhealthy status")
-	}
-
-	for _, resolverName := range statusResponse.Resolvers {
-		if resolverName == fmt.Sprintf("bosh/%v", environmentAlias) {
-			return nil
-		}
-	}
-	return fmt.Errorf("pcap-api does not support environment %v", environmentAlias)
+	err := c.CheckAPIHandler(fmt.Sprintf("bosh/%v", environmentAlias))
+	return fmt.Errorf("pcap-api does not support BOSH environment %v, %w", environmentAlias, err)
 }
 
 // setLogLevel sets the log level of the zap.Logger created in setupLogging via atomicLogLevel

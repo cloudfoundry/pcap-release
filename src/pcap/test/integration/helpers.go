@@ -345,3 +345,24 @@ func containsMsgTypeWithOrigin(messages []*pcap.CaptureResponse, msgType pcap.Me
 
 	return false
 }
+
+func NewMemoryMessageWriter() *MemoryMessageWriter {
+	return &MemoryMessageWriter{Messages: make([]*pcap.Message, 0, 10)}
+}
+
+type MemoryMessageWriter struct {
+	Messages []*pcap.Message
+}
+
+func (m *MemoryMessageWriter) WriteMessage(message *pcap.Message) {
+	m.Messages = append(m.Messages, message)
+}
+
+func (m *MemoryMessageWriter) Filter(messageType pcap.MessageType) (result []*pcap.Message) {
+	for _, msg := range m.Messages {
+		if msg.Type == messageType {
+			result = append(result, msg)
+		}
+	}
+	return
+}

@@ -126,7 +126,7 @@ func TestHandleStream(t *testing.T) {
 			stream := &MockAPIWriter{messages: tt.messages}
 			ctx, cancel := context.WithCancelCause(context.Background())
 			c := Client{log: zap.L().With(zap.String("test", tt.name))}
-			go c.handleStream(stream, writer, copyWg, cancel)
+			go c.ReadCaptureResponse(stream, writer, copyWg, cancel)
 			if tt.clientError != nil {
 				cancel(tt.clientError)
 			}
@@ -185,7 +185,8 @@ func TestWritePacket(t *testing.T) {
 	}
 	actualTimestamp := packets[0].Metadata().Timestamp
 
-	if delta := testTimestamp.Sub(actualTimestamp); delta != 0 {
+	// account for inaccuracy in time formats stored in pcap file
+	if delta := testTimestamp.Sub(actualTimestamp); delta > time.Microsecond {
 		t.Errorf("mismatching timestamps. expected %v, actual %v, delta: %+v", testTimestamp, actualTimestamp, delta)
 	}
 	transportLayer := packets[0].TransportLayer()
