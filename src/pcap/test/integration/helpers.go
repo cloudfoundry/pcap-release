@@ -1,3 +1,4 @@
+//nolint:gomnd // These test tools include a lot of magic numbers that are part of the test scenarios.
 package integration
 
 import (
@@ -22,8 +23,8 @@ import (
 	"github.com/google/gopacket"
 	gopcap "github.com/google/gopacket/pcap"
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo/v2" // nolint:revive // best practice for Ginkgo
-	. "github.com/onsi/gomega"    // nolint:revive // best practice for Ginkgo
+	. "github.com/onsi/ginkgo/v2" //nolint:revive,stylecheck // this is the common way to import ginkgo and gomega
+	. "github.com/onsi/gomega"    //nolint:revive,stylecheck // this is the common way to import ginkgo and gomega
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -83,6 +84,8 @@ func validatePcapFile(fileName string, validate func([]gopacket.Packet)) {
 	for packet := range packetSource.Packets() {
 		packets = append(packets, packet)
 	}
+
+	validate(packets)
 }
 
 // readAndExpectCleanEnd reads up to 1000 capture responses and expects an OK termination code.
@@ -92,11 +95,6 @@ func readAndExpectCleanEnd(stream pcap.API_CaptureClient) []*pcap.CaptureRespons
 	Expect(code).To(Equal(codes.OK))
 
 	return messages
-}
-
-func nextFreePort() int {
-	port++
-	return port
 }
 
 func readAndExpectFirstMessages(stream pcap.API_CaptureClient) {
@@ -242,9 +240,6 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 
 	agent := pcap.NewAgent(pcap.BufferConf{Size: 10000, UpperLimit: 9800, LowerLimit: 8000}, id)
 
-	// listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
-	//Expect(err).NotTo(HaveOccurred())
-
 	listener := localNodeListener(port)
 	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
 	Expect(ok).To(BeTrue())
@@ -279,9 +274,6 @@ func createAPI(resolver pcap.AgentResolver, bufConf pcap.BufferConf, mTLSConfig 
 	Expect(err).NotTo(HaveOccurred())
 
 	api.RegisterResolver(resolver)
-
-	// lis, err := net.Listen("tcp", fmt.Sprintf(":%d", APIPort))
-	//Expect(err).NotTo(HaveOccurred())
 
 	listener := localNodeListener(APIPort)
 
@@ -346,7 +338,7 @@ func containsMsgTypeWithOrigin(messages []*pcap.CaptureResponse, msgType pcap.Me
 }
 
 func NewMemoryMessageWriter() *MemoryMessageWriter {
-	return &MemoryMessageWriter{Messages: make([]*pcap.Message, 0, 10)}
+	return &MemoryMessageWriter{Messages: make([]*pcap.Message, 0, 10)} //nolint:gomnd // Default configuration
 }
 
 type MemoryMessageWriter struct {
@@ -363,5 +355,5 @@ func (m *MemoryMessageWriter) Filter(messageType pcap.MessageType) (result []*pc
 			result = append(result, msg)
 		}
 	}
-	return
+	return result
 }

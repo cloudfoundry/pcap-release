@@ -1,3 +1,4 @@
+//nolint:gomnd // These tests include a lot of magic numbers that are part of the test scenarios.
 package integration
 
 import (
@@ -11,8 +12,8 @@ import (
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2" //nolint:revive,stylecheck // this is the common way to import ginkgo and gomega
+	. "github.com/onsi/gomega"    //nolint:revive,stylecheck // this is the common way to import ginkgo and gomega
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -103,7 +104,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				client, err = pcap.NewClient("test.pcap", logger, messageWriter)
 				Expect(err).ShouldNot(HaveOccurred(), "failed initializing client")
 
-				client.ConnectToAPI(apiURL)
+				err = client.ConnectToAPI(apiURL)
 				Expect(err).ShouldNot(HaveOccurred(), "failed to connect to API")
 			})
 
@@ -258,7 +259,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				client, err = pcap.NewClient("test.pcap", logger, messageWriter)
 				Expect(err).ShouldNot(HaveOccurred(), "failed initializing client")
 
-				client.ConnectToAPI(apiURL)
+				err = client.ConnectToAPI(apiURL)
 				Expect(err).ShouldNot(HaveOccurred(), "failed to connect to API")
 
 				// automatically stop capture after captureDuration
@@ -303,7 +304,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				client, err = pcap.NewClient("test.pcap", logger, messageWriter)
 				Expect(err).ShouldNot(HaveOccurred(), "failed initializing client")
 
-				client.ConnectToAPI(apiURL)
+				err = client.ConnectToAPI(apiURL)
 				Expect(err).ShouldNot(HaveOccurred(), "failed to connect to API")
 
 				// automatically stop capture after captureDuration

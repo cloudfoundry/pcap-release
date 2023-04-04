@@ -7,9 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
-	"go.uber.org/zap"
-
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
 
@@ -32,9 +29,9 @@ func init() {
 }
 
 func main() {
-	jwtapi, _ := mock.MockJWTAPI()
+	jwtapi, _ := mock.NewMockJWTAPI()
 	responses := prepareMockBoshDirectorResponse()
-	boshAPI := mock.MockBoshDirectorAPI(responses, jwtapi.URL)
+	boshAPI := mock.NewMockBoshDirectorAPI(responses, jwtapi.URL)
 	defer boshAPI.Close()
 
 	zap.L().Info("jwtapi listening", zap.String("url", jwtapi.URL))

@@ -1,3 +1,4 @@
+//nolint:gomnd // These tests include a lot of magic numbers that are part of the test scenarios.
 package mock
 
 import (
@@ -20,8 +21,6 @@ import (
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 
-	"github.com/cloudfoundry/pcap-release/src/pcap"
-
 	"github.com/golang-jwt/jwt/v4"
 	"go.uber.org/zap"
 )
@@ -34,13 +33,7 @@ func MustParseURL(rawURL string) *url.URL {
 	return parsedURL
 }
 
-func MockJWTAPI() (*httptest.Server, string) {
-	type JWTAPIMock struct {
-		UAAUrl string
-	}
-
-	var JWTAPI JWTAPIMock
-
+func NewMockJWTAPI() (*httptest.Server, string) {
 	mux := http.NewServeMux()
 	ts := httptest.NewServer(mux)
 	jku := ts.URL + "/token_keys"
@@ -70,8 +63,6 @@ func MockJWTAPI() (*httptest.Server, string) {
 		}
 	})
 
-	JWTAPI.UAAUrl = ts.URL
-
 	return ts, token
 }
 
@@ -85,8 +76,8 @@ func NewResolverWithMockBoshAPI(responses map[string]string) (*pcap.BoshResolver
 }
 
 func NewResolverWithMockBoshAPIWithConfig(responses map[string]string, config pcap.BoshResolverConfig) (*pcap.BoshResolver, *httptest.Server, *httptest.Server, error) {
-	jwtapi, _ := MockJWTAPI()
-	boshAPI := MockBoshDirectorAPI(responses, jwtapi.URL)
+	jwtapi, _ := NewMockJWTAPI()
+	boshAPI := NewMockBoshDirectorAPI(responses, jwtapi.URL)
 
 	config.RawDirectorURL = boshAPI.URL
 
@@ -142,7 +133,7 @@ func NewResolverWithMockBoshAPIWithEndpoints(endpoints []pcap.AgentEndpoint, con
 	return NewResolverWithMockBoshAPIWithConfig(responses, config)
 }
 
-func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Server {
+func NewMockBoshDirectorAPI(responses map[string]string, url string) *httptest.Server {
 	jsonTemplate := `{
 		"name": "bosh-azure-cfn01",
 		"uuid": "f0ceb485-e188-4b9f-b3d5-fb2067aad3c2",
@@ -162,10 +153,10 @@ func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Serv
 		}
 	}`
 
-	type BoshApiMock struct {
+	type BoshAPIMock struct {
 		UaaURL string
 	}
-	var boshapi BoshApiMock
+	var boshapi BoshAPIMock
 
 	responseTemplate := template.Must(template.New("boshapi").Parse(jsonTemplate))
 
@@ -202,11 +193,11 @@ func MockBoshDirectorAPI(responses map[string]string, url string) *httptest.Serv
 func verifyJWTTokenMock(jku string) (string, string) {
 	type payload struct {
 		Scope     []string  `json:"scope"`
-		ClientId  string    `json:"client_id"`
+		ClientID  string    `json:"client_id"`
 		Cid       string    `json:"cid"`
 		Azp       string    `json:"azp"`
 		GrantType string    `json:"grant_type"`
-		UserId    string    `json:"user_id"`
+		UserID    string    `json:"user_id"`
 		Origin    string    `json:"origin"`
 		User      string    `json:"user_name"`
 		Email     string    `json:"email"`
@@ -223,11 +214,11 @@ func verifyJWTTokenMock(jku string) (string, string) {
 			"openid",
 			"bosh.admin",
 		},
-		ClientId:  "bosh_cli",
+		ClientID:  "bosh_cli",
 		Cid:       "bosh_cli",
 		Azp:       "bosh_cli",
 		GrantType: "password",
-		UserId:    "f62c94ae-2552-411b-9f8e-9ad181c50b40",
+		UserID:    "f62c94ae-2552-411b-9f8e-9ad181c50b40",
 		Origin:    "uaa",
 		User:      "h.example",
 		Email:     "h.example@192.168.1.11:8443",
@@ -287,10 +278,12 @@ func GetValidToken(uaaURL string) (string, error) {
 			"grant_type": {"refresh_token"},
 		}.Encode()))),
 	}
-	res, err := http.DefaultClient.Do(&req)
+	res, err := http.DefaultClient.Do(&req) //nolint:bodyclose // closed via pcap.CloseQuietly below.
 	if err != nil {
 		return "", err
 	}
+
+	defer pcap.CloseQuietly(res.Body)
 
 	var newTokens struct {
 		AccessToken  string `json:"access_token"`

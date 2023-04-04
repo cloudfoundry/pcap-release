@@ -23,8 +23,8 @@ var DefaultAPIConfig = APIConfig{
 		ID:       "test-api",
 	},
 	AgentsMTLS:         nil,
-	DrainTimeout:       10 * time.Second,
-	ConcurrentCaptures: 5,
+	DrainTimeout:       10 * time.Second, //nolint:gomnd // default configuration
+	ConcurrentCaptures: 5,                //nolint:gomnd // default configuration
 }
 
 type APIConfig struct {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 
-	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/ginkgo/v2" //nolint:revive,stylecheck // this is the common way to import ginkgo and gomega
 	"go.uber.org/zap"
 )
 
@@ -15,8 +15,8 @@ var TestNodeIndex = 0
 // localNodeListener gives each mock gorouter a separate local IP address, so gorouters can be distinguished based on their IP address in tests.
 func localNodeListener(port int) net.Listener {
 	// exclude .0 and .255 as they may have special meaning.
-	node := (TestNodeIndex % 254) + 1
-	subnet := TestNodeIndex / 254
+	node := (TestNodeIndex % 254) + 1 //nolint:gomnd // default IP range
+	subnet := TestNodeIndex / 254     //nolint:gomnd // default IP range
 
 	TestNodeIndex++
 

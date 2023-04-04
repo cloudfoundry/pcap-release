@@ -346,11 +346,11 @@ func (h HealthyResolver) Name() string {
 	return "healthy"
 }
 
-func (h HealthyResolver) CanResolve(request *EndpointRequest) bool {
+func (h HealthyResolver) CanResolve(_ *EndpointRequest) bool {
 	return true
 }
 
-func (h HealthyResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([]AgentEndpoint, error) {
+func (h HealthyResolver) Resolve(_ *EndpointRequest, _ *zap.Logger) ([]AgentEndpoint, error) {
 	return []AgentEndpoint{}, nil
 }
 

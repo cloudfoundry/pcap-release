@@ -291,8 +291,8 @@ func (c *Client) logProgress(ctx context.Context) {
 		return
 	}
 
-	// this is an endless function, so it's ok to use time.Tick()
-	ticker := time.Tick(logProgressWait) //nolint
+	//nolint:staticcheck // this is an endless function, so it's ok to use time.Tick()
+	ticker := time.Tick(logProgressWait)
 	for {
 		select {
 		case <-ticker:
@@ -308,10 +308,7 @@ func (c *Client) logProgress(ctx context.Context) {
 	}
 }
 
-// checkAPIHealth accepts a Client with working client-connection and an environmentAlias.
-//
-// Using the clients connection to the pcap-api it checks whether the api endpoint is healthy in general
-// and if it supports requests to the Bosh Environment specified in environmentAlias.
+// CheckAPIHandler checks if handler is announced by the API as healthy available handler.
 func (c *Client) CheckAPIHandler(handler string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

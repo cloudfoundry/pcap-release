@@ -66,9 +66,18 @@ func init() {
 
 func main() {
 	var (
-		err  error
-		opts options
+		err         error
+		opts        options
+		apiURL      *url.URL
+		client      *pcap.Client
+		environment *Environment
 	)
+
+	// Parse command-line arguments
+	_, err = flags.Parse(&opts)
+	if err != nil {
+		os.Exit(1)
+	}
 
 	defer func() {
 		if err != nil {
@@ -76,13 +85,6 @@ func main() {
 			os.Exit(1)
 		}
 	}()
-
-	// Parse command-line arguments
-	_, err = flags.Parse(&opts)
-	if err != nil {
-		err = fmt.Errorf("could not parse the provided arguments %w", err)
-		return
-	}
 
 	// we cannot log to Debug before this point
 	err = setLogLevel(opts.Verbose, opts.Quiet)
@@ -92,29 +94,7 @@ func main() {
 
 	logger.Debug("pcap-bosh-cli initialized", zap.Int64("compatibilityLevel", pcap.CompatibilityLevel))
 
-	err = checkOutputFile(opts.File, opts.ForceOverwriteFile)
-	if err != nil {
-		return
-	}
-
-	// update bosh tokens/config
-	apiURL, err := parseAPIURL(urlWithScheme(opts.PcapAPIURL))
-	if err != nil {
-		return
-	}
-	boshConfig, err := configFromFile(opts.BoshConfigFilename)
-	if err != nil {
-		return
-	}
-	environment, err := getEnvironment(opts.BoshEnvironment, boshConfig)
-	if err != nil {
-		return
-	}
-	err = environment.UpdateTokens()
-	if err != nil {
-		return
-	}
-	err = writeBoshConfig(boshConfig, opts.BoshConfigFilename)
+	apiURL, environment, err = initFromOptions(opts)
 	if err != nil {
 		return
 	}
@@ -122,7 +102,7 @@ func main() {
 	logger.Debug("bosh-config and tokens successfully updated")
 
 	// set up pcap-client/pcap-api connection
-	client, err := pcap.NewClient(opts.File, logger, pcap.LogMessageWriter{Log: logger})
+	client, err = pcap.NewClient(opts.File, logger, pcap.LogMessageWriter{Log: logger})
 	if err != nil {
 		err = fmt.Errorf("could not set up pcap-client %w", err)
 		return
@@ -146,11 +126,45 @@ func main() {
 
 	err = client.CaptureRequest(endpointRequest, captureOptions)
 	if err != nil {
-		// caught by the defer and used to exit.
-		err = err
+		return
 	}
 
 	logger.Info("capture finished successfully")
+}
+
+func initFromOptions(opts options) (*url.URL, *Environment, error) {
+	var (
+		boshConfig  *Config
+		apiURL      *url.URL
+		environment *Environment
+	)
+	err := checkOutputFile(opts.File, opts.ForceOverwriteFile)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// update bosh tokens/config
+	apiURL, err = parseAPIURL(urlWithScheme(opts.PcapAPIURL))
+	if err != nil {
+		return nil, nil, err
+	}
+	boshConfig, err = configFromFile(opts.BoshConfigFilename)
+	if err != nil {
+		return nil, nil, err
+	}
+	environment, err = getEnvironment(opts.BoshEnvironment, boshConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = environment.UpdateTokens()
+	if err != nil {
+		return nil, nil, err
+	}
+	err = writeBoshConfig(boshConfig, opts.BoshConfigFilename)
+	if err != nil {
+		return nil, nil, err
+	}
+	return apiURL, environment, nil
 }
 
 // checkOutputFile checks if the specified output-file already exists.
@@ -350,8 +364,6 @@ func (e *Environment) UpdateTokens() error {
 // and then sets up the http client for use with either TLS or plain HTTP.
 func (e *Environment) init() error {
 	var err error
-	logger := zap.L()
-
 	e.DirectorURL, err = url.Parse(e.URL)
 	if err != nil {
 		return fmt.Errorf("error parsing environment url (%v) %w", e.URL, err)
@@ -380,7 +392,7 @@ func (e *Environment) init() error {
 
 // fetchUAAURL connects to the bosh-director API to fetch the bosh-uaa API URL.
 func (e *Environment) fetchUAAURL() error {
-	res, err := e.client.Do(&http.Request{
+	res, err := e.client.Do(&http.Request{ //nolint:bodyclose // closed via pcap.CloseQuietly below.
 		Method: http.MethodGet,
 		URL: &url.URL{
 			Scheme: e.DirectorURL.Scheme,
@@ -394,11 +406,12 @@ func (e *Environment) fetchUAAURL() error {
 	if err != nil {
 		return fmt.Errorf("could not get response from bosh-director %w", err)
 	}
+
+	defer pcap.CloseQuietly(res.Body)
+
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code %d from bosh-director", res.StatusCode)
 	}
-
-	defer pcap.CloseQuietly(res.Body)
 
 	var info pcap.BoshInfo
 	err = json.NewDecoder(res.Body).Decode(&info)
@@ -434,10 +447,12 @@ func (e *Environment) refreshTokens() error { //TODO: logging
 			"refresh_token": {e.RefreshToken},
 		}.Encode()))),
 	}
-	res, err := e.client.Do(&req)
+	res, err := e.client.Do(&req) //nolint:bodyclose // closed via pcap.CloseQuietly below.
 	if err != nil {
 		return err
 	}
+
+	defer pcap.CloseQuietly(res.Body)
 
 	var newTokens struct {
 		AccessToken  string `json:"access_token"`

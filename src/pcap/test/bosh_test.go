@@ -16,8 +16,8 @@ var (
 )
 
 func TestNewBoshResolver(t *testing.T) {
-	jwtapi, _ := mock.MockJWTAPI()
-	boshAPI := mock.MockBoshDirectorAPI(nil, jwtapi.URL)
+	jwtapi, _ := mock.NewMockJWTAPI()
+	boshAPI := mock.NewMockBoshDirectorAPI(nil, jwtapi.URL)
 
 	tests := []struct {
 		name          string
@@ -278,7 +278,7 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testEndpointRequest := &pcap.EndpointRequest{Request: &pcap.EndpointRequest_Bosh{tt.req}}
+			testEndpointRequest := &pcap.EndpointRequest{Request: &pcap.EndpointRequest_Bosh{Bosh: tt.req}}
 
 			err = boshResolver.Validate(testEndpointRequest)
 			if (err != nil) != tt.wantErr {
@@ -292,8 +292,8 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 }
 
 func TestAPIRegisterHandler(t *testing.T) {
-	jwtapi, _ := mock.MockJWTAPI()
-	boshAPI := mock.MockBoshDirectorAPI(nil, jwtapi.URL)
+	jwtapi, _ := mock.NewMockJWTAPI()
+	boshAPI := mock.NewMockBoshDirectorAPI(nil, jwtapi.URL)
 
 	config := pcap.BoshResolverConfig{
 		RawDirectorURL:   boshAPI.URL,

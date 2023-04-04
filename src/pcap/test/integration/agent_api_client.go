@@ -1,3 +1,4 @@
+//nolint:gomnd // These tests include a lot of magic numbers that are part of the test scenarios.
 package integration
 
 import (
@@ -11,8 +12,8 @@ import (
 	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
 
 	"github.com/google/gopacket"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2" //nolint:revive,stylecheck // this is the common way to import ginkgo and gomega
+	. "github.com/onsi/gomega"    //nolint:revive,stylecheck // this is the common way to import ginkgo and gomega
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -22,8 +23,8 @@ var apiClient pcap.APIClient
 
 var MaxConcurrentCaptures = uint(2)
 
-// port is used for various server listen ports, automatically incremented.
-var port = 8110
+// port is used for creating agents.
+var port = 9494
 
 var APIPort = 8080
 
@@ -59,13 +60,13 @@ var _ = Describe("Using LocalResolver", func() {
 				targets = append(targets, agentTarget2)
 
 				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
-				apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180}
+				apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180} //nolint:gomnd // Values for a test
 				apiClient, apiServer, api, _ = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, apiID)
 
 				defaultOptions = &pcap.CaptureOptions{
 					Device:  loopback,
 					Filter:  "",
-					SnapLen: 65000,
+					SnapLen: 65000, //nolint:gomnd // Value for a test
 				}
 			})
 
@@ -208,7 +209,7 @@ var _ = Describe("Using LocalResolver", func() {
 			BeforeEach(func() {
 				var targets []pcap.AgentEndpoint
 
-				agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
+				agentServer1, agentTarget1, agent1 = createAgent(port, agentID1, nil)
 				targets = append(targets, agentTarget1)
 
 				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
@@ -250,10 +251,10 @@ var _ = Describe("Using LocalResolver", func() {
 			BeforeEach(func() {
 				var targets []pcap.AgentEndpoint
 
-				agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
+				agentServer1, agentTarget1, agent1 = createAgent(port, agentID1, nil)
 				targets = append(targets, agentTarget1)
 
-				agentServer2, agentTarget2, _ = createAgent(nextFreePort(), agentID2, nil)
+				agentServer2, agentTarget2, _ = createAgent(port, agentID2, nil)
 				targets = append(targets, agentTarget2)
 				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 				apiBuffConf := pcap.BufferConf{Size: 7, UpperLimit: 6, LowerLimit: 4}
@@ -302,7 +303,7 @@ var _ = Describe("Using LocalResolver", func() {
 				mTLSConfig, err := configureServer(certPath, keyPath, clientCAFile)
 				Expect(err).ToNot(HaveOccurred())
 
-				agentServer1, target, agent1 = createAgent(nextFreePort(), agentID1, mTLSConfig)
+				agentServer1, target, agent1 = createAgent(port, agentID1, mTLSConfig)
 				targets = append(targets, target)
 
 				agentTLSConf := &pcap.MutualTLS{
@@ -375,7 +376,7 @@ var _ = Describe("Using LocalResolver", func() {
 
 			var targets []pcap.AgentEndpoint
 
-			agentServer1, agentTarget1, agent1 = createAgent(nextFreePort(), agentID1, nil)
+			agentServer1, agentTarget1, agent1 = createAgent(port, agentID1, nil)
 			targets = append(targets, agentTarget1)
 
 			agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
@@ -422,7 +423,7 @@ var _ = Describe("Using LocalResolver", func() {
 
 				go func() {
 					time.Sleep(5 * time.Second)
-					fmt.Printf("sending Stop\n")
+					GinkgoWriter.Println("sending Stop")
 					client.StopRequest()
 				}()
 

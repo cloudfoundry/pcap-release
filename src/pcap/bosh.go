@@ -207,7 +207,8 @@ func (br *BoshResolver) Validate(endpointRequest *EndpointRequest) error {
 func (br *BoshResolver) setup() error {
 	br.logger.Debug("setting up BoshResolver", zap.Any("resolver-config", br.Config))
 
-	var tlsConfig *tls.Config = nil
+	var tlsConfig *tls.Config
+
 	if br.Config.MTLS != nil {
 		tlsConfig = &tls.Config{
 			MinVersion: tls.VersionTLS12,
@@ -220,11 +221,11 @@ func (br *BoshResolver) setup() error {
 	br.client = &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
-				Timeout: 500 * time.Millisecond,
+				Timeout: 500 * time.Millisecond, //nolint:gomnd // Default configuration
 			}).DialContext,
-			TLSHandshakeTimeout:   500 * time.Millisecond,
-			ResponseHeaderTimeout: 500 * time.Millisecond,
-			ExpectContinueTimeout: 500 * time.Millisecond,
+			TLSHandshakeTimeout:   500 * time.Millisecond, //nolint:gomnd // Default configuration
+			ResponseHeaderTimeout: 500 * time.Millisecond, //nolint:gomnd // Default configuration
+			ExpectContinueTimeout: 500 * time.Millisecond, //nolint:gomnd // Default configuration
 			DisableKeepAlives:     true,
 			MaxIdleConnsPerHost:   -1,
 			TLSClientConfig:       tlsConfig,
@@ -364,29 +365,7 @@ type UaaKeyInfo struct {
 // returns a boolean that confirms that the token is valid, from a valid issuer and has the needed scope,
 // and an error in case anything went wrong while verifying the token and its scopes.
 func (br *BoshResolver) verifyJWT(tokenString string) (bool, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if jku, ok := token.Header["jku"]; ok {
-			jkuURL, err := url.Parse(jku.(string))
-			if err != nil {
-				return nil, err
-			}
-
-			for _, issuer := range br.UaaURLs {
-				var issuerURL *url.URL
-				issuerURL, err = url.Parse(issuer)
-				if err != nil {
-					br.logger.Warn("could not parse URL %s: %v", zap.String("issuer", issuer), zap.Error(err))
-					continue
-				}
-
-				if strings.HasPrefix(jkuURL.String(), issuerURL.String()) {
-					return br.parseRsaToken(token)
-				}
-			}
-			return nil, fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, br.UaaURLs)
-		}
-		return nil, fmt.Errorf("header 'jku' missing from token, cannot verify signature")
-	})
+	token, err := jwt.Parse(tokenString, br.parseKey)
 
 	if err != nil || !token.Valid {
 		return false, err
@@ -405,6 +384,33 @@ func (br *BoshResolver) verifyJWT(tokenString string) (bool, error) {
 	return false, fmt.Errorf("could not find scope %q in token claims", br.Config.TokenScope)
 }
 
+// parseKey attempts to find the appropriate signing key for the token based on the information provided with the token.
+//
+// called by jwt.Parse().
+func (br *BoshResolver) parseKey(token *jwt.Token) (interface{}, error) {
+	if jku, ok := token.Header["jku"]; ok {
+		jkuURL, err := url.Parse(jku.(string))
+		if err != nil {
+			return nil, err
+		}
+
+		for _, issuer := range br.UaaURLs {
+			var issuerURL *url.URL
+			issuerURL, err = url.Parse(issuer)
+			if err != nil {
+				br.logger.Warn("could not parse URL %s: %v", zap.String("issuer", issuer), zap.Error(err))
+				continue
+			}
+
+			if strings.HasPrefix(jkuURL.String(), issuerURL.String()) {
+				return br.parseRsaToken(token)
+			}
+		}
+		return nil, fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, br.UaaURLs)
+	}
+	return nil, fmt.Errorf("header 'jku' missing from token, cannot verify signature")
+}
+
 // parseRsaToken uses the token information for RSA signed JWT tokens and retrieves
 // the public key information from the 'jku' header in order to retrieve key information
 // (key ID, RSA public key), which is used to verify the token.
@@ -415,34 +421,50 @@ func (br *BoshResolver) parseRsaToken(token *jwt.Token) (interface{}, error) {
 	if rsa, ok := token.Method.(*jwt.SigningMethodRSA); ok {
 		// with the RSA signing method, the key is a public key / certificate that can be
 		// retrieved from the JKU endpoint (among other places).
-		if rawKeyInfoURL, ok := token.Header["jku"].(string); ok {
-			var kid string
-			if kid, ok = token.Header["kid"].(string); ok {
-				keyInfoURL, err := url.Parse(rawKeyInfoURL)
-				if err != nil {
-					return nil, err
-				}
-
-				key, err := br.fetchPublicKey(keyInfoURL, kid)
-				if err != nil {
-					return nil, err
-				}
-
-				if rsa.Alg() != key.Alg {
-					return nil, fmt.Errorf("signature algorithm %q does not match expected token key information %q", rsa.Alg(), key.Alg)
-				}
-
-				// the RSA public key returned here is used to check the JWT token signature.
-				// It is provided by the URL encoded in the token (in the 'jku' header).
-				// For valid tokens, this URL is verified against the UAA URLs reported by BOSH Director later.
-				return jwt.ParseRSAPublicKeyFromPEM([]byte(key.Value))
-			}
+		key, done, err := br.verifyRSASignature(token, rsa)
+		if done {
+			return key, err
 		}
 
 		return nil, fmt.Errorf("could not find key information URL in token headers: %+v", token.Header)
 	}
 
 	return nil, fmt.Errorf("unsupported signing method: %v", token.Header["alg"])
+}
+
+func (br *BoshResolver) verifyRSASignature(token *jwt.Token, rsa *jwt.SigningMethodRSA) (interface{}, bool, error) {
+	if rawKeyInfoURL, ok := token.Header["jku"].(string); ok {
+		var kid string
+		if kid, ok = token.Header["kid"].(string); ok {
+			return br.getPublicKeyPEM(rawKeyInfoURL, kid, rsa)
+		}
+	}
+	return nil, false, nil
+}
+
+func (br *BoshResolver) getPublicKeyPEM(rawKeyInfoURL string, kid string, rsa *jwt.SigningMethodRSA) (interface{}, bool, error) {
+	keyInfoURL, err := url.Parse(rawKeyInfoURL)
+	if err != nil {
+		return nil, true, err
+	}
+
+	key, err := br.fetchPublicKey(keyInfoURL, kid)
+	if err != nil {
+		return nil, true, err
+	}
+
+	if rsa.Alg() != key.Alg {
+		return nil, true, fmt.Errorf("signature algorithm %q does not match expected token key information %q", rsa.Alg(), key.Alg)
+	}
+
+	// the RSA public key returned here is used to check the JWT token signature.
+	// It is provided by the URL encoded in the token (in the 'jku' header).
+	// For valid tokens, this URL is verified against the UAA URLs reported by BOSH Director later.
+	pem, pemError := jwt.ParseRSAPublicKeyFromPEM([]byte(key.Value))
+	if pemError != nil {
+		return nil, false, pemError
+	}
+	return pem, true, nil
 }
 
 // fetchPublicKey fetches the token key information from url and returns the key with the Key ID (kid).
