@@ -136,7 +136,6 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([
 
 	var endpoints []AgentEndpoint
 	for _, instance := range instances {
-
 		if !matchesInstanceGroups(instance, boshRequest.Groups) {
 			continue
 		}
@@ -278,7 +277,7 @@ func (br *BoshResolver) info() (*BoshInfo, error) {
 	return apiResponse, nil
 }
 
-// Healthy returns true if the resolver ran setup() and can connect to the BOSH director
+// Healthy returns true if the resolver ran setup() and can connect to the BOSH director.
 func (br *BoshResolver) Healthy() bool {
 	if br.client == nil {
 		// not initialized yet
@@ -452,7 +451,6 @@ func (br *BoshResolver) parseRsaToken(token *jwt.Token) (interface{}, error) {
 //
 // Limitation: This will only fetch keys with RSA as signature algorithm.
 func (br *BoshResolver) fetchPublicKey(url *url.URL, kid string) (*UaaKeyInfo, error) {
-
 	res, err := br.client.Do(&http.Request{
 		Method: http.MethodGet,
 		URL:    url,

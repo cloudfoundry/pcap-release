@@ -77,7 +77,6 @@ func (c NodeConfig) TLSCredentials() (credentials.TransportCredentials, error) {
 		return LoadTLSCredentials(tlsConfig.Certificate, tlsConfig.PrivateKey, &tlsConfig.CertificateAuthority, nil, nil)
 	}
 	return insecure.NewCredentials(), nil
-
 }
 
 // LoadTLSCredentials creates TLS transport credentials from the given parameters.

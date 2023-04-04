@@ -3,15 +3,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
-	"go.uber.org/zap"
 	"io/fs"
 	"os"
 	"time"
 
-	"github.com/jessevdk/go-flags"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
+	"go.uber.org/zap"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
+
+	"github.com/jessevdk/go-flags"
+	"go.uber.org/zap"
 )
 
 type options struct {
@@ -26,7 +29,6 @@ func init() {
 	if err != nil {
 		return
 	}
-
 }
 
 func main() {

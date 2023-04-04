@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/cloudfoundry/pcap-release/src/pcap"
+
 	. "github.com/onsi/ginkgo/v2"
 	"go.uber.org/zap"
-
-	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 var TestNodeIndex = 0

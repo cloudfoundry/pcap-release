@@ -3,10 +3,12 @@ package integration
 import (
 	"context"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
 	"net"
 	"os"
 	"time"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
 
 	"github.com/google/gopacket"
 	. "github.com/onsi/ginkgo/v2"
@@ -14,15 +16,13 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-
-	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 var apiClient pcap.APIClient
 
 var MaxConcurrentCaptures = uint(2)
 
-// port is used for various server listen ports, automatically incremented
+// port is used for various server listen ports, automatically incremented.
 var port = 8110
 
 var APIPort = 8080

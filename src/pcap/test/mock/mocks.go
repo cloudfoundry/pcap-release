@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,9 +18,12 @@ import (
 	"text/template"
 	"time"
 
-	"go.uber.org/zap"
+	"github.com/cloudfoundry/pcap-release/src/pcap"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
 
 	"github.com/golang-jwt/jwt/v4"
+	"go.uber.org/zap"
 )
 
 func MustParseURL(rawURL string) *url.URL {

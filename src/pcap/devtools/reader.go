@@ -4,11 +4,11 @@ import (
 	"errors"
 	"io"
 
+	"github.com/cloudfoundry/pcap-release/src/pcap"
+
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 type genericStreamReceiver interface {

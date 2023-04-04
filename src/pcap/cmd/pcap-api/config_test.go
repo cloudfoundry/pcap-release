@@ -4,13 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestAPIConfig(t *testing.T) {
-
 	cfg, err := parseAPIConfig("../../config/api.example.yml")
 
 	if err != nil {

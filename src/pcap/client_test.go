@@ -3,17 +3,19 @@ package pcap
 import (
 	"bytes"
 	"context"
-	"go.uber.org/zap"
 	"io"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/pcapgo"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -140,7 +142,7 @@ func TestHandleStream(t *testing.T) {
 	}
 }
 
-// TestWritePacket writes a predefined packet to a pcap-file, parses the file and compares timestamp and destination port
+// TestWritePacket writes a predefined packet to a pcap-file, parses the file and compares timestamp and destination port.
 func TestWritePacket(t *testing.T) {
 	filename := "testfile.pcap"
 	file, err := os.Create(filename)

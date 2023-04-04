@@ -509,7 +509,6 @@ func convertAgentStatusCodeToMsg(err error, targetIdentifier string) *CaptureRes
 		if unwrappedError != nil {
 			code = status.Code(unwrappedError)
 		}
-
 	}
 
 	err = fmt.Errorf("capturing from agent %s: %w", targetIdentifier, err)
@@ -532,5 +531,4 @@ func convertAgentStatusCodeToMsg(err error, targetIdentifier string) *CaptureRes
 	default:
 		return newMessageResponse(MessageType_UNKNOWN, err.Error(), targetIdentifier)
 	}
-
 }

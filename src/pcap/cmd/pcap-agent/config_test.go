@@ -3,9 +3,9 @@ package main
 import (
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/cloudfoundry/pcap-release/src/pcap"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestConfig(t *testing.T) {

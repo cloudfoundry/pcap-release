@@ -17,9 +17,13 @@ import (
 	"path"
 	"time"
 
+	"github.com/cloudfoundry/pcap-release/src/pcap"
+
 	"github.com/google/gopacket"
 	gopcap "github.com/google/gopacket/pcap"
 	"github.com/google/uuid"
+	. "github.com/onsi/ginkgo/v2" // nolint:revive // best practice for Ginkgo
+	. "github.com/onsi/gomega"    // nolint:revive // best practice for Ginkgo
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -27,11 +31,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-
-	"github.com/cloudfoundry/pcap-release/src/pcap"
-
-	. "github.com/onsi/ginkgo/v2" // nolint:revive // best practice for Ginkgo
-	. "github.com/onsi/gomega"    // nolint:revive // best practice for Ginkgo
 )
 
 // boshRequest prepares the properly contained gRPC request for bosh with options.
@@ -243,7 +242,7 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 
 	agent := pcap.NewAgent(pcap.BufferConf{Size: 10000, UpperLimit: 9800, LowerLimit: 8000}, id)
 
-	//listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	// listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	//Expect(err).NotTo(HaveOccurred())
 
 	listener := localNodeListener(port)
@@ -281,7 +280,7 @@ func createAPI(resolver pcap.AgentResolver, bufConf pcap.BufferConf, mTLSConfig 
 
 	api.RegisterResolver(resolver)
 
-	//lis, err := net.Listen("tcp", fmt.Sprintf(":%d", APIPort))
+	// lis, err := net.Listen("tcp", fmt.Sprintf(":%d", APIPort))
 	//Expect(err).NotTo(HaveOccurred())
 
 	listener := localNodeListener(APIPort)

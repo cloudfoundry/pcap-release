@@ -10,12 +10,11 @@ import (
 	"sync"
 
 	"github.com/google/gopacket"
-	"google.golang.org/protobuf/types/known/timestamppb"
-
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pcap.proto

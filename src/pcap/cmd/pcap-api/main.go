@@ -10,10 +10,10 @@ import (
 	"net"
 	"os"
 
+	"github.com/cloudfoundry/pcap-release/src/pcap"
+
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-
-	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 func main() {

@@ -3,16 +3,18 @@ package integration
 import (
 	"context"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
 	"net"
 	"net/http/httptest"
 	"net/url"
 	"time"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
+	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 // Start API with BOSH resolver and

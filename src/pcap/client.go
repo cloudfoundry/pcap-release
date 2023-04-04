@@ -292,7 +292,7 @@ func (c *Client) logProgress(ctx context.Context) {
 	}
 
 	// this is an endless function, so it's ok to use time.Tick()
-	ticker := time.Tick(logProgressWait) // nolint
+	ticker := time.Tick(logProgressWait) //nolint
 	for {
 		select {
 		case <-ticker:

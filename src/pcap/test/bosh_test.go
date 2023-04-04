@@ -5,10 +5,10 @@ import (
 	"reflect"
 	"testing"
 
-	"go.uber.org/zap"
-
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
+
+	"go.uber.org/zap"
 )
 
 var (

@@ -6,17 +6,19 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/jessevdk/go-flags"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
+
+	"github.com/jessevdk/go-flags"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -158,7 +160,7 @@ func checkOutputFile(file string, overwrite bool) error {
 	// Check if the file already exists
 	_, err := os.Stat(file)
 
-	//File already exists
+	// File already exists
 	if err == nil {
 		if overwrite {
 			return os.Remove(file)
@@ -309,7 +311,7 @@ type Config struct {
 	Environments []Environment `yaml:"environments"`
 }
 
-// Environment contains all the necessary information to connect to a specific bosh-director
+// Environment contains all the necessary information to connect to a specific bosh-director.
 type Environment struct {
 	AccessToken     string       `yaml:"access_token" validate:"required"`
 	AccessTokenType string       `yaml:"access_token_type" validate:"required"`
@@ -345,7 +347,7 @@ func (e *Environment) UpdateTokens() error {
 }
 
 // init sets up a Bosh environment by parsing the bosh-director URL (string) from the config-file
-// and then sets up the http client for use with either TLS or plain HTTP
+// and then sets up the http client for use with either TLS or plain HTTP.
 func (e *Environment) init() error {
 	var err error
 	logger := zap.L()
@@ -360,7 +362,7 @@ func (e *Environment) init() error {
 		boshCA := x509.NewCertPool()
 		ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
 		if !ok {
-			return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed %v", e.CaCert) //TODO really output cert here?
+			return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed %v", e.CaCert) // TODO really output cert here?
 		}
 
 		transport := http.DefaultTransport.(*http.Transport).Clone()
