@@ -24,6 +24,7 @@ var (
 	ErrNoEndpoints       = fmt.Errorf("no matching endpoints found")
 	ErrNotConnected      = fmt.Errorf("client not connected to api")
 	ErrResolverUnhealthy = fmt.Errorf("resolver unhealthy")
+	errNotAuthorized     = fmt.Errorf("not authorized")
 )
 
 // pcapError is an attempt to work around the shortcomings of error handling in the gRPC

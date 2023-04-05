@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -290,16 +291,15 @@ func (br *BoshResolver) Healthy() bool {
 }
 
 func (br *BoshResolver) Authenticate(authToken string) error {
-	allowed, err := br.verifyJWT(authToken)
-	if err != nil {
-		return fmt.Errorf("could not verify token: %w", err)
+	err := br.verifyJWT(authToken)
+	if err == nil {
+		return nil
 	}
 
-	if !allowed {
-		return fmt.Errorf("token %s does not have the permissions or is not supported", authToken)
+	if errors.Is(err, errNotAuthorized) {
+		return fmt.Errorf("token %s does not have the permissions or is not supported: %w", authToken, err)
 	}
-
-	return nil
+	return fmt.Errorf("could not verify token: %w", err)
 }
 
 func (br *BoshResolver) getInstances(deployment string, authToken string) ([]BoshInstance, int, error) {
@@ -364,24 +364,28 @@ type UaaKeyInfo struct {
 //
 // returns a boolean that confirms that the token is valid, from a valid issuer and has the needed scope,
 // and an error in case anything went wrong while verifying the token and its scopes.
-func (br *BoshResolver) verifyJWT(tokenString string) (bool, error) {
+func (br *BoshResolver) verifyJWT(tokenString string) error {
 	token, err := jwt.Parse(tokenString, br.parseKey)
 
-	if err != nil || !token.Valid {
-		return false, err
+	if err != nil {
+		return err
+	}
+
+	if !token.Valid {
+		return fmt.Errorf("token invalid")
 	}
 
 	if claims, claimsOk := token.Claims.(jwt.MapClaims); claimsOk {
 		if scopes, ok := claims["scope"].([]interface{}); ok {
 			for _, scope := range scopes {
 				if scope.(string) == br.Config.TokenScope {
-					return true, nil
+					return nil
 				}
 			}
 		}
 	}
 
-	return false, fmt.Errorf("could not find scope %q in token claims", br.Config.TokenScope)
+	return fmt.Errorf("could not find scope %q in token claims: %w", br.Config.TokenScope, errNotAuthorized)
 }
 
 // parseKey attempts to find the appropriate signing key for the token based on the information provided with the token.

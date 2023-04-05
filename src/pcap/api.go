@@ -115,7 +115,8 @@ func (api *API) RegisteredResolverNames(onlyHealthy bool) []string {
 }
 
 // HasResolver checks if handler is registered.
-// returns false, if the handler is not registered.
+//
+// Returns false, if the handler is not registered.
 func (api *API) HasResolver(handler string) bool {
 	_, ok := api.resolvers[handler]
 	return ok

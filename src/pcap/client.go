@@ -102,7 +102,7 @@ func (c *Client) Stop() {
 }
 
 func (c *Client) Wait() {
-
+	// waiting is implicit. Needed for fulfulling the pcap.Stoppable interface.
 }
 
 // ConnectToAPI sets up the grpc-connection between client and pcap-api.
