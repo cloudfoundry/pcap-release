@@ -375,12 +375,17 @@ func (br *BoshResolver) verifyJWT(tokenString string) error {
 		return fmt.Errorf("token invalid")
 	}
 
-	if claims, claimsOk := token.Claims.(jwt.MapClaims); claimsOk {
-		if scopes, ok := claims["scope"].([]interface{}); ok {
-			for _, scope := range scopes {
-				if scope.(string) == br.Config.TokenScope {
-					return nil
-				}
+	claims, claimsOk := token.Claims.(jwt.MapClaims)
+
+	if !claimsOk {
+		return fmt.Errorf("token did not contain claims, required scope %q: %w", br.Config.TokenScope, errNotAuthorized)
+	}
+
+	scopes, ok := claims["scope"].([]interface{})
+	if ok {
+		for _, scope := range scopes {
+			if scope.(string) == br.Config.TokenScope {
+				return nil
 			}
 		}
 	}
@@ -392,27 +397,30 @@ func (br *BoshResolver) verifyJWT(tokenString string) error {
 //
 // called by jwt.Parse().
 func (br *BoshResolver) parseKey(token *jwt.Token) (interface{}, error) {
-	if jku, ok := token.Header["jku"]; ok {
-		jkuURL, err := url.Parse(jku.(string))
-		if err != nil {
-			return nil, err
-		}
+	jku, ok := token.Header["jku"]
 
-		for _, issuer := range br.UaaURLs {
-			var issuerURL *url.URL
-			issuerURL, err = url.Parse(issuer)
-			if err != nil {
-				br.logger.Warn("could not parse URL %s: %v", zap.String("issuer", issuer), zap.Error(err))
-				continue
-			}
-
-			if strings.HasPrefix(jkuURL.String(), issuerURL.String()) {
-				return br.parseRsaToken(token)
-			}
-		}
-		return nil, fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, br.UaaURLs)
+	if !ok {
+		return nil, fmt.Errorf("header 'jku' missing from token, cannot verify signature")
 	}
-	return nil, fmt.Errorf("header 'jku' missing from token, cannot verify signature")
+
+	jkuURL, err := url.Parse(jku.(string))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, issuer := range br.UaaURLs {
+		var issuerURL *url.URL
+		issuerURL, err = url.Parse(issuer)
+		if err != nil {
+			br.logger.Warn("could not parse URL %s: %v", zap.String("issuer", issuer), zap.Error(err))
+			continue
+		}
+
+		if strings.HasPrefix(jkuURL.String(), issuerURL.String()) {
+			return br.parseRsaToken(token)
+		}
+	}
+	return nil, fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, br.UaaURLs)
 }
 
 // parseRsaToken uses the token information for RSA signed JWT tokens and retrieves
@@ -422,28 +430,34 @@ func (br *BoshResolver) parseKey(token *jwt.Token) (interface{}, error) {
 // Limitation: only supports RSA tokens using the 'jku' header, which points to a URL
 // that can be used to retrieve key information.
 func (br *BoshResolver) parseRsaToken(token *jwt.Token) (interface{}, error) {
-	if rsa, ok := token.Method.(*jwt.SigningMethodRSA); ok {
-		// with the RSA signing method, the key is a public key / certificate that can be
-		// retrieved from the JKU endpoint (among other places).
-		key, done, err := br.verifyRSASignature(token, rsa)
-		if done {
-			return key, err
-		}
+	rsa, ok := token.Method.(*jwt.SigningMethodRSA)
 
-		return nil, fmt.Errorf("could not find key information URL in token headers: %+v", token.Header)
+	if !ok {
+		return nil, fmt.Errorf("unsupported signing method: %v", token.Header["alg"])
 	}
 
-	return nil, fmt.Errorf("unsupported signing method: %v", token.Header["alg"])
+	// with the RSA signing method, the key is a public key / certificate that can be
+	// retrieved from the JKU endpoint (among other places).
+	key, done, err := br.verifyRSASignature(token, rsa)
+	if done {
+		return key, err
+	}
+
+	return nil, fmt.Errorf("could not find key information URL in token headers: %+v", token.Header)
 }
 
 func (br *BoshResolver) verifyRSASignature(token *jwt.Token, rsa *jwt.SigningMethodRSA) (interface{}, bool, error) {
-	if rawKeyInfoURL, ok := token.Header["jku"].(string); ok {
-		var kid string
-		if kid, ok = token.Header["kid"].(string); ok {
-			return br.getPublicKeyPEM(rawKeyInfoURL, kid, rsa)
-		}
+	rawKeyInfoURL, ok := token.Header["jku"].(string)
+
+	if !ok {
+		return nil, false, fmt.Errorf("token does not contain jku: %w", errNotAuthorized)
 	}
-	return nil, false, nil
+	var kid string
+	if kid, ok = token.Header["kid"].(string); ok {
+		return br.getPublicKeyPEM(rawKeyInfoURL, kid, rsa)
+	}
+
+	return nil, false, fmt.Errorf("token does not contain kid: %w", errNotAuthorized)
 }
 
 func (br *BoshResolver) getPublicKeyPEM(rawKeyInfoURL string, kid string, rsa *jwt.SigningMethodRSA) (interface{}, bool, error) {
