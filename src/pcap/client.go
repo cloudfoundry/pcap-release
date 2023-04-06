@@ -72,10 +72,6 @@ type Client struct {
 	aPIClient
 }
 
-func CloseQuietly(closer io.Closer) {
-	_ = closer.Close()
-}
-
 // NewClient sets up logging for the client and creates the outputFile.
 // It assumes that the outputFile does not pre-exist and that the path is writeable (should be checked by CLI).
 //

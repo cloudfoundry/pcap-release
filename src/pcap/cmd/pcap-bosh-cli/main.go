@@ -392,7 +392,7 @@ func (e *Environment) init() error {
 
 // fetchUAAURL connects to the bosh-director API to fetch the bosh-uaa API URL.
 func (e *Environment) fetchUAAURL() error {
-	res, err := e.client.Do(&http.Request{ //nolint:bodyclose // closed via pcap.CloseQuietly below.
+	res, err := e.client.Do(&http.Request{
 		Method: http.MethodGet,
 		URL: &url.URL{
 			Scheme: e.DirectorURL.Scheme,
@@ -407,7 +407,7 @@ func (e *Environment) fetchUAAURL() error {
 		return fmt.Errorf("could not get response from bosh-director %w", err)
 	}
 
-	defer pcap.CloseQuietly(res.Body)
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code %d from bosh-director", res.StatusCode)
@@ -447,12 +447,12 @@ func (e *Environment) refreshTokens() error { //TODO: logging
 			"refresh_token": {e.RefreshToken},
 		}.Encode()))),
 	}
-	res, err := e.client.Do(&req) //nolint:bodyclose // closed via pcap.CloseQuietly below.
+	res, err := e.client.Do(&req)
 	if err != nil {
 		return err
 	}
 
-	defer pcap.CloseQuietly(res.Body)
+	defer func() { _ = res.Body.Close() }()
 
 	var newTokens struct {
 		AccessToken  string `json:"access_token"`

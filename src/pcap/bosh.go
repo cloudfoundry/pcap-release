@@ -261,7 +261,7 @@ func (br *BoshResolver) info() (*BoshInfo, error) {
 		return nil, fmt.Errorf("could not fetch Bosh Director API from %v: %w", br.Config.RawDirectorURL, err)
 	}
 
-	defer CloseQuietly(response.Body)
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("received non-OK response from Bosh Director: %s", response.Status)
@@ -322,7 +322,7 @@ func (br *BoshResolver) getInstances(deployment string, authToken string) ([]Bos
 		return nil, 0, fmt.Errorf("request to Bosh-director failed: %v", zap.Error(err))
 	}
 
-	defer CloseQuietly(res.Body)
+	defer func() { _ = res.Body.Close() }()
 
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -499,7 +499,7 @@ func (br *BoshResolver) fetchPublicKey(url *url.URL, kid string) (*UaaKeyInfo, e
 		return nil, err
 	}
 
-	defer CloseQuietly(res.Body)
+	defer func() { _ = res.Body.Close() }()
 
 	keys := struct {
 		Keys []UaaKeyInfo

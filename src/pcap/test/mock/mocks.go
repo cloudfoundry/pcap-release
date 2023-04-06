@@ -278,12 +278,12 @@ func GetValidToken(uaaURL string) (string, error) {
 			"grant_type": {"refresh_token"},
 		}.Encode()))),
 	}
-	res, err := http.DefaultClient.Do(&req) //nolint:bodyclose // closed via pcap.CloseQuietly below.
+	res, err := http.DefaultClient.Do(&req)
 	if err != nil {
 		return "", err
 	}
 
-	defer pcap.CloseQuietly(res.Body)
+	defer func() { _ = res.Body.Close() }()
 
 	var newTokens struct {
 		AccessToken  string `json:"access_token"`
