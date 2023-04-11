@@ -21,6 +21,13 @@ func main() {
 	log.Info("init phase done, starting api")
 
 	var err error
+
+	defer func() {
+		if err != nil {
+			os.Exit(1)
+		}
+	}()
+
 	var config = DefaultAPIConfig
 	switch len(os.Args) {
 	case 1:
@@ -32,19 +39,19 @@ func main() {
 	}
 
 	if err != nil {
-		log.Panic("Unable to initialize", zap.Error(err))
+		log.Error("Unable to initialize", zap.Error(err))
 	}
 
 	err = config.validate()
 	if err != nil {
-		log.Panic("Failed to validate config", zap.Error(err))
+		log.Error("Failed to validate config", zap.Error(err))
 	}
 
 	pcap.SetLogLevel(log, config.LogLevel)
 
 	api, err := pcap.NewAPI(config.Buffer, config.AgentsMTLS, config.ID, config.ConcurrentCaptures)
 	if err != nil {
-		log.Panic("Unable to create api", zap.Error(err))
+		log.Error("Unable to create api", zap.Error(err))
 	}
 
 	// set up a BoshResolver for each bosh environment
@@ -53,12 +60,12 @@ func main() {
 	//TODO: CFAgentResolver
 
 	if len(api.RegisteredResolverNames(false)) == 0 {
-		log.Panic("Could not register any AgentResolvers")
+		log.Error("Could not register any AgentResolvers")
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Listen.Port))
 	if err != nil {
-		log.Panic("unable to create listener", zap.Error(err))
+		log.Error("unable to create listener", zap.Error(err))
 	}
 
 	tlsCredentials, err := config.TLSCredentials()
@@ -86,7 +93,7 @@ func registerBoshResolvers(configs []pcap.BoshResolverConfig, log *zap.Logger, a
 	for _, env := range configs {
 		resolver, err := pcap.NewBoshResolver(env)
 		if err != nil {
-			log.Panic("Failed to setup BoshResolver", zap.String(pcap.LogKeyResolver, env.EnvironmentAlias), zap.Error(err))
+			log.With(zap.String(pcap.LogKeyResolver, env.EnvironmentAlias)).Error("Failed to setup BoshResolver", zap.Error(err))
 		}
 		api.RegisterResolver(resolver)
 	}
