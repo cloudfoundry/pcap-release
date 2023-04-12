@@ -224,19 +224,21 @@ func (br *BoshResolver) setup() error {
 		}
 	}
 
+	timeout := 500 * time.Millisecond //nolint:gomnd // reasonable value.
+
 	br.client = &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
-				Timeout: 500 * time.Millisecond, //nolint:gomnd // Default configuration
+				Timeout: timeout,
 			}).DialContext,
-			TLSHandshakeTimeout:   500 * time.Millisecond, //nolint:gomnd // Default configuration
-			ResponseHeaderTimeout: 500 * time.Millisecond, //nolint:gomnd // Default configuration
-			ExpectContinueTimeout: 500 * time.Millisecond, //nolint:gomnd // Default configuration
+			TLSHandshakeTimeout:   timeout,
+			ResponseHeaderTimeout: timeout,
+			ExpectContinueTimeout: timeout,
 			DisableKeepAlives:     true,
 			MaxIdleConnsPerHost:   -1,
 			TLSClientConfig:       tlsConfig,
 		},
-		Timeout: time.Second,
+		Timeout: timeout,
 	}
 
 	br.logger.Debug("discovering bosh-UAA endpoint", zap.String("bosh-director", br.DirectorURL.String()))
@@ -254,6 +256,9 @@ func (br *BoshResolver) setup() error {
 //
 // Used for startup and health check.
 func (br *BoshResolver) info() (*BoshInfo, error) {
+	if br.client == nil {
+		return nil, ErrBoshNotConnected
+	}
 	infoEndpoint := br.DirectorURL.JoinPath("/info")
 
 	response, err := br.client.Do(&http.Request{
@@ -358,14 +363,15 @@ type UaaKeyInfo struct {
 }
 
 // verifyJWT checks the JWT token in tokenString and ensures that it's valid and contains the neededScope as claim.
-// Validity is determined with the defaults, i.e.
+//
+// Validity is determined with the defaults, i.e.:
 //   - validity time range
 //   - for RSA signed JWT that the RSA signature is consistent with the key provided by UAA
 //   - that there is a claim 'scope' that contains one entry that matches neededScope.
 //
 // Limitations: only RSA signed tokens are supported.
 //
-// returns a boolean that confirms that the token is valid, from a valid issuer and has the needed scope,
+// Returns a boolean that confirms that the token is valid, from a valid issuer and has the needed scope,
 // and an error in case anything went wrong while verifying the token and its scopes.
 func (br *BoshResolver) verifyJWT(tokenString string) error {
 	token, err := jwt.Parse(tokenString, br.parseKey)

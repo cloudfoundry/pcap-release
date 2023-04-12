@@ -26,6 +26,8 @@ var (
 	ErrResolverUnhealthy = fmt.Errorf("resolver unhealthy")
 	ErrNotAuthorized     = fmt.Errorf("not authorized")
 	ErrTokenUnsupported  = fmt.Errorf("token unsupported: %w", ErrNotAuthorized)
+
+	ErrBoshNotConnected = fmt.Errorf("not connected to bosh director")
 )
 
 // pcapError is an attempt to work around the shortcomings of error handling in the gRPC

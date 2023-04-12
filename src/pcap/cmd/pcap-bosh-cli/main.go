@@ -356,7 +356,7 @@ type Environment struct {
 // connect(env, opts) must be called before calling UpdateTokens!
 func (e *Environment) UpdateTokens() error {
 	if e.client == nil {
-		return fmt.Errorf("not connected")
+		return pcap.ErrBoshNotConnected
 	}
 
 	err := e.refreshTokens()
