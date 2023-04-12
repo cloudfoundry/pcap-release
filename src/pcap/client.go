@@ -81,6 +81,9 @@ func NewClient(outputFile string, logger *zap.Logger, writer MessageWriter) (*Cl
 	client := &Client{log: logger, messageWriter: writer}
 
 	if len(outputFile) == 0 {
+		if logsToStdout(zapConfig) {
+			return nil, fmt.Errorf("writing and logging to stdout is not supported")
+		}
 		client.packetFile = os.Stdout
 	} else {
 		client.packetFile, err = os.Create(outputFile)
@@ -188,7 +191,7 @@ func (c *Client) ProcessCapture(ctx context.Context, endpointRequest *EndpointRe
 
 	done := c.ReadCaptureResponse(c.stream, packetWriter, cancel)
 
-	go c.logProgress(ctx)
+	go c.logProgress(ctx, logger)
 
 	// wait for progress to finish
 	<-ctx.Done()
@@ -210,6 +213,18 @@ func (c *Client) ProcessCapture(ctx context.Context, endpointRequest *EndpointRe
 	}
 
 	return nil
+}
+
+// logsToStdout determines if the config logs data to stdout
+func logsToStdout(config zap.Config) bool {
+	for _, path := range config.OutputPaths {
+		// "stdout" has a special meaning in zap and refers to os.Stdout.
+		if path == "stdout" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (c *Client) StopRequest() {
@@ -266,6 +281,10 @@ func (c *Client) ReadCaptureResponse(stream API_CaptureClient, packetWriter *pca
 // writePacket writes a Packet to the outputFile (in packetWriter).
 func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 	log := zap.L()
+	if log.Level().Enabled(zap.DebugLevel) {
+		log.Debug("received packet", zap.Int("bytes", len(packet.Data)), zap.Time("capture-timestamp", packet.Timestamp.AsTime()))
+	}
+
 	captureInfo := gopacket.CaptureInfo{
 		Timestamp:      packet.Timestamp.AsTime(),
 		CaptureLength:  len(packet.Data),
@@ -277,20 +296,12 @@ func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 	if err != nil {
 		log.Error("writing packet to file failed", zap.Error(err))
 	}
-	if log.Level().Enabled(zap.DebugLevel) {
-		log.Debug("received packet", zap.Int("bytes", len(packet.Data)), zap.Time("capture-timestamp", packet.Timestamp.AsTime()))
-	}
 }
 
 // logProgress logs out the size of the outputFile every 5 seconds (see logProgressWait).
-func (c *Client) logProgress(ctx context.Context) {
-	logger := zap.L()
-	if c.packetFile == os.Stdout {
-		// writing progress information could interfere with packet output when both are written to stdout
-		logger.Debug("writing captures to stdout, skipping write-progress logs")
-		return
-	}
-
+//
+// When the output is to stdout, no progress logging will be done. Why not actually?
+func (c *Client) logProgress(ctx context.Context, logger *zap.Logger) {
 	//nolint:staticcheck // this is an endless function, so it's ok to use time.Tick()
 	ticker := time.Tick(logProgressWait)
 	for {
