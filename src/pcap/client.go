@@ -296,11 +296,12 @@ func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 
 // logProgress logs out the size of the outputFile every 5 seconds (see logProgressWait).
 func (c *Client) logProgress(ctx context.Context, logger *zap.Logger) {
-	//nolint:staticcheck // this is an endless function, so it's ok to use time.Tick()
-	ticker := time.Tick(logProgressWait)
+	ticker := time.NewTicker(logProgressWait)
+	defer ticker.Stop()
+
 	for {
 		select {
-		case <-ticker:
+		case <-ticker.C:
 			info, err := c.packetFile.Stat()
 			if err != nil {
 				logger.Debug("could not inspect output file", zap.Error(err))

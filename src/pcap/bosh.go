@@ -320,7 +320,7 @@ func (br *BoshResolver) Authenticate(authToken string) error {
 
 // getInstances retrieves all instances for deployment using authToken.
 //
-// Returns an error if the resolver is not connected to BOSH, the request to BOSH failed
+// Returns an error if the resolver is not connected to BOSH, the request to BOSH failed.
 func (br *BoshResolver) getInstances(deployment string, authToken string) ([]BoshInstance, error) {
 	if br.client == nil {
 		return nil, ErrBoshNotConnected
@@ -542,8 +542,7 @@ func (br *BoshResolver) fetchPublicKey(url *url.URL, kid string) (*UaaKeyInfo, e
 
 	for _, key := range keys.Keys {
 		if key.Kty == "RSA" && key.Kid == kid {
-			matchingKey := key
-			return &matchingKey, nil
+			return &key, nil
 		}
 	}
 
