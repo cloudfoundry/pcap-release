@@ -15,9 +15,10 @@ package main
 
 import (
 	"context"
+	"os"
+
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/devtools"
-	"os"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
