@@ -55,12 +55,16 @@ func main() {
 	}
 
 	// set up a BoshResolver for each bosh environment
-	registerBoshResolvers(config.BoshResolverConfigs, log, api)
+	err = registerBoshResolvers(config.BoshResolverConfigs, log, api)
+	if err != nil {
+		log.Error("Could not register BOSH Resolver", zap.Error(err))
+		return
+	}
 
 	//TODO: CFAgentResolver
 
-	if len(api.RegisteredResolverNames(false)) == 0 {
-		log.Error("Could not register any AgentResolvers")
+	if len(api.HealthyResolverNames()) == 0 {
+		log.Error("Could not register any AgentResolvers. Please check the configuration.")
 		return
 	}
 
@@ -93,13 +97,14 @@ func main() {
 // registerBoshResolvers tries to register all BoshResolvers defined in configs and registers them in api.
 //
 // Logs an error for each resolver could not be initialized.
-func registerBoshResolvers(configs []pcap.BoshResolverConfig, log *zap.Logger, api *pcap.API) {
+func registerBoshResolvers(configs []pcap.BoshResolverConfig, log *zap.Logger, api *pcap.API) error {
 	for _, env := range configs {
 		resolver, err := pcap.NewBoshResolver(env)
 		if err != nil {
 			log.With(zap.String(pcap.LogKeyResolver, env.EnvironmentAlias)).Error("Failed to setup BoshResolver", zap.Error(err))
-			continue
+			return err
 		}
 		api.RegisterResolver(resolver)
 	}
+	return nil
 }

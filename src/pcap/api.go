@@ -84,7 +84,7 @@ func (api *API) RegisterResolver(resolver AgentResolver) {
 //
 // The service is marked unhealthy when there are no healthy resolvers available, or the API is draining (shutting down).
 func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
-	healthyResolvers := api.RegisteredResolverNames(true)
+	healthyResolvers := api.HealthyResolverNames()
 	isHealthy := !api.draining() && len(healthyResolvers) > 0
 
 	apiStatus := &StatusResponse{
@@ -101,11 +101,12 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	return apiStatus, nil
 }
 
-func (api *API) RegisteredResolverNames(onlyHealthy bool) []string {
+// HealthyResolverNames provides a list of resolver names that are configured and marked healthy.
+func (api *API) HealthyResolverNames() []string {
 	resolverNames := make([]string, len(api.resolvers))
 	i := 0
 	for name, resolver := range api.resolvers {
-		if onlyHealthy && !resolver.Healthy() {
+		if !resolver.Healthy() {
 			continue
 		}
 		resolverNames[i] = name
