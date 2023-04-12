@@ -247,7 +247,7 @@ func configFromFile(configFilename string) (*Config, error) {
 
 // urlWithScheme prepends url with https:// if no scheme is specified.
 //
-// returns url with scheme prefix.
+// Returns url with scheme prefix.
 func urlWithScheme(url string) string {
 	if !schemaPattern.MatchString(url) {
 		return "https://" + url

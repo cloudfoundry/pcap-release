@@ -55,6 +55,9 @@ type BoshResolverConfig struct {
 	MTLS             *MutualTLS `yaml:"mtls" validate:"omitempty"`
 }
 
+// BoshResolver uses a BOSH director to resolve AgentEndpoint s.
+//
+// Must call setup() to initialize. This is done by NewBoshResolver(), which is the preferred way of initialization.
 type BoshResolver struct {
 	client      *http.Client
 	UaaURLs     []string
@@ -211,6 +214,10 @@ func (br *BoshResolver) Validate(endpointRequest *EndpointRequest) error {
 	return nil
 }
 
+// setup is called in NewBoshResolver and ensures that a connection to the configured BOSH director is possible.
+// Retrieves information about the director and its UAA.
+//
+// Returns an error if the connection to the BOSH Director is not possible.
 func (br *BoshResolver) setup() error {
 	br.logger.Debug("setting up BoshResolver", zap.Any("resolver-config", br.Config))
 
@@ -507,7 +514,7 @@ func (br *BoshResolver) getPublicKeyPEM(rawKeyInfoURL string, kid string, rsa *j
 //
 // Returns an error if no key can be found with the requested kid or an error arises while communicating with url.
 //
-// Limitation: This will only fetch keys with RSA as signature algorithm.
+// Limitation: This will only fetch the first key with RSA as signature algorithm.
 func (br *BoshResolver) fetchPublicKey(url *url.URL, kid string) (*UaaKeyInfo, error) {
 	res, err := br.client.Do(&http.Request{
 		Method: http.MethodGet,

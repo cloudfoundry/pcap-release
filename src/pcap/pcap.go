@@ -124,7 +124,7 @@ func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (co
 
 // vcapIDFromIncomingCtx finds the vcap-id from the context metadata, if available.
 //
-// returns errNoVcapID if no vcap-id was found in the metadata.
+// Returns errNoVcapID if no vcap-id was found in the metadata.
 func vcapIDFromIncomingCtx(ctx context.Context) (*string, error) {
 	var vcap *string
 	var err error

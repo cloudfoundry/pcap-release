@@ -295,8 +295,6 @@ func writePacket(packet *Packet, packetWriter *pcapgo.Writer) {
 }
 
 // logProgress logs out the size of the outputFile every 5 seconds (see logProgressWait).
-//
-// When the output is to stdout, no progress logging will be done. Why not actually?
 func (c *Client) logProgress(ctx context.Context, logger *zap.Logger) {
 	//nolint:staticcheck // this is an endless function, so it's ok to use time.Tick()
 	ticker := time.Tick(logProgressWait)
@@ -305,7 +303,7 @@ func (c *Client) logProgress(ctx context.Context, logger *zap.Logger) {
 		case <-ticker:
 			info, err := c.packetFile.Stat()
 			if err != nil {
-				logger.Debug("pcap output file already closed: ", zap.Error(err))
+				logger.Debug("could not inspect output file", zap.Error(err))
 				return
 			}
 			logger.Debug(fmt.Sprintf("%s bytes written to disk (total).", bytefmt.ByteSize(uint64(info.Size()))))
@@ -315,7 +313,7 @@ func (c *Client) logProgress(ctx context.Context, logger *zap.Logger) {
 	}
 }
 
-// CheckAPIHandler checks if handler is announced by the API as healthy available handler.
+// CheckAPIHandler checks if API is healthy and the given handler is available, if that's the case, the returned error will be nil.
 func (c *Client) CheckAPIHandler(handler string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

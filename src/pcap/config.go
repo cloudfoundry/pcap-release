@@ -127,7 +127,7 @@ func createCAPool(certificateAuthorityFile string) (*x509.CertPool, error) {
 	caPool := x509.NewCertPool()
 
 	// We do not use x509.CertPool.AppendCertsFromPEM because it swallows any errors.
-	// We would like to now if any certificate failed (and not just if any certificate
+	// We would like to know if any certificate failed (and not just if any certificate
 	// could be parsed).
 	for len(caFile) > 0 {
 		var block *pem.Block
