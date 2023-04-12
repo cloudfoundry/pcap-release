@@ -1,6 +1,7 @@
 package pcap
 
 import (
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -411,6 +412,8 @@ func (br *BoshResolver) verifyJWT(tokenString string) error {
 // parseKey attempts to find the appropriate signing key for the token based on the information provided with the token.
 //
 // called by jwt.Parse().
+//
+// Returns the identified signing key or an error. The key type interface{} is enforced by jwt.Keyfunc.
 func (br *BoshResolver) parseKey(token *jwt.Token) (interface{}, error) {
 	jku, ok := token.Header["jku"]
 
@@ -444,8 +447,8 @@ func (br *BoshResolver) parseKey(token *jwt.Token) (interface{}, error) {
 //
 // Limitation: only supports RSA tokens using the 'jku' header, which points to a URL
 // that can be used to retrieve key information.
-func (br *BoshResolver) parseRsaToken(token *jwt.Token) (interface{}, error) {
-	rsa, ok := token.Method.(*jwt.SigningMethodRSA)
+func (br *BoshResolver) parseRsaToken(token *jwt.Token) (*rsa.PublicKey, error) {
+	signingMethodRSA, ok := token.Method.(*jwt.SigningMethodRSA)
 
 	if !ok {
 		return nil, fmt.Errorf("unsupported signing method: %v: %w", token.Header["alg"], ErrTokenUnsupported)
@@ -453,7 +456,7 @@ func (br *BoshResolver) parseRsaToken(token *jwt.Token) (interface{}, error) {
 
 	// with the RSA signing method, the key is a public key / certificate that can be
 	// retrieved from the JKU endpoint (among other places).
-	key, done, err := br.verifyRSASignature(token, rsa)
+	key, done, err := br.verifyRSASignature(token, signingMethodRSA)
 	if done {
 		return key, err
 	}
@@ -461,7 +464,7 @@ func (br *BoshResolver) parseRsaToken(token *jwt.Token) (interface{}, error) {
 	return nil, fmt.Errorf("could not find key information URL in token headers: %+v: %w", token.Header, ErrTokenUnsupported)
 }
 
-func (br *BoshResolver) verifyRSASignature(token *jwt.Token, rsa *jwt.SigningMethodRSA) (interface{}, bool, error) {
+func (br *BoshResolver) verifyRSASignature(token *jwt.Token, rsa *jwt.SigningMethodRSA) (*rsa.PublicKey, bool, error) {
 	rawKeyInfoURL, ok := token.Header["jku"].(string)
 
 	if !ok {
@@ -475,7 +478,7 @@ func (br *BoshResolver) verifyRSASignature(token *jwt.Token, rsa *jwt.SigningMet
 	return nil, false, fmt.Errorf("token does not contain kid: %w", ErrNotAuthorized)
 }
 
-func (br *BoshResolver) getPublicKeyPEM(rawKeyInfoURL string, kid string, rsa *jwt.SigningMethodRSA) (interface{}, bool, error) {
+func (br *BoshResolver) getPublicKeyPEM(rawKeyInfoURL string, kid string, rsa *jwt.SigningMethodRSA) (*rsa.PublicKey, bool, error) {
 	keyInfoURL, err := url.Parse(rawKeyInfoURL)
 	if err != nil {
 		return nil, true, err
