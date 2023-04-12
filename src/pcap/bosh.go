@@ -135,7 +135,7 @@ func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([
 		return nil, err
 	}
 
-	instances, _, err := br.getInstances(boshRequest.Deployment, boshRequest.Token)
+	instances, err := br.getInstances(boshRequest.Deployment, boshRequest.Token)
 	if err != nil {
 		return nil, err
 	}
@@ -310,11 +310,17 @@ func (br *BoshResolver) Authenticate(authToken string) error {
 	return fmt.Errorf("could not verify token: %w", err)
 }
 
-func (br *BoshResolver) getInstances(deployment string, authToken string) ([]BoshInstance, int, error) {
+// getInstances retrieves all instances for deployment using authToken.
+//
+// Returns an error if the resolver is not connected to BOSH, the request to BOSH failed
+func (br *BoshResolver) getInstances(deployment string, authToken string) ([]BoshInstance, error) {
+	if br.client == nil {
+		return nil, ErrBoshNotConnected
+	}
 	br.logger.Debug("checking token-permissions", zap.String("director-url", br.DirectorURL.String()), zap.String("deployment", deployment))
 	instancesURL, err := url.Parse(fmt.Sprintf("%s/deployments/%s/instances", br.DirectorURL, deployment))
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	req := &http.Request{
@@ -327,28 +333,28 @@ func (br *BoshResolver) getInstances(deployment string, authToken string) ([]Bos
 
 	res, err := br.client.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("request to Bosh-director failed: %v", zap.Error(err))
+		return nil, fmt.Errorf("request to Bosh-director failed: %v", zap.Error(err))
 	}
 
 	defer func() { _ = res.Body.Close() }()
 
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return nil, res.StatusCode, fmt.Errorf("expected status code %d but got status code %d: %s", http.StatusOK, res.StatusCode, string(data))
+		return nil, fmt.Errorf("expected status code %d but got status code %d: %s", http.StatusOK, res.StatusCode, string(data))
 	}
 
 	var response []BoshInstance
 
 	err = json.Unmarshal(data, &response)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	return response, res.StatusCode, nil
+	return response, nil
 }
 
 // UaaKeyInfo holds the response of the UAA /token_keys endpoint.
@@ -496,7 +502,7 @@ func (br *BoshResolver) getPublicKeyPEM(rawKeyInfoURL string, kid string, rsa *j
 
 // fetchPublicKey fetches the token key information from url and returns the key with the Key ID (kid).
 //
-// returns an error if no key can be found with the requested kid or an error arises while communicating with url.
+// Returns an error if no key can be found with the requested kid or an error arises while communicating with url.
 //
 // Limitation: This will only fetch keys with RSA as signature algorithm.
 func (br *BoshResolver) fetchPublicKey(url *url.URL, kid string) (*UaaKeyInfo, error) {
