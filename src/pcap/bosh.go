@@ -120,7 +120,7 @@ func (br *BoshResolver) CanResolve(request *EndpointRequest) bool {
 // No endpoints are found if:
 //   - none of the instance groups in the request have instances or the instance groups are not found
 //   - the provided instance IDs don't match any of the existing ID in selected instance groups
-func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([]AgentEndpoint, error) { // TODO why do we pass the logger here?
+func (br *BoshResolver) Resolve(request *EndpointRequest, logger *zap.Logger) ([]AgentEndpoint, error) {
 	logger.Info("resolving endpoints for bosh request")
 
 	err := br.Validate(request)
@@ -299,7 +299,7 @@ func (br *BoshResolver) Authenticate(authToken string) error {
 		return nil
 	}
 
-	if errors.Is(err, errNotAuthorized) {
+	if errors.Is(err, ErrNotAuthorized) {
 		return fmt.Errorf("token %s does not have the permissions or is not supported: %w", authToken, err)
 	}
 	return fmt.Errorf("could not verify token: %w", err)
@@ -381,7 +381,7 @@ func (br *BoshResolver) verifyJWT(tokenString string) error {
 	claims, claimsOk := token.Claims.(jwt.MapClaims)
 
 	if !claimsOk {
-		return fmt.Errorf("token did not contain claims, required scope %q: %w", br.Config.TokenScope, errNotAuthorized)
+		return fmt.Errorf("token did not contain claims, required scope %q: %w", br.Config.TokenScope, ErrNotAuthorized)
 	}
 
 	scopes, ok := claims["scope"].([]interface{})
@@ -393,7 +393,7 @@ func (br *BoshResolver) verifyJWT(tokenString string) error {
 		}
 	}
 
-	return fmt.Errorf("could not find scope %q in token claims: %w", br.Config.TokenScope, errNotAuthorized)
+	return fmt.Errorf("could not find scope %q in token claims: %w", br.Config.TokenScope, ErrNotAuthorized)
 }
 
 // parseKey attempts to find the appropriate signing key for the token based on the information provided with the token.
@@ -403,7 +403,7 @@ func (br *BoshResolver) parseKey(token *jwt.Token) (interface{}, error) {
 	jku, ok := token.Header["jku"]
 
 	if !ok {
-		return nil, fmt.Errorf("header 'jku' missing from token, cannot verify signature")
+		return nil, fmt.Errorf("header 'jku' missing from token, cannot verify signature: %w", ErrTokenUnsupported)
 	}
 
 	jkuURL, err := url.Parse(jku.(string))
@@ -415,7 +415,7 @@ func (br *BoshResolver) parseKey(token *jwt.Token) (interface{}, error) {
 		var issuerURL *url.URL
 		issuerURL, err = url.Parse(issuer)
 		if err != nil {
-			br.logger.Warn("could not parse URL %s: %v", zap.String("issuer", issuer), zap.Error(err))
+			br.logger.Warn("could not parse URL", zap.String("issuer", issuer), zap.Error(err))
 			continue
 		}
 
@@ -423,7 +423,7 @@ func (br *BoshResolver) parseKey(token *jwt.Token) (interface{}, error) {
 			return br.parseRsaToken(token)
 		}
 	}
-	return nil, fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v", jku, br.UaaURLs)
+	return nil, fmt.Errorf("header 'jku' %v did not match any UAA base URLs reported by the BOSH Director: %v: %w", jku, br.UaaURLs, ErrNotAuthorized)
 }
 
 // parseRsaToken uses the token information for RSA signed JWT tokens and retrieves
@@ -436,7 +436,7 @@ func (br *BoshResolver) parseRsaToken(token *jwt.Token) (interface{}, error) {
 	rsa, ok := token.Method.(*jwt.SigningMethodRSA)
 
 	if !ok {
-		return nil, fmt.Errorf("unsupported signing method: %v", token.Header["alg"])
+		return nil, fmt.Errorf("unsupported signing method: %v: %w", token.Header["alg"], ErrTokenUnsupported)
 	}
 
 	// with the RSA signing method, the key is a public key / certificate that can be
@@ -446,21 +446,21 @@ func (br *BoshResolver) parseRsaToken(token *jwt.Token) (interface{}, error) {
 		return key, err
 	}
 
-	return nil, fmt.Errorf("could not find key information URL in token headers: %+v", token.Header)
+	return nil, fmt.Errorf("could not find key information URL in token headers: %+v: %w", token.Header, ErrTokenUnsupported)
 }
 
 func (br *BoshResolver) verifyRSASignature(token *jwt.Token, rsa *jwt.SigningMethodRSA) (interface{}, bool, error) {
 	rawKeyInfoURL, ok := token.Header["jku"].(string)
 
 	if !ok {
-		return nil, false, fmt.Errorf("token does not contain jku: %w", errNotAuthorized)
+		return nil, false, fmt.Errorf("token does not contain jku: %w", ErrNotAuthorized)
 	}
 	var kid string
 	if kid, ok = token.Header["kid"].(string); ok {
 		return br.getPublicKeyPEM(rawKeyInfoURL, kid, rsa)
 	}
 
-	return nil, false, fmt.Errorf("token does not contain kid: %w", errNotAuthorized)
+	return nil, false, fmt.Errorf("token does not contain kid: %w", ErrNotAuthorized)
 }
 
 func (br *BoshResolver) getPublicKeyPEM(rawKeyInfoURL string, kid string, rsa *jwt.SigningMethodRSA) (interface{}, bool, error) {
@@ -475,7 +475,7 @@ func (br *BoshResolver) getPublicKeyPEM(rawKeyInfoURL string, kid string, rsa *j
 	}
 
 	if rsa.Alg() != key.Alg {
-		return nil, true, fmt.Errorf("signature algorithm %q does not match expected token key information %q", rsa.Alg(), key.Alg)
+		return nil, true, fmt.Errorf("signature algorithm %q does not match expected token key information %q: %w", rsa.Alg(), key.Alg, ErrNotAuthorized)
 	}
 
 	// the RSA public key returned here is used to check the JWT token signature.
@@ -525,5 +525,5 @@ func (br *BoshResolver) fetchPublicKey(url *url.URL, kid string) (*UaaKeyInfo, e
 		}
 	}
 
-	return nil, fmt.Errorf("key info of type RSA for kid %q not found in token keys endpoint", kid)
+	return nil, fmt.Errorf("key info of type RSA for kid %q not found in token keys endpoint: %w", kid, ErrNotAuthorized)
 }

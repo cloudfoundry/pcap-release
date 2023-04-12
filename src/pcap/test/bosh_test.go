@@ -8,6 +8,7 @@ import (
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/test/mock"
 
+	"github.com/golang-jwt/jwt/v4"
 	"go.uber.org/zap"
 )
 
@@ -100,15 +101,13 @@ func TestAuthenticate(t *testing.T) {
 			name:        "invalid token - mismatching jku",
 			token:       "eyJhbGciOiJSUzI1NiIsImprdSI6Imh0dHBzOi8vMTAuMC4zLjExOjg0NDMvdG9rZW5fa2V5cyIsImtpZCI6InVhYS1qd3Qta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJqdGkiOiIwZWNmODIxYjVmYzI0YTBmODczOWM5MmJkOGY2YzYyMi1yIiwic3ViIjoiMDY4ZmEwODItMDdkNy00NjRjLWE1MWEtZmFkMzdiNGQ2MDViIiwiaWF0IjoxNjc3NTM0Mjg3LCJleHAiOjE2Nzc2MjA2ODcsImNpZCI6ImJvc2hfY2xpIiwiY2xpZW50X2lkIjoiYm9zaF9jbGkiLCJpc3MiOiJodHRwczovLzEwLjAuMy4xMTo4NDQzL29hdXRoL3Rva2VuIiwiemlkIjoidWFhIiwiYXVkIjpbIm9wZW5pZCIsImJvc2hfY2xpIiwiYm9zaCJdLCJncmFudGVkX3Njb3BlcyI6WyJvcGVuaWQiLCJib3NoLmFkbWluIl0sImFtciI6WyJwd2QiXSwiYXV0aF90aW1lIjoxNjc3NTM0Mjg3LCJncmFudF90eXBlIjoicGFzc3dvcmQiLCJ1c2VyX25hbWUiOiJoLmk1NTQwNzYuOTFiNjc1Iiwib3JpZ2luIjoidWFhIiwidXNlcl9pZCI6IjA2OGZhMDgyLTA3ZDctNDY0Yy1hNTFhLWZhZDM3YjRkNjA1YiIsInJldl9zaWciOiJjMGRkMTY0MSJ9.o7t1HSihRZNrHKeCynj5K8xM5EixOMr33F37N7i2Zy-I2d8T9LLXCbY9nczQboSG2UtDFu-ztr7xMFwpsCYzVgGItWPBMY62tk4GVir1zFYEDChFXF6vaL3Lv9Y1L9AOwtT6Nr47jYY5XxkLmVgjfXb2wDx7lL8OG0BvVmKrQDtZuUlYhyXQNDkhBHQlXh5TqK07LgPzOoWgoVcNGNlpjj3hOnHNAq-gexNqJHtIBJ-0AdcadyE3wrKWCxeuQGkEnnMG3M2ByVoFd6_V2UnizxCnIpaoVOLJqywUyxOecmALLg4c9M6Bymkv5oR_CgbMGcVTxocwGgDYXVZ20TpbOg",
 			wantErr:     true,
-			expectedErr: nil, // TODO: custom error comparison currently not implemented, see wrap.go:53
-			// expectedErr: fmt.Errorf("could not verify token eyJhbGciOiJSUzI1NiIsImprdSI6Imh0dHBzOi8vMTAuMC4zLjExOjg0NDMvdG9rZW5fa2V5cyIsImtpZCI6InVhYS1qd3Qta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJqdGkiOiIwZWNmODIxYjVmYzI0YTBmODczOWM5MmJkOGY2YzYyMi1yIiwic3ViIjoiMDY4ZmEwODItMDdkNy00NjRjLWE1MWEtZmFkMzdiNGQ2MDViIiwiaWF0IjoxNjc3NTM0Mjg3LCJleHAiOjE2Nzc2MjA2ODcsImNpZCI6ImJvc2hfY2xpIiwiY2xpZW50X2lkIjoiYm9zaF9jbGkiLCJpc3MiOiJodHRwczovLzEwLjAuMy4xMTo4NDQzL29hdXRoL3Rva2VuIiwiemlkIjoidWFhIiwiYXVkIjpbIm9wZW5pZCIsImJvc2hfY2xpIiwiYm9zaCJdLCJncmFudGVkX3Njb3BlcyI6WyJvcGVuaWQiLCJib3NoLmFkbWluIl0sImFtciI6WyJwd2QiXSwiYXV0aF90aW1lIjoxNjc3NTM0Mjg3LCJncmFudF90eXBlIjoicGFzc3dvcmQiLCJ1c2VyX25hbWUiOiJoLmk1NTQwNzYuOTFiNjc1Iiwib3JpZ2luIjoidWFhIiwidXNlcl9pZCI6IjA2OGZhMDgyLTA3ZDctNDY0Yy1hNTFhLWZhZDM3YjRkNjA1YiIsInJldl9zaWciOiJjMGRkMTY0MSJ9.o7t1HSihRZNrHKeCynj5K8xM5EixOMr33F37N7i2Zy-I2d8T9LLXCbY9nczQboSG2UtDFu-ztr7xMFwpsCYzVgGItWPBMY62tk4GVir1zFYEDChFXF6vaL3Lv9Y1L9AOwtT6Nr47jYY5XxkLmVgjfXb2wDx7lL8OG0BvVmKrQDtZuUlYhyXQNDkhBHQlXh5TqK07LgPzOoWgoVcNGNlpjj3hOnHNAq-gexNqJHtIBJ-0AdcadyE3wrKWCxeuQGkEnnMG3M2ByVoFd6_V2UnizxCnIpaoVOLJqywUyxOecmALLg4c9M6Bymkv5oR_CgbMGcVTxocwGgDYXVZ20TpbOg (header 'jku' https://10.0.3.11:8443/token_keys did not match any UAA base URLs reported by the BOSH Director: [%v])", bar.uaaURLs[0]),
+			expectedErr: pcap.ErrNotAuthorized,
 		},
 		{
 			name:        "invalid token - not a token",
 			token:       "notatoken",
 			wantErr:     true,
-			expectedErr: nil, // TODO: custom error comparison currently not implemented, see wrap.go:53
-			// expectedErr: fmt.Errorf("could not verify token notatoken (token contains an invalid number of segments)"),
+			expectedErr: jwt.ErrTokenMalformed,
 		},
 	}
 
@@ -214,8 +213,6 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 		})
 	}
 }
-
-// TODO: Test for getInstances? (is included in resolve)
 
 func TestValidateBoshEndpointRequest(t *testing.T) {
 	tests := []struct {

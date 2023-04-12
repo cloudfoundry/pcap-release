@@ -31,7 +31,6 @@ cf:
     private_key: cc-client-key.key
     ca: cc-ca.pem
 bosh:
-  # TODO: check if this will be terrible to populate via boshrelease spec / ERB.
   - alias: bootstrap_bosh
     director_url: https://bosh:8080
     token_scope: bosh.admin

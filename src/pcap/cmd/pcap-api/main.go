@@ -61,11 +61,13 @@ func main() {
 
 	if len(api.RegisteredResolverNames(false)) == 0 {
 		log.Error("Could not register any AgentResolvers")
+		return
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Listen.Port))
 	if err != nil {
 		log.Error("unable to create listener", zap.Error(err))
+		return
 	}
 
 	tlsCredentials, err := config.TLSCredentials()

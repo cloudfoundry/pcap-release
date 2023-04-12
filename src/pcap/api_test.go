@@ -43,8 +43,6 @@ func (m *mockCaptureStream) Context() context.Context {
 	return nil
 }
 
-// TODO: TestValidateConfig?
-
 func TestReadMsg(t *testing.T) {
 	tests := []struct {
 		name             string

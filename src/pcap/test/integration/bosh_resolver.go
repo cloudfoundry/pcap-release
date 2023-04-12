@@ -28,7 +28,6 @@ import (
 //   - with correct token
 // - two nodes
 // everything with a client requesting things and checking that the response messages or pcap files are as expected.
-// TODO: test for MTLS
 
 var _ = Describe("Client to API with Bosh Resolver", func() {
 	var agentServer1 *grpc.Server

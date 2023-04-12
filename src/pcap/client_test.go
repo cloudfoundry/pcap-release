@@ -85,7 +85,7 @@ func TestHandleStream(t *testing.T) {
 		name               string
 		clientError        error
 		messages           []MessageTuple
-		expectedErrMessage string // TODO: better way to compare errors
+		expectedErrMessage string
 	}{
 		{
 			name:        "clean stop",
