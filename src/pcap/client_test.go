@@ -5,7 +5,6 @@ import (
 	"context"
 	"io"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -121,16 +120,14 @@ func TestHandleStream(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			writer := pcapgo.NewWriter(&buf)
-			copyWg := &sync.WaitGroup{}
-			copyWg.Add(1)
 			stream := &MockAPIWriter{messages: tt.messages}
 			ctx, cancel := context.WithCancelCause(context.Background())
 			c := Client{log: zap.L().With(zap.String("test", tt.name))}
-			go c.ReadCaptureResponse(stream, writer, copyWg, cancel)
+			done := c.ReadCaptureResponse(stream, writer, cancel)
 			if tt.clientError != nil {
 				cancel(tt.clientError)
 			}
-			copyWg.Wait()
+			<-done
 
 			err := context.Cause(ctx)
 			if err.Error() != tt.expectedErrMessage {

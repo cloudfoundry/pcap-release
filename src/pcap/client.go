@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"sync"
 	"time"
 
 	"code.cloudfoundry.org/bytefmt"
@@ -187,17 +186,16 @@ func (c *Client) ProcessCapture(ctx context.Context, endpointRequest *EndpointRe
 		return err
 	}
 
-	copyWg := &sync.WaitGroup{}
-	copyWg.Add(1)
-	go c.ReadCaptureResponse(c.stream, packetWriter, copyWg, cancel)
+	done := c.ReadCaptureResponse(c.stream, packetWriter, cancel)
 
 	go c.logProgress(ctx)
 
 	// wait for progress to finish
 	<-ctx.Done()
 
-	logger.Info("waiting for copy operation to stop")
-	copyWg.Wait()
+	logger.Info("waiting for capture to finish")
+	// wait for the ReadCaptureResponse goroutine to finish.
+	<-done
 
 	logger.Debug("syncing file to disk")
 	err = c.packetFile.Sync()
@@ -233,30 +231,36 @@ func (c *Client) StopRequest() {
 // ReadCaptureResponse reads CaptureResponse's from the api in a loop and delegates writing/logging messages & packets to WriteMessage / writePacket.
 //
 // It terminates if an error or clean stop-message is received.
-func (c *Client) ReadCaptureResponse(stream API_CaptureClient, packetWriter *pcapgo.Writer, copyWg *sync.WaitGroup, cancel context.CancelCauseFunc) {
+func (c *Client) ReadCaptureResponse(stream API_CaptureClient, packetWriter *pcapgo.Writer, cancel context.CancelCauseFunc) chan struct{} {
 	logger := c.log.With(zap.String(LogKeyHandler, "ReadCaptureResponse"))
-	for {
-		res, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			logger.Info("clean stop, done")
-			cancel(nil)
-			break
-		}
-		code := status.Code(err)
-		if code != codes.OK {
-			err = fmt.Errorf("receive non-OK code: %v: %w", code, err)
-			cancel(err)
-			break
-		}
 
-		switch p := res.Payload.(type) {
-		case *CaptureResponse_Message:
-			c.messageWriter.WriteMessage(p.Message)
-		case *CaptureResponse_Packet:
-			writePacket(p.Packet, packetWriter)
+	done := make(chan struct{})
+	go func() {
+		for {
+			res, err := stream.Recv()
+			if errors.Is(err, io.EOF) {
+				logger.Info("clean stop, done")
+				cancel(nil)
+				break
+			}
+			code := status.Code(err)
+			if code != codes.OK {
+				err = fmt.Errorf("receive non-OK code: %v: %w", code, err)
+				cancel(err)
+				break
+			}
+
+			switch p := res.Payload.(type) {
+			case *CaptureResponse_Message:
+				c.messageWriter.WriteMessage(p.Message)
+			case *CaptureResponse_Packet:
+				writePacket(p.Packet, packetWriter)
+			}
 		}
-	}
-	copyWg.Done()
+		close(done)
+	}()
+
+	return done
 }
 
 // writePacket writes a Packet to the outputFile (in packetWriter).
