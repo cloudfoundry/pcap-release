@@ -69,6 +69,11 @@ func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 		return nil, fmt.Errorf("cannot initialize BoshResolver for environment %s. %w", config.EnvironmentAlias, err)
 	}
 
+	// Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
+	if directorURL.Path == "" {
+		directorURL.Path = "/"
+	}
+
 	var boshRootCAs *x509.CertPool
 	if config.MTLS != nil {
 		boshRootCAs, err = createCAPool(config.MTLS.CertificateAuthority)
@@ -249,13 +254,11 @@ func (br *BoshResolver) setup() error {
 //
 // Used for startup and health check.
 func (br *BoshResolver) info() (*BoshInfo, error) {
-	// FIXME: Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
-	infoEndpoint := *br.DirectorURL
-	infoEndpoint.Path = "/info"
+	infoEndpoint := br.DirectorURL.JoinPath("/info")
 
 	response, err := br.client.Do(&http.Request{
 		Method: http.MethodGet,
-		URL:    &infoEndpoint,
+		URL:    infoEndpoint,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch Bosh Director API from %v: %w", br.Config.RawDirectorURL, err)

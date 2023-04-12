@@ -24,6 +24,9 @@ import (
 var (
 	logger         *zap.Logger
 	atomicLogLevel zap.AtomicLevel
+
+	// schemaPattern defines a regular expression pattern that checks for a typical URL schema with two slashes, such as HTTP/HTTPS.
+	schemaPattern = regexp.MustCompile(`^([\w+.-_]+://)`)
 )
 
 type options struct {
@@ -148,22 +151,27 @@ func initFromOptions(opts options) (*url.URL, *Environment, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
 	boshConfig, err = configFromFile(opts.BoshConfigFilename)
 	if err != nil {
 		return nil, nil, err
 	}
-	environment, err = getEnvironment(opts.BoshEnvironment, boshConfig)
+
+	environment, err = connectToEnvironment(opts.BoshEnvironment, boshConfig)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	err = environment.UpdateTokens()
 	if err != nil {
 		return nil, nil, err
 	}
+
 	err = writeBoshConfig(boshConfig, opts.BoshConfigFilename)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return apiURL, environment, nil
 }
 
@@ -241,11 +249,10 @@ func configFromFile(configFilename string) (*Config, error) {
 //
 // returns url with scheme prefix.
 func urlWithScheme(url string) string {
-	re := regexp.MustCompile(`^([\w+.-_]+://)`)
-	if !re.MatchString(url) {
+	if !schemaPattern.MatchString(url) {
 		return "https://" + url
 	}
-	logger.Debug("pcap-api URL contains http/https scheme")
+	logger.Debug("pcap-api URL contains a scheme")
 	return url
 }
 
@@ -263,13 +270,19 @@ func parseAPIURL(urlString string) (*url.URL, error) {
 	return parsedURL, nil
 }
 
-// getEnvironment searches the provided Config for the environmentAlias.
+// connectToEnvironment searches the provided Config for the environmentAlias, and when found connects to this environment.
 //
-// Returns a matching environment if one exists.
-func getEnvironment(environmentAlias string, config *Config) (*Environment, error) {
+// Returns a matching environment if one exists and the connection works, and an error indicating the cause otherwise.
+func connectToEnvironment(environmentAlias string, config *Config) (*Environment, error) {
 	for _, environment := range config.Environments {
 		if environment.Alias == environmentAlias {
 			logger.Debug("found matching bosh-environment", zap.String("environment-alias", environment.Alias))
+
+			err := environment.connect()
+			if err != nil {
+				return nil, err
+			}
+
 			return &environment, nil
 		}
 	}
@@ -325,6 +338,10 @@ type Config struct {
 	Environments []Environment `yaml:"environments"`
 }
 
+func NewEnvironment() {
+
+}
+
 // Environment contains all the necessary information to connect to a specific bosh-director.
 type Environment struct {
 	AccessToken     string       `yaml:"access_token" validate:"required"`
@@ -338,21 +355,14 @@ type Environment struct {
 	client          *http.Client `yaml:"-"`
 }
 
-// UpdateTokens is the public wrapper func for the bosh Environment struct
+// UpdateTokens refreshes the bosh authentication token obtained from the BOSH CLI config.
 //
-// It fetches the bosh-uaa URLs from the bosh-director (if necessary)
-// and refreshes the bosh authentication tokens.
+// connect(env, opts) must be called before calling UpdateTokens!
 func (e *Environment) UpdateTokens() error {
-	if e.UaaURL == nil {
-		err := e.init()
-		if err != nil {
-			return err
-		}
-		err = e.fetchUAAURL()
-		if err != nil {
-			return err
-		}
+	if e.client == nil {
+		return fmt.Errorf("not connected")
 	}
+
 	err := e.refreshTokens()
 	if err != nil {
 		return fmt.Errorf("failed to refresh bosh access token %w", err)
@@ -360,33 +370,45 @@ func (e *Environment) UpdateTokens() error {
 	return nil
 }
 
-// init sets up a Bosh environment by parsing the bosh-director URL (string) from the config-file
-// and then sets up the http client for use with either TLS or plain HTTP.
-func (e *Environment) init() error {
+// connect uses the URL from the parsed Bosh environment of a config, sets up the http client for use with either TLS or plain HTTP
+// and uses this client to establish a connection to the BOSH Director and its UAA.
+func (e *Environment) connect() error {
 	var err error
 	e.DirectorURL, err = url.Parse(e.URL)
 	if err != nil {
 		return fmt.Errorf("error parsing environment url (%v) %w", e.URL, err)
 	}
 
-	if e.DirectorURL.Scheme == "https" {
-		logger.Info("using TLS-encrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
-		boshCA := x509.NewCertPool()
-		ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
-		if !ok {
-			return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed %v", e.CaCert) // TODO really output cert here?
-		}
+	// Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
+	if e.DirectorURL.Path == "" {
+		e.DirectorURL.Path = "/"
+	}
 
-		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.TLSClientConfig.RootCAs = boshCA
-
-		e.client = &http.Client{
-			Transport: transport,
-		}
-	} else {
+	if e.DirectorURL.Scheme != "https" {
 		logger.Warn("using unencrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
 		e.client = http.DefaultClient
+		return nil
 	}
+
+	logger.Info("using TLS-encrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
+	boshCA := x509.NewCertPool()
+	ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
+	if !ok {
+		return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed")
+	}
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig.RootCAs = boshCA
+
+	e.client = &http.Client{
+		Transport: transport,
+	}
+
+	err = e.fetchUAAURL()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -394,11 +416,7 @@ func (e *Environment) init() error {
 func (e *Environment) fetchUAAURL() error {
 	res, err := e.client.Do(&http.Request{
 		Method: http.MethodGet,
-		URL: &url.URL{
-			Scheme: e.DirectorURL.Scheme,
-			Host:   e.DirectorURL.Host,
-			Path:   "/info",
-		},
+		URL:    e.DirectorURL.JoinPath("/info"),
 		Header: http.Header{
 			"Accept": {"application/json"},
 		},
@@ -425,22 +443,23 @@ func (e *Environment) fetchUAAURL() error {
 	}
 	e.UaaURL = uaaURL
 
+	// Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
+	if e.UaaURL.Path == "" {
+		e.UaaURL.Path = "/"
+	}
+
 	return nil
 }
 
 // refreshTokens connects to the bosh-uaa API to fetch updated bosh access- & refresh-token.
-func (e *Environment) refreshTokens() error { //TODO: logging
+func (e *Environment) refreshTokens() error {
 	req := http.Request{
 		Method: http.MethodPost,
-		URL: &url.URL{
-			Scheme: e.UaaURL.Scheme,
-			Host:   e.UaaURL.Host,
-			Path:   "/oauth/token",
-		},
+		URL:    e.UaaURL.JoinPath("/oauth/token"),
 		Header: http.Header{
 			"Accept":        {"application/json"},
 			"Content-Type":  {"application/x-www-form-urlencoded"},
-			"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("bosh_cli:")))}, // TODO: the client name is also written in the token
+			"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("bosh_cli:")))},
 		},
 		Body: io.NopCloser(bytes.NewReader([]byte(url.Values{
 			"grant_type":    {"refresh_token"},
