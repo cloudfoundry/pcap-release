@@ -368,12 +368,12 @@ func TestAgentCapture(t *testing.T) {
 
 			err := a.Capture(&test.stream)
 			if (err != nil) != test.wantErr {
-				t.Errorf("EndpointRequest() error = %v, wantErr %v", err, test.wantErr)
+				t.Errorf("Capture() error = %v, wantErr %v", err, test.wantErr)
 			}
 
 			code := status.Code(err)
 			if test.wantErr && code != test.wantStatusCode {
-				t.Errorf("EndpointRequest() statusCode = %v, wantStatusCode = %v", code, test.wantStatusCode)
+				t.Errorf("Capture() statusCode = %v, wantStatusCode = %v", code, test.wantStatusCode)
 			}
 		})
 	}

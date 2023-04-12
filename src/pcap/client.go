@@ -215,7 +215,7 @@ func (c *Client) ProcessCapture(ctx context.Context, endpointRequest *EndpointRe
 	return nil
 }
 
-// logsToStdout determines if the config logs data to stdout
+// logsToStdout determines if the config logs data to stdout.
 func logsToStdout(config zap.Config) bool {
 	for _, path := range config.OutputPaths {
 		// "stdout" has a special meaning in zap and refers to os.Stdout.

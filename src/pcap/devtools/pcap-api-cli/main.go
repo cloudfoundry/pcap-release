@@ -36,7 +36,8 @@ func main() {
 
 	cc, err := grpc.Dial("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatal("unable to establish connection", zap.Error(err))
+		log.Error("unable to establish connection", zap.Error(err))
+		return
 	}
 
 	ctx := context.Background()
@@ -47,7 +48,7 @@ func main() {
 
 	statusRes, err := api.Status(ctx, &pcap.StatusRequest{})
 	if err != nil {
-		log.Fatal("unable to get api status", zap.Error(err))
+		log.Error("unable to get api status", zap.Error(err))
 		return
 	}
 	// This whole client is temporary, so leaving the sugared zap logger here.

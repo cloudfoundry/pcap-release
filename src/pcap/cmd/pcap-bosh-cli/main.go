@@ -439,7 +439,7 @@ func (e *Environment) fetchUAAURL() error {
 	}
 	e.UaaURL = uaaURL
 
-	//Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
+	// Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
 	if e.UaaURL.Path == "" {
 		e.UaaURL.Path = "/"
 	}
