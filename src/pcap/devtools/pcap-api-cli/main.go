@@ -12,6 +12,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
@@ -24,6 +25,14 @@ import (
 
 func main() {
 	log := zap.L()
+
+	var err error
+
+	defer func() {
+		if err != nil {
+			os.Exit(1)
+		}
+	}()
 
 	cc, err := grpc.Dial("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -38,17 +47,16 @@ func main() {
 
 	statusRes, err := api.Status(ctx, &pcap.StatusRequest{})
 	if err != nil {
-		log.Panic("unable to get api status", zap.Error(err))
+		log.Fatal("unable to get api status", zap.Error(err))
+		return
 	}
 	// This whole client is temporary, so leaving the sugared zap logger here.
-	log.Info("status:")
-	log.Sugar().Infof("  healthy: %v\n", statusRes.Healthy)
-	log.Sugar().Infof("  compLvl: %d\n", statusRes.CompatibilityLevel)
-	log.Sugar().Infof("  message: %s\n", statusRes.Message)
+	log.Info("status:", zap.Bool("healthy", statusRes.Healthy), zap.Int64("compatibility-level", statusRes.CompatibilityLevel), zap.String("message", statusRes.Message))
 
 	stream, err := api.Capture(ctx)
 	if err != nil {
-		log.Panic("error during capturing", zap.Error(err))
+		log.Error("error during capturing", zap.Error(err))
+		return
 	}
 
 	request := &pcap.CaptureRequest{
@@ -74,7 +82,8 @@ func main() {
 
 	err = stream.Send(request)
 	if err != nil {
-		log.Panic("unable to start capture", zap.Error(err))
+		log.Error("unable to start capture", zap.Error(err))
+		return
 	}
 
 	// keep receiving some data long enough to start a manual drain
@@ -85,7 +94,8 @@ func main() {
 
 	err = stream.Send(pcap.MakeStopRequest())
 	if err != nil {
-		log.Panic("unable to stop capture", zap.Error(err))
+		log.Error("unable to stop capture", zap.Error(err))
+		return
 	}
 
 	devtools.ReadN(10_000, stream) //nolint:gomnd // default value used for testing

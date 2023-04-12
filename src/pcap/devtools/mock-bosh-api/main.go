@@ -95,7 +95,7 @@ agent:
 
 	err := os.WriteFile(file, []byte(config), fs.ModePerm)
 	if err != nil {
-		log.Panic("Failed to write api config file", zap.Error(err))
+		log.Fatal("Failed to write api config file", zap.Error(err))
 		return
 	}
 	log.Info("Wrote api config file")
@@ -104,7 +104,8 @@ func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 	log := zap.L().With(zap.String("file", file))
 	token, err := mock.GetValidToken(jwtAPIurl)
 	if err != nil {
-		log.Panic("Failed to write api config file", zap.Error(err))
+		log.Error("Failed to write api config file", zap.Error(err))
+		return
 	}
 
 	config := fmt.Sprintf(`environments:
@@ -154,7 +155,8 @@ func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 
 	err = os.WriteFile(file, []byte(config), fs.ModePerm)
 	if err != nil {
-		log.Panic("Failed to write output file", zap.Error(err))
+		log.Error("Failed to write output file", zap.Error(err))
+		return
 	}
 
 	log.Info("Wrote bosh CLI config")

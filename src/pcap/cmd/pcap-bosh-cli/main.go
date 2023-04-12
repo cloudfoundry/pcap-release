@@ -338,10 +338,6 @@ type Config struct {
 	Environments []Environment `yaml:"environments"`
 }
 
-func NewEnvironment() {
-
-}
-
 // Environment contains all the necessary information to connect to a specific bosh-director.
 type Environment struct {
 	AccessToken     string       `yaml:"access_token" validate:"required"`
@@ -443,7 +439,7 @@ func (e *Environment) fetchUAAURL() error {
 	}
 	e.UaaURL = uaaURL
 
-	// Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
+	//Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
 	if e.UaaURL.Path == "" {
 		e.UaaURL.Path = "/"
 	}

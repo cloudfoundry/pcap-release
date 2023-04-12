@@ -70,7 +70,8 @@ func main() {
 
 	tlsCredentials, err := config.TLSCredentials()
 	if err != nil {
-		log.Panic("unable to load provided TLS credentials", zap.Error(err))
+		log.Error("unable to load provided TLS credentials", zap.Error(err))
+		return
 	}
 	server := grpc.NewServer(grpc.Creds(tlsCredentials))
 	pcap.RegisterAPIServer(server, api)
@@ -80,7 +81,8 @@ func main() {
 	log.Info("starting server")
 	err = server.Serve(lis)
 	if err != nil {
-		log.Panic("serve returned unsuccessfully", zap.Error(err))
+		log.Error("serve returned unsuccessfully", zap.Error(err))
+		return
 	}
 
 	log.Info("serve returned successfully")
@@ -88,12 +90,13 @@ func main() {
 
 // registerBoshResolvers tries to register all BoshResolvers defined in configs and registers them in api.
 //
-// Logs an error if the resolver could not be initialized.
+// Logs an error for each resolver could not be initialized.
 func registerBoshResolvers(configs []pcap.BoshResolverConfig, log *zap.Logger, api *pcap.API) {
 	for _, env := range configs {
 		resolver, err := pcap.NewBoshResolver(env)
 		if err != nil {
 			log.With(zap.String(pcap.LogKeyResolver, env.EnvironmentAlias)).Error("Failed to setup BoshResolver", zap.Error(err))
+			continue
 		}
 		api.RegisterResolver(resolver)
 	}
