@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/uuid"
@@ -35,6 +36,8 @@ const (
 	HeaderVcapID        = contextKeyVcapID("x-vcap-request-id")
 	maxDeviceNameLength = 16
 	maxFilterLength     = 5000
+
+	DefaultStatusTimeout = time.Minute
 )
 
 type contextKeyVcapID string

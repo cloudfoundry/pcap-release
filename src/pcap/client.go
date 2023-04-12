@@ -316,7 +316,7 @@ func (c *Client) logProgress(ctx context.Context, logger *zap.Logger) {
 
 // CheckAPIHandler checks if API is healthy and the given handler is available, if that's the case, the returned error will be nil.
 func (c *Client) CheckAPIHandler(handler string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultStatusTimeout)
 	defer cancel()
 
 	if c.cc == nil {

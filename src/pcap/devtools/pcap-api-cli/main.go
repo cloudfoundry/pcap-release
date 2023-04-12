@@ -40,8 +40,7 @@ func main() {
 		return
 	}
 
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), pcap.DefaultStatusTimeout)
 	defer cancel()
 
 	api := pcap.NewAPIClient(cc)

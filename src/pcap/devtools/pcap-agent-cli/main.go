@@ -15,11 +15,9 @@ package main
 
 import (
 	"context"
-	"os"
-	"time"
-
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"github.com/cloudfoundry/pcap-release/src/pcap/devtools"
+	"os"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -46,7 +44,7 @@ func main() {
 	agentClient := pcap.NewAgentClient(cc)
 
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, pcap.DefaultStatusTimeout)
 	defer cancel()
 
 	statusRes, err := agentClient.Status(ctx, &pcap.StatusRequest{})
