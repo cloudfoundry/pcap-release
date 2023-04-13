@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"syscall"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 
@@ -122,7 +123,7 @@ func main() {
 
 	logger.Debug("pcap-client successfully initialized and connected to pcap-api")
 
-	go pcap.WaitForSignal(logger, client, nil)
+	go pcap.StopOnSignal(logger, client, nil, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
 	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups, environment.Alias)
 	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, uint32(opts.SnapLength))

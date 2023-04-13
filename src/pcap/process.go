@@ -3,7 +3,6 @@ package pcap
 import (
 	"os"
 	"os/signal"
-	"syscall"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -11,7 +10,7 @@ import (
 
 // Stoppable provides an interface for services that can be stopped.
 //
-// Primarily used with WaitForSignal.
+// Primarily used with StopOnSignal.
 type Stoppable interface {
 	Stop()
 }
@@ -23,33 +22,38 @@ type WaitingStoppable interface {
 	Wait()
 }
 
-// WaitForSignal to tell the process to stop processing any streams. Will first tell the agent
-// to end any running streams, wait for them to terminate and gracefully stop the gRPC server
-// afterwards. Currently listens for SIGUSR1 and SIGINT, SIGQUIT and SIGTERM.
+// StopOnSignal is a reusable function to handle stop signals.
 //
-// the provided Stoppable can also be a WaitingStoppable. Then the Wait() function is also called.
-func WaitForSignal(log *zap.Logger, stoppable Stoppable, server *grpc.Server) {
+// The Stoppable interface defines what to do when topping a particular process, and stopSignals defines a list of
+// signals, for which Stop() is called.
+//
+// When a server is given, it is shut down gracefully.
+//
+// The provided Stoppable can also be a WaitingStoppable. Then the Wait() function is also called.
+func StopOnSignal(log *zap.Logger, stoppable Stoppable, server *grpc.Server, stopSignals ...os.Signal) {
 	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	signal.Notify(signals, stopSignals...)
 	for {
 		sig := <-signals
-		switch sig {
-		case syscall.SIGUSR1, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM:
-			log.Info("received signal, stopping.", zap.String("signal", sig.String()))
-			stoppable.Stop()
 
-			if waitingStoppable, ok := stoppable.(WaitingStoppable); ok {
-				log.Info("waiting for stop")
-				waitingStoppable.Wait()
-			}
+		for _, stopSignal := range stopSignals {
+			if sig == stopSignal {
+				log.Info("received signal, stopping.", zap.String("signal", sig.String()))
+				stoppable.Stop()
 
-			if server != nil {
-				log.Info("shutting down server")
-				server.GracefulStop()
+				if waitingStoppable, ok := stoppable.(WaitingStoppable); ok {
+					log.Info("waiting for stop")
+					waitingStoppable.Wait()
+				}
+
+				if server != nil {
+					log.Info("shutting down server")
+					server.GracefulStop()
+				}
+				return
 			}
-			return
-		default:
-			log.Warn("ignoring unknown signal", zap.String("signal", sig.String()))
 		}
+
+		log.Warn("ignoring unhandled signal", zap.String("signal", sig.String()))
 	}
 }

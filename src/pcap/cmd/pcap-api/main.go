@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"syscall"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 
@@ -82,7 +83,7 @@ func main() {
 	server := grpc.NewServer(grpc.Creds(tlsCredentials))
 	pcap.RegisterAPIServer(server, api)
 
-	go pcap.WaitForSignal(log, api, server)
+	go pcap.StopOnSignal(log, api, server, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
 	log.Info("starting server")
 	err = server.Serve(lis)
