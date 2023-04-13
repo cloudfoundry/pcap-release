@@ -18,6 +18,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// BoshInfo corresponds to the relevant data that is provided as JSON from the BOSH Director
+// endpoint /info. This struct is limited to the fields needed for the supported operation types (i.e. using UAA).
 type BoshInfo struct {
 	Name            string `json:"name"`
 	UUID            string `json:"uuid"`
@@ -35,6 +37,7 @@ type BoshInfo struct {
 	} `json:"user_authentication"`
 }
 
+// BoshInstance contains the metadata about a particular BOSH VM instance in a BOSH deployment.
 type BoshInstance struct {
 	AgentID     string    `json:"agent_id"`
 	Cid         string    `json:"cid"`
@@ -47,6 +50,7 @@ type BoshInstance struct {
 	ExpectsVM   bool      `json:"expects_vm"`
 }
 
+// BoshResolverConfig defines the configuration for a specific BOSH environment used for a BoshResolver.
 type BoshResolverConfig struct {
 	RawDirectorURL   string     `yaml:"director_url" validate:"required,url"`
 	EnvironmentAlias string     `yaml:"alias" validate:"required"`
@@ -67,6 +71,11 @@ type BoshResolver struct {
 	boshRootCAs *x509.CertPool
 }
 
+// NewBoshResolver creates and initializes a BoshResolver based on the provided config.
+// NewBoshResolver calls setup() to establish the connection to the configured BOSH Director.
+//
+// Returns an error if the configuration is incorrect (unparseable URL, incorrect or inconsistent TLS configuration)
+// or the connection to the BOSH director fails.
 func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 	directorURL, err := url.Parse(config.RawDirectorURL)
 	if err != nil {
@@ -263,10 +272,9 @@ func (br *BoshResolver) setup() error {
 // info retrieves the BOSH director /info endpoint.
 //
 // Used for startup and health check.
+//
+// Returns an error if the connection to the director URL fails or the response from the director is not a BoshInfo.
 func (br *BoshResolver) info() (*BoshInfo, error) {
-	if br.client == nil {
-		return nil, ErrBoshNotConnected
-	}
 	infoEndpoint := br.DirectorURL.JoinPath("/info")
 
 	response, err := br.client.Do(&http.Request{
@@ -295,13 +303,8 @@ func (br *BoshResolver) info() (*BoshInfo, error) {
 	return apiResponse, nil
 }
 
-// Healthy returns true if the resolver ran setup() and can connect to the BOSH director.
+// Healthy returns true if the resolver can retrieve /info to the BOSH director.
 func (br *BoshResolver) Healthy() bool {
-	if br.client == nil {
-		// not initialized yet
-		return false
-	}
-
 	_, err := br.info()
 	return err == nil
 }
