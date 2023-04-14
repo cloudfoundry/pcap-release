@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/gopacket"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -41,6 +42,7 @@ func (m *mockCaptureStream) CloseSend() error {
 func (m *mockCaptureStream) Context() context.Context {
 	return nil
 }
+
 func TestReadMsg(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -74,7 +76,7 @@ func TestReadMsg(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
+			ctx, cancel := context.WithCancelCause(ctx)
 			if tt.contextCancelled {
 				cancel(nil)
 			}
@@ -180,33 +182,36 @@ func TestStopCmd(t *testing.T) {
 			wantErr:     true,
 		},
 		{
-			name:        "Invalid payload type",
-			recv:        &mockRequestReceiver{req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Capture: &Capture{Capture: &Capture_Bosh{Bosh: &BoshCapture{}}}}}}, err: nil},
+			name: "Invalid payload type",
+			recv: &mockRequestReceiver{
+				req: &CaptureRequest{Operation: &CaptureRequest_Start{Start: &StartCapture{Request: &EndpointRequest{Request: &EndpointRequest_Bosh{Bosh: &BoshRequest{}}}}}},
+				err: nil,
+			},
 			expectedErr: errInvalidPayload,
 			wantErr:     true,
 		},
 		{
 			name:        "Happy path",
-			recv:        &mockRequestReceiver{req: makeStopRequest(), err: nil},
+			recv:        &mockRequestReceiver{req: MakeStopRequest(), err: nil},
 			expectedErr: context.Canceled,
 			wantErr:     true,
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
-			stopCmd(cancel, test.recv)
+			ctx, cancel := context.WithCancelCause(ctx)
+			stopCmd(cancel, tt.recv)
 			<-ctx.Done()
 
-			err := Cause(ctx)
+			err := context.Cause(ctx)
 
-			if (err != nil) != test.wantErr {
-				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("wantErr = %v, error = %v", tt.wantErr, err)
 			}
 
-			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
-				t.Errorf("expectedErr = %v, error = %v", test.expectedErr, err)
+			if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
+				t.Errorf("expectedErr = %v, error = %v", tt.expectedErr, err)
 			}
 		})
 	}
@@ -231,15 +236,15 @@ func TestMergeResponseChannels(t *testing.T) {
 	}{
 		{
 			name:       "each channel has one capture response",
-			crAgent1:   []*CaptureResponse{newPacketResponse([]byte("ABC"))},
-			crAgent2:   []*CaptureResponse{newPacketResponse([]byte("ABC"))},
+			crAgent1:   []*CaptureResponse{newPacketResponse([]byte("ABC"), gopacket.CaptureInfo{})},
+			crAgent2:   []*CaptureResponse{newPacketResponse([]byte("ABC"), gopacket.CaptureInfo{})},
 			wantOutLen: 2,
 		},
 
 		{
 			name:       "one channel is empty",
 			crAgent1:   []*CaptureResponse{},
-			crAgent2:   []*CaptureResponse{newPacketResponse([]byte("ABC"))},
+			crAgent2:   []*CaptureResponse{newPacketResponse([]byte("ABC"), gopacket.CaptureInfo{})},
 			wantOutLen: 1,
 		},
 
@@ -302,7 +307,7 @@ func TestCapture(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log := zap.L()
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, nil, origin, 1)
 			if err != nil {
 				t.Errorf("capture() unexpected error during api creation: %v", err)
 			}
@@ -332,6 +337,25 @@ func containsMsgType(got <-chan *CaptureResponse, messageType MessageType) bool 
 	return false
 }
 
+type HealthyResolver struct {
+}
+
+func (h HealthyResolver) Name() string {
+	return "healthy"
+}
+
+func (h HealthyResolver) CanResolve(_ *EndpointRequest) bool {
+	return true
+}
+
+func (h HealthyResolver) Resolve(_ *EndpointRequest, _ *zap.Logger) ([]AgentEndpoint, error) {
+	return []AgentEndpoint{}, nil
+}
+
+func (h HealthyResolver) Healthy() bool {
+	return true
+}
+
 func TestAPIStatus(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -351,7 +375,8 @@ func TestAPIStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, nil, origin, 1)
+			api.RegisterResolver(HealthyResolver{})
 			if err != nil {
 				t.Errorf("Status() unexpected error during api creation: %v", err)
 			}
@@ -365,48 +390,6 @@ func TestAPIStatus(t *testing.T) {
 			}
 			if got.Healthy != tt.wantHealth {
 				t.Errorf("Status() healthy = %v, wantHealth %v", got.Healthy, tt.wantHealth)
-			}
-		})
-	}
-}
-
-func TestAPIRegisterHandler(t *testing.T) {
-	tests := []struct {
-		name              string
-		handler           AgentResolver
-		wantRegistered    bool
-		wantedHandlerName string
-	}{
-		{
-			name:              "Register bosh handler and check the handler with correct name",
-			handler:           &BoshHandler{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
-			wantRegistered:    true,
-			wantedHandlerName: "bosh",
-		},
-		{
-			name:              "Register cf handler and check the handler with correct name",
-			handler:           &CloudfoundryHandler{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
-			wantRegistered:    true,
-			wantedHandlerName: "cf",
-		},
-		{
-			name:              "Register bosh handler and check the handler with invalid name",
-			handler:           &BoshHandler{Config: ManualEndpoints{Targets: []AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}},
-			wantRegistered:    false,
-			wantedHandlerName: "cf",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
-			if err != nil {
-				t.Errorf("RegisterResolver() unexpected error during api creation: %v", err)
-			}
-
-			api.RegisterResolver(tt.handler)
-			registered := api.handlerRegistered(tt.wantedHandlerName)
-			if *registered != tt.wantRegistered {
-				t.Errorf("RegisterResolver() expected registered %v but got %v", tt.wantRegistered, *registered)
 			}
 		})
 	}
@@ -436,7 +419,7 @@ func TestAPICapture(t *testing.T) {
 		},
 		{
 			name:           "Incoming Request is invalid",
-			stream:         mockRequestReceiver{makeStopRequest(), nil, nil, context.Background()},
+			stream:         mockRequestReceiver{MakeStopRequest(), nil, nil, context.Background()},
 			apiRunning:     true,
 			wantErr:        true,
 			wantStatusCode: codes.InvalidArgument,
@@ -444,7 +427,7 @@ func TestAPICapture(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, AgentMTLS{MTLS: nil}, origin, 1)
+			api, err := NewAPI(BufferConf{Size: 5, UpperLimit: 4, LowerLimit: 3}, nil, origin, 1)
 			if err != nil {
 				t.Errorf("Capture() unexpected error during api creation: %v", err)
 			}

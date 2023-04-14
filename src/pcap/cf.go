@@ -6,43 +6,44 @@ import (
 	"go.uber.org/zap"
 )
 
-type CloudfoundryHandler struct {
-	Config ManualEndpoints
+type CloudfoundryResolver struct {
 }
 
-func (cf *CloudfoundryHandler) name() string {
+func (cf *CloudfoundryResolver) Name() string {
 	return "cf"
 }
 
-func (cf *CloudfoundryHandler) canResolve(request *Capture) bool {
+func (cf *CloudfoundryResolver) CanResolve(request *EndpointRequest) bool {
 	return request.GetCf() != nil
 }
 
-func (cf *CloudfoundryHandler) resolve(request *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
-	log = log.With(zap.String("handler", cf.name()))
+func (cf *CloudfoundryResolver) Healthy() bool {
+	return true
+}
+
+func (cf *CloudfoundryResolver) Resolve(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
+	log = log.With(zap.String("handler", cf.Name()))
 	log.Info("Handling request")
 
-	// TODO Validate & get targets from bosh
-
-	_ = cf.Config.Targets
+	// TODO Validate & get targets from cloud-controller
 
 	_ = request
 	// TODO: Add the static IP addresses here, if needed
 	return []AgentEndpoint{}, nil
 }
 
-func (cf *CloudfoundryHandler) validate(capture *Capture) error {
-	request := capture.GetCf()
+func (cf *CloudfoundryResolver) validate(request *EndpointRequest) error {
+	cfRequest := request.GetCf()
 
-	if request == nil {
+	if cfRequest == nil {
 		return fmt.Errorf("invalid message: bosh: %w", errNilField)
 	}
 
-	if request.Token == "" {
+	if cfRequest.Token == "" {
 		return fmt.Errorf("invalid message: token: %w", errEmptyField)
 	}
 
-	if request.AppId == "" {
+	if cfRequest.AppId == "" {
 		return fmt.Errorf("invalid message: application_id: %w", errEmptyField)
 	}
 

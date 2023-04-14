@@ -2,8 +2,6 @@
 
 set -euo pipefail
 
-apt-get update && apt-get install -y libpcap-dev # TODO: remove and move to dockerfile
-
 cd "${REPO_ROOT}"
 
 echo "> Running 'bundle exec rake spec'"
@@ -12,15 +10,12 @@ bundle exec rake spec
 
 echo "> Running unit tests"
 pushd src/pcap
-  go test $(go list ./... | grep -v /integrationtests)
+  # The xargs call explicitly quotes each package name.
+  # shellcheck disable=SC2046
+  go test -count=1 -v $(go list ./... | grep -v test/integration | xargs -n1 -I {} echo "{}")
 popd
 
-echo "> Running integration tests"
-pushd src/pcap/integrationtests
-  mkdir /go
-  export GOPATH=/go
-  go install "github.com/onsi/ginkgo/v2/ginkgo@latest"
-  export PATH=$PATH:$GOPATH/bin
-  ginkgo version
+echo "> Running integration tests (ginkgo)"
+pushd src/pcap/test/integration
   ginkgo -r -trace -vv
 popd

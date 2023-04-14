@@ -15,10 +15,10 @@ package main
 
 import (
 	"context"
-	"time"
+	"os"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
+	"github.com/cloudfoundry/pcap-release/src/pcap/devtools"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -28,20 +28,30 @@ import (
 func main() {
 	log := zap.L()
 
+	var err error
+
+	defer func() {
+		if err != nil {
+			os.Exit(1)
+		}
+	}()
+
 	cc, err := grpc.Dial("localhost:8083", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatal("unable to establish connection", zap.Error(err))
+		log.Error("unable to establish connection", zap.Error(err))
+		return
 	}
 
 	agentClient := pcap.NewAgentClient(cc)
 
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, pcap.DefaultStatusTimeout)
 	defer cancel()
 
 	statusRes, err := agentClient.Status(ctx, &pcap.StatusRequest{})
 	if err != nil {
-		log.Panic("unable to get agent status", zap.Error(err))
+		log.Error("unable to get agent status", zap.Error(err))
+		return
 	}
 	log.Info("status:")
 	log.Sugar().Infof("  healthy: %v\n", statusRes.Healthy)
@@ -50,7 +60,8 @@ func main() {
 
 	stream, err := agentClient.Capture(ctx)
 	if err != nil {
-		log.Panic("error during capturing", zap.Error(err))
+		log.Error("error during capturing", zap.Error(err))
+		return
 	}
 
 	err = stream.Send(&pcap.AgentRequest{
@@ -65,17 +76,19 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Panic("unable to start capture", zap.Error(err))
+		log.Error("unable to start capture", zap.Error(err))
+		return
 	}
 
-	cmd.ReadN(10, stream) //nolint:gomnd // default value used for testing
+	devtools.ReadN(10, stream) //nolint:gomnd // default value used for testing
 
 	err = stream.Send(&pcap.AgentRequest{
 		Payload: &pcap.AgentRequest_Stop{},
 	})
 	if err != nil {
-		log.Panic("unable to stop capture", zap.Error(err))
+		log.Error("unable to stop capture", zap.Error(err))
+		return
 	}
 
-	cmd.ReadN(10_000, stream) //nolint:gomnd // default value used for testing
+	devtools.ReadN(10_000, stream) //nolint:gomnd // default value used for testing
 }

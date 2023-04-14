@@ -1,5 +1,6 @@
 syntax = "proto3";
 option go_package = "github.com/cloudfoundry/pcap-release/src/pcap";
+import "google/protobuf/timestamp.proto";
 
 package pcap;
 
@@ -18,10 +19,12 @@ message CaptureResponse {
   }
 }
 
-// Packet wraps the raw pcap data stream of one packet. More fields might be
+// Packet wraps the raw pcap data stream and some metadata (CaptureInfo: timestamp & length) of one packet. More fields might be
 // added as needed.
 message Packet {
   bytes data = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  int32 length = 3;
 }
 
 // Message represents a control message used by the server to inform the client
@@ -71,8 +74,7 @@ message StatusResponse {
   bool healthy = 1;
   int64 compatibilityLevel = 2;
   string message = 3;
-  optional bool bosh = 4;
-  optional bool cf = 5;
+  repeated string resolvers = 4;
 }
 
 message StatusRequest {}
@@ -95,26 +97,27 @@ message CaptureRequest {
 
 message StopCapture {}
 
-message Capture {
-  oneof capture {
-    BoshCapture bosh = 1;
-    CloudfoundryCapture cf = 2;
+message EndpointRequest {
+  oneof request {
+    BoshRequest bosh = 1;
+    CloudfoundryRequest cf = 2;
   }
 }
 
 message StartCapture {
-  Capture capture = 1;
+  EndpointRequest request = 1;
   CaptureOptions options = 2;
 }
 
-message BoshCapture {
+message BoshRequest {
   string token = 1;
   string deployment = 2;
   repeated string groups = 3;
   repeated string instances = 4;
+  string environment = 5;
 }
 
-message CloudfoundryCapture {
+message CloudfoundryRequest {
   string token = 1;
   string appId = 2;
   optional string appType = 3;

@@ -1,0 +1,13 @@
+id: pcap-agent/123
+log_level: debug
+buffer:
+  size: 100
+  upper_limit: 95
+  lower_limit: 90
+listen:
+  port: 9494
+  tls: # omitempty -> nil == tls off
+    certificate: agent-cert.pem
+    private_key: agent-cert.key
+    ca: pcap-ca.pem
+

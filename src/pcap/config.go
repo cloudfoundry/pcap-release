@@ -1,5 +1,16 @@
 package pcap
 
+import (
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
+	"fmt"
+	"os"
+
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+)
+
 // TLS configures the server side of (m)TLS.
 type TLS struct {
 	// Certificate holds the path to the PEM encoded certificate (chain).
@@ -16,7 +27,7 @@ type TLS struct {
 // Certificate and PrivateKey are for the mTLS client certificate
 // The CertificateAuthority is a file containing the server's CA that should be trusted when connecting to the server.
 type MutualTLS struct {
-	TLS
+	TLS `yaml:"-,inline"`
 	// SkipVerify can disable the server certificate verification when connecting.
 	SkipVerify bool `yaml:"skip_verify"`
 	// CommonName is used as part of the certificate verification, together with CertificateAuthority.
@@ -37,11 +48,11 @@ type BufferConf struct {
 	// UpperLimit tells the manager of the buffer to start discarding messages
 	// once the limit is exceeded. The condition looks like this:
 	//   len(buf) >= UpperLimit
-	UpperLimit int `yaml:"upperLimit" validate:"gte=0,ltefield=Size"`
+	UpperLimit int `yaml:"upper_limit" validate:"gte=0,ltefield=Size"`
 	// LowerLimit tells the manager of the buffer to stop discarding messages
 	// once the limit is reached/undercut. The condition looks like this:
 	//   len(buf) <= LowerLimit
-	LowerLimit int `yaml:"lowerLimit" validate:"gte=0,ltefield=UpperLimit"`
+	LowerLimit int `yaml:"lower_limit" validate:"gte=0,ltefield=UpperLimit"`
 }
 
 // Listen defines the port and optional TLS configuration for the listening socket.
@@ -50,7 +61,88 @@ type Listen struct {
 	TLS  *TLS `yaml:"tls,omitempty"`
 }
 
-// AgentMTLS defines the optional mTLS configuration to connect to agents.
-type AgentMTLS struct {
-	MTLS *MutualTLS `yaml:"mtls,omitempty"`
+type NodeConfig struct {
+	Listen   Listen     `yaml:"listen"`
+	Buffer   BufferConf `yaml:"buffer"`
+	LogLevel string     `yaml:"log_level"`
+	ID       string     `yaml:"id" validate:"required"`
+}
+
+// TLSCredentials creates the necessary credentials from this Config. If NodeConfig.Listen.TLS is
+// nil, credentials which disable transport security, will be used.
+//
+// Note: the TLS version is currently hard-coded to TLSv1.3.
+func (c NodeConfig) TLSCredentials() (credentials.TransportCredentials, error) {
+	if tlsConfig := c.Listen.TLS; tlsConfig != nil {
+		return LoadTLSCredentials(tlsConfig.Certificate, tlsConfig.PrivateKey, &tlsConfig.CertificateAuthority, nil, nil)
+	}
+	return insecure.NewCredentials(), nil
+}
+
+// LoadTLSCredentials creates TLS transport credentials from the given parameters.
+func LoadTLSCredentials(certFile, keyFile string, caFile *string, peerCAFile *string, peerCommonName *string) (credentials.TransportCredentials, error) {
+	tlsConf := &tls.Config{
+		MinVersion: tls.VersionTLS13,
+		MaxVersion: tls.VersionTLS13,
+		ClientAuth: tls.RequireAndVerifyClientCert,
+	}
+
+	if certFile != "" && keyFile != "" {
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("load client certificate or private key failed: %w", err)
+		}
+		tlsConf.Certificates = []tls.Certificate{cert}
+	}
+
+	if caFile != nil {
+		caPool, err := createCAPool(*caFile)
+		if err != nil {
+			return nil, fmt.Errorf("load certificate authority file failed: %w", err)
+		}
+		tlsConf.ClientCAs = caPool
+	}
+
+	if peerCAFile != nil {
+		caPool, err := createCAPool(*peerCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("load certificate authority file failed: %w", err)
+		}
+		tlsConf.RootCAs = caPool
+	}
+
+	if peerCommonName != nil {
+		tlsConf.ServerName = *peerCommonName
+	}
+
+	return credentials.NewTLS(tlsConf), nil
+}
+
+func createCAPool(certificateAuthorityFile string) (*x509.CertPool, error) {
+	caFile, err := os.ReadFile(certificateAuthorityFile)
+	if err != nil {
+		return nil, err
+	}
+
+	caPool := x509.NewCertPool()
+
+	// We do not use x509.CertPool.AppendCertsFromPEM because it swallows any errors.
+	// We would like to know if any certificate failed (and not just if any certificate
+	// could be parsed).
+	for len(caFile) > 0 {
+		var block *pem.Block
+
+		block, caFile = pem.Decode(caFile)
+		if block.Type != "CERTIFICATE" {
+			return nil, fmt.Errorf("ca file contains non-certificate blocks")
+		}
+
+		ca, caErr := x509.ParseCertificate(block.Bytes)
+		if caErr != nil {
+			return nil, caErr
+		}
+
+		caPool.AddCert(ca)
+	}
+	return caPool, nil
 }

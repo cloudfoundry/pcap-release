@@ -12,10 +12,11 @@ package main
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
+	"github.com/cloudfoundry/pcap-release/src/pcap/devtools"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -25,41 +26,49 @@ import (
 func main() {
 	log := zap.L()
 
+	var err error
+
+	defer func() {
+		if err != nil {
+			os.Exit(1)
+		}
+	}()
+
 	cc, err := grpc.Dial("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatal("unable to establish connection", zap.Error(err))
+		log.Error("unable to establish connection", zap.Error(err))
+		return
 	}
 
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), pcap.DefaultStatusTimeout)
 	defer cancel()
 
 	api := pcap.NewAPIClient(cc)
 
 	statusRes, err := api.Status(ctx, &pcap.StatusRequest{})
 	if err != nil {
-		log.Panic("unable to get api status", zap.Error(err))
+		log.Error("unable to get api status", zap.Error(err))
+		return
 	}
 	// This whole client is temporary, so leaving the sugared zap logger here.
-	log.Info("status:")
-	log.Sugar().Infof("  healthy: %v\n", statusRes.Healthy)
-	log.Sugar().Infof("  compLvl: %d\n", statusRes.CompatibilityLevel)
-	log.Sugar().Infof("  message: %s\n", statusRes.Message)
+	log.Info("status:", zap.Bool("healthy", statusRes.Healthy), zap.Int64("compatibility-level", statusRes.CompatibilityLevel), zap.String("message", statusRes.Message))
 
 	stream, err := api.Capture(ctx)
 	if err != nil {
-		log.Panic("error during capturing", zap.Error(err))
+		log.Error("error during capturing", zap.Error(err))
+		return
 	}
 
 	request := &pcap.CaptureRequest{
 		Operation: &pcap.CaptureRequest_Start{
 			Start: &pcap.StartCapture{
-				Capture: &pcap.Capture{
-					Capture: &pcap.Capture_Bosh{
-						Bosh: &pcap.BoshCapture{
+				Request: &pcap.EndpointRequest{
+					Request: &pcap.EndpointRequest_Bosh{
+						Bosh: &pcap.BoshRequest{
 							Token:      "123",
 							Deployment: "cf",
-							Groups:     []string{"router"}},
+							Groups:     []string{"router"},
+						},
 					},
 				},
 				Options: &pcap.CaptureOptions{
@@ -73,23 +82,21 @@ func main() {
 
 	err = stream.Send(request)
 	if err != nil {
-		log.Panic("unable to start capture", zap.Error(err))
+		log.Error("unable to start capture", zap.Error(err))
+		return
 	}
 
 	// keep receiving some data long enough to start a manual drain
 	for i := 0; i < 10000; i++ {
-		cmd.ReadN(1000, stream)            //nolint:gomnd // default value used for testing
+		devtools.ReadN(1000, stream)       //nolint:gomnd // default value used for testing
 		time.Sleep(200 * time.Millisecond) //nolint:gomnd // default value used for testing
 	}
 
-	stop := &pcap.CaptureRequest{
-		Operation: &pcap.CaptureRequest_Stop{},
-	}
-
-	err = stream.Send(stop)
+	err = stream.Send(pcap.MakeStopRequest())
 	if err != nil {
-		log.Panic("unable to stop capture", zap.Error(err))
+		log.Error("unable to stop capture", zap.Error(err))
+		return
 	}
 
-	cmd.ReadN(10_000, stream) //nolint:gomnd // default value used for testing
+	devtools.ReadN(10_000, stream) //nolint:gomnd // default value used for testing
 }

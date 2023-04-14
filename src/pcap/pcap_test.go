@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/gopacket"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc/metadata"
@@ -412,7 +413,7 @@ func (m *mockPacketSender) Send(res *CaptureResponse) error {
 	m.resCounter++
 
 	if m.stopAfterErrorOccurs && isMsg && message.Message.Type == MessageType_CONGESTED {
-		return fmt.Errorf("%w", errDiscardedMsg)
+		return errDiscardedMsg
 	}
 
 	if !m.stopAfterErrorOccurs && m.sentRes == m.resCounter {
@@ -434,14 +435,14 @@ func TestForwardToStream(t *testing.T) {
 			name:        "error during sending of packets",
 			stream:      &mockPacketSender{err: io.EOF, stopAfterErrorOccurs: true},
 			resToBeSent: 2,
-			response:    newPacketResponse([]byte("ABC")),
+			response:    newPacketResponse([]byte("ABC"), gopacket.CaptureInfo{}),
 			expectedErr: io.EOF,
 		},
 		{
 			name:        "buffer is filled with PacketResponse, one packet discarded",
 			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit + 1},
 			resToBeSent: bufUpperLimit + 2,
-			response:    newPacketResponse([]byte("ABC")),
+			response:    newPacketResponse([]byte("ABC"), gopacket.CaptureInfo{}),
 			expectedErr: errTestEnded,
 		},
 		{
@@ -455,21 +456,21 @@ func TestForwardToStream(t *testing.T) {
 			name:        "buffer is filled with PacketResponse, discarding packets",
 			stream:      &mockPacketSender{err: nil, stopAfterErrorOccurs: true},
 			resToBeSent: bufUpperLimit + 1,
-			response:    newPacketResponse([]byte("ABC")),
+			response:    newPacketResponse([]byte("ABC"), gopacket.CaptureInfo{}),
 			expectedErr: errDiscardedMsg,
 		},
 		{
 			name:        "happy path",
 			stream:      &mockPacketSender{err: nil, sentRes: bufUpperLimit - 1},
 			resToBeSent: bufUpperLimit - 1,
-			response:    newPacketResponse([]byte("ABC")),
+			response:    newPacketResponse([]byte("ABC"), gopacket.CaptureInfo{}),
 			expectedErr: errTestEnded,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
+			ctx, cancel := context.WithCancelCause(ctx)
 			src := make(chan *CaptureResponse, bufSize)
 			defer close(src)
 			go func() {
@@ -485,7 +486,7 @@ func TestForwardToStream(t *testing.T) {
 
 			<-ctx.Done()
 
-			err := Cause(ctx)
+			err := context.Cause(ctx)
 			if err == nil {
 				t.Errorf("Expected error to finish test")
 			}

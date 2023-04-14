@@ -6,14 +6,13 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
-	"github.com/cloudfoundry/pcap-release/src/pcap/cmd"
 
 	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v3"
 )
 
 var DefaultAPIConfig = APIConfig{
-	CommonConfig: cmd.CommonConfig{
+	NodeConfig: pcap.NodeConfig{
 		Listen: pcap.Listen{Port: 8080}, //nolint:gomnd // default port
 		Buffer: pcap.BufferConf{
 			Size:       100, //nolint:gomnd // default size
@@ -23,22 +22,19 @@ var DefaultAPIConfig = APIConfig{
 		LogLevel: "debug",
 		ID:       "test-api",
 	},
-	Agents: &pcap.AgentMTLS{
-		MTLS: nil,
-	},
-	DrainTimeout:       10 * time.Second,                                                                                               //nolint:gomnd // default value
-	ConcurrentCaptures: 5,                                                                                                              //nolint:gomnd // default value
-	ManualEndpoints:    pcap.ManualEndpoints{Targets: []pcap.AgentEndpoint{{IP: "localhost", Port: 8083, Identifier: "test-agent/1"}}}, //nolint:gomnd // default value
+	AgentsMTLS:         nil,
+	DrainTimeout:       10 * time.Second, //nolint:gomnd // default configuration
+	ConcurrentCaptures: 5,                //nolint:gomnd // default configuration
 }
 
 type APIConfig struct {
-	cmd.CommonConfig
-	Agents             *pcap.AgentMTLS `yaml:"agents"`
-	ConcurrentCaptures int             `yaml:"concurrent_captures"`
+	pcap.NodeConfig    `yaml:"-,inline"`
+	AgentsMTLS         *pcap.MutualTLS `yaml:"agents_mtls" validate:"omitempty"`
+	ConcurrentCaptures uint            `yaml:"concurrent_captures"`
 	DrainTimeout       time.Duration   `yaml:"drain_timeout"`
 
-	// TODO: Add BOSH and CF specific config fragments
-	ManualEndpoints pcap.ManualEndpoints
+	BoshResolverConfigs []pcap.BoshResolverConfig `yaml:"bosh,omitempty" validate:"dive"`
+	// TODO: Add CF specific config fragments
 }
 
 func (c APIConfig) validate() error {

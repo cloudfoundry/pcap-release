@@ -5,22 +5,17 @@ package pcap
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"net"
-	"os"
-	"strings"
 	"sync"
-	"unicode"
+	"time"
 
+	"github.com/google/gopacket"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pcap.proto
@@ -34,25 +29,21 @@ const (
 
 	// LogKeyVcapID sets on which field the vcap request id will be logged.
 	LogKeyVcapID = "vcap-id"
-	// LogKeyHandler sets the handler.
-	LogKeyHandler = "handler"
-
+	// LogKeyHandler sets the logged handler. Useful for distinguishing, which part of the code logged the message or error.
+	LogKeyHandler       = "handler"
 	LogKeyTarget        = "target"
 	LogKeyResolver      = "resolver"
 	HeaderVcapID        = contextKeyVcapID("x-vcap-request-id")
 	maxDeviceNameLength = 16
 	maxFilterLength     = 5000
+
+	DefaultStatusTimeout = time.Minute
 )
 
 type contextKeyVcapID string
 
 func (c contextKeyVcapID) String() string {
 	return string(c)
-}
-
-type Stoppable interface {
-	Stop()
-	Wait()
 }
 
 // purge reads all messages from the given channel and discards them. The
@@ -63,13 +54,13 @@ func purge[T any](c <-chan T) {
 	}
 }
 
-// newMessageResponse wraps the message msg of type t into a CaptureResponse, which can be sent to the recipient.
-func newMessageResponse(t MessageType, msg string, origin string) *CaptureResponse {
+// newMessageResponse wraps the message of type messageType into a CaptureResponse, which can be sent to the recipient.
+func newMessageResponse(messageType MessageType, message string, origin string) *CaptureResponse {
 	return &CaptureResponse{
 		Payload: &CaptureResponse_Message{
 			Message: &Message{
-				Type:    t,
-				Message: msg,
+				Type:    messageType,
+				Message: message,
 				Origin:  origin,
 			},
 		},
@@ -77,11 +68,13 @@ func newMessageResponse(t MessageType, msg string, origin string) *CaptureRespon
 }
 
 // newPacketResponse wraps data into a CaptureResponse, which can be sent to the recipient.
-func newPacketResponse(data []byte) *CaptureResponse {
+func newPacketResponse(data []byte, captureInfo gopacket.CaptureInfo) *CaptureResponse {
 	return &CaptureResponse{
 		Payload: &CaptureResponse_Packet{
 			Packet: &Packet{
-				Data: data,
+				Data:      data,
+				Timestamp: timestamppb.New(captureInfo.Timestamp),
+				Length:    int32(captureInfo.Length),
 			},
 		},
 	}
@@ -104,42 +97,6 @@ func (opts *CaptureOptions) validate() error {
 	if opts.SnapLen == 0 {
 		return fmt.Errorf("expected snaplen to be not zero")
 	}
-	return nil
-}
-
-// validateDevice is a go implementation of dev_valid_name from the linux kernel.
-//
-// See: https://lxr.linux.no/linux+v6.0.9/net/core/dev.c#L995
-func validateDevice(name string) (err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("validate device: %w", err)
-		}
-	}()
-
-	if len(name) > maxDeviceNameLength {
-		return fmt.Errorf("name too long: %d > %d", len(name), maxDeviceNameLength)
-	}
-
-	if name == "." || name == ".." {
-		return fmt.Errorf("invalid name: '%s'", name)
-	}
-
-	for i, r := range name {
-		if r == '/' {
-			return fmt.Errorf("%w at pos. %d: '/'", errIllegalCharacter, i)
-		}
-		if r == '\x00' {
-			return fmt.Errorf("%w at pos. %d: '\\0'", errIllegalCharacter, i)
-		}
-		if r == ':' {
-			return fmt.Errorf("%w at pos. %d: ':'", errIllegalCharacter, i)
-		}
-		if unicode.Is(unicode.White_Space, r) {
-			return fmt.Errorf("%w: whitespace at pos %d", errIllegalCharacter, i)
-		}
-	}
-
 	return nil
 }
 
@@ -170,7 +127,7 @@ func setVcapID(ctx context.Context, log *zap.Logger, externalVcapID *string) (co
 
 // vcapIDFromIncomingCtx finds the vcap-id from the context metadata, if available.
 //
-// returns errNoVcapID if no vcap-id was found in the metadata.
+// Returns errNoVcapID if no vcap-id was found in the metadata.
 func vcapIDFromIncomingCtx(ctx context.Context) (*string, error) {
 	var vcap *string
 	var err error
@@ -193,86 +150,15 @@ func getVcapFromMD(md metadata.MD) (*string, error) {
 	return nil, errNoVcapID
 }
 
-// interfaceAddrs provides a list of all known network addresses.
-var interfaceAddrs = net.InterfaceAddrs
-
-// containsForbiddenRunes checks whether a given string contains
-// any character that is less than 32 or more than 126.
-//
-// See: https://www.lookuptables.com/text/ascii-table
-func containsForbiddenRunes(in string) bool {
-	for _, r := range in {
-		if r < 32 || r > 126 {
-			return true
-		}
-	}
-	return false
-}
-
-// patchFilter extends the given filter by excluding the filter generated
-// by generateApiFilter.
-func patchFilter(filter string) (string, error) {
-	apiFilter, err := generateAPIFilter()
-	if err != nil {
-		return "", err
-	}
-
-	filter = strings.TrimSpace(filter)
-
-	if filter == "" {
-		return fmt.Sprintf("not (%s)", apiFilter), nil
-	}
-
-	return fmt.Sprintf("not (%s) and (%s)", apiFilter, filter), nil
-}
-
-// generateApiFilter takes all IP addresses as returned by interfaceAddrs and
-// generates a filter for those IP addresses (loopback is excluded from the filter).
-// Note: the filter *matches* all of those IP addresses.
-func generateAPIFilter() (string, error) {
-	addrs, err := interfaceAddrs()
-	if err != nil {
-		return "", fmt.Errorf("unable to get IPs: %w", err)
-	}
-	if len(addrs) == 0 {
-		return "", fmt.Errorf("unable to determine ip addresses")
-	}
-
-	var ipFilters []string
-	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		// check that:
-		// * ipNet is actually an IP address
-		// * it is not a loopback address
-		// * can be represented in either 4- or 16-bytes representation
-		if ok && !ipNet.IP.IsLoopback() {
-			// Check whether the IP is v4 or v6. If both evaluate to true
-			// v4 takes precedence.
-			var expression string
-			switch {
-			case ipNet.IP.To4() != nil:
-				expression = "ip"
-			case ipNet.IP.To16() != nil:
-				expression = "ip6"
-			default:
-				return "", fmt.Errorf("address %s is not IPv4 or v6", ipNet.IP.String())
-			}
-
-			ipFilters = append(ipFilters, fmt.Sprintf("%s host %s", expression, ipNet.IP.String()))
-		}
-	}
-	return strings.Join(ipFilters, " or "), nil
-}
-
-// makeStopRequest creates the generic stop CaptureRequest that can be sent to api and agent.
-func makeStopRequest() *CaptureRequest {
+// MakeStopRequest creates the generic stop CaptureRequest that can be sent to api and agent.
+func MakeStopRequest() *CaptureRequest {
 	return &CaptureRequest{Operation: &CaptureRequest_Stop{Stop: &StopCapture{}}}
 }
 
 // forwardToStream reads Packets from src until it's closed and writes them to stream.
 // If it encounters an error while doing so the error is set to cause and the cancel function
 // is called. Any data left in src is discarded after a write-error occurred.
-func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, bufConf BufferConf, wg *sync.WaitGroup, id string) {
+func forwardToStream(cancel context.CancelCauseFunc, src <-chan *CaptureResponse, stream responseSender, bufConf BufferConf, wg *sync.WaitGroup, id string) {
 	go func() {
 		// After this function returns we want to make sure that this channel is
 		// drained properly if there is anything left in it. This avoids responses
@@ -325,72 +211,4 @@ func forwardToStream(cancel CancelCauseFunc, src <-chan *CaptureResponse, stream
 		}
 		cancel(errorf(codes.Aborted, "no data is left to forward"))
 	}()
-}
-
-// LoadTLSCredentials creates TLS transport credentials from the given parameters.
-func LoadTLSCredentials(certFile, keyFile string, caFile *string, peerCAFile *string, peerCommonName *string) (credentials.TransportCredentials, error) {
-	tlsConf := &tls.Config{
-		MinVersion: tls.VersionTLS13,
-		MaxVersion: tls.VersionTLS13,
-		ClientAuth: tls.RequireAndVerifyClientCert,
-	}
-
-	if certFile != "" && keyFile != "" {
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			return nil, fmt.Errorf("load client certificate or private key failed: %w", err)
-		}
-		tlsConf.Certificates = []tls.Certificate{cert}
-	}
-
-	if caFile != nil {
-		caPool, err := createCAPool(*caFile)
-		if err != nil {
-			return nil, fmt.Errorf("load certificate authority file failed: %w", err)
-		}
-		tlsConf.ClientCAs = caPool
-	}
-
-	if peerCAFile != nil {
-		caPool, err := createCAPool(*peerCAFile)
-		if err != nil {
-			return nil, fmt.Errorf("load certificate authority file failed: %w", err)
-		}
-		tlsConf.RootCAs = caPool
-	}
-
-	if peerCommonName != nil {
-		tlsConf.ServerName = *peerCommonName
-	}
-
-	return credentials.NewTLS(tlsConf), nil
-}
-
-func createCAPool(certificateAuthorityFile string) (*x509.CertPool, error) {
-	caFile, err := os.ReadFile(certificateAuthorityFile)
-	if err != nil {
-		return nil, err
-	}
-
-	caPool := x509.NewCertPool()
-
-	// We do not use x509.CertPool.AppendCertsFromPEM because it swallows any errors.
-	// We would like to now if any certificate failed (and not just if any certificate
-	// could be parsed).
-	for len(caFile) > 0 {
-		var block *pem.Block
-
-		block, caFile = pem.Decode(caFile)
-		if block.Type != "CERTIFICATE" {
-			return nil, fmt.Errorf("ca file contains non-certificate blocks")
-		}
-
-		ca, caErr := x509.ParseCertificate(block.Bytes)
-		if caErr != nil {
-			return nil, caErr
-		}
-
-		caPool.AddCert(ca)
-	}
-	return caPool, nil
 }

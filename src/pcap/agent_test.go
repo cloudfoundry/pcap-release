@@ -70,11 +70,11 @@ func TestAgentStopCmd(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
+			ctx, cancel := context.WithCancelCause(ctx)
 			agentStopCmd(cancel, test.recv)
 			<-ctx.Done()
 
-			err := Cause(ctx)
+			err := context.Cause(ctx)
 
 			if (err != nil) != test.wantErr {
 				t.Errorf("wantErr = %v, error = %v", test.wantErr, err)
@@ -136,7 +136,7 @@ func TestReadPackets(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			ctx, cancel := WithCancelCause(ctx)
+			ctx, cancel := context.WithCancelCause(ctx)
 			if test.contextCancelled {
 				// cancel context before read packets in order to get edge case
 				cancel(errContextCancelled)
@@ -146,7 +146,7 @@ func TestReadPackets(t *testing.T) {
 
 			<-ctx.Done()
 
-			err := Cause(ctx)
+			err := context.Cause(ctx)
 			if err != nil && !errors.Is(err, test.expectedErr) && !errors.Is(err, errTestEnded) {
 				t.Errorf("expectedErr = %v, got err = %v", test.expectedErr, err)
 			}

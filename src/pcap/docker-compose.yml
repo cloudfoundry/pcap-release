@@ -1,0 +1,10 @@
+version: "3.7"
+services:
+  pcap-build:
+    build: .
+    volumes:
+      - .:/pcap
+    working_dir: "/pcap"
+    cap_add:
+      - NET_ADMIN
+    entrypoint: "go test -v ./..."

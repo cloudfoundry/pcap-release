@@ -26,15 +26,16 @@ type API struct {
 	bufConf   BufferConf
 	resolvers map[string]AgentResolver
 	// id of the instance where the api is located.
-	id                    string
-	maxConcurrentCaptures int
+	id string
+
+	maxConcurrentCaptures uint
 	concurrentStreams     atomic.Int32
 	tlsCredentials        credentials.TransportCredentials
 
 	UnimplementedAPIServer
 }
 
-func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCaptures int) (*API, error) {
+func NewAPI(bufConf BufferConf, agentmTLS *MutualTLS, id string, maxConcurrentCaptures uint) (*API, error) {
 	var err error
 
 	api := &API{
@@ -44,7 +45,6 @@ func NewAPI(bufConf BufferConf, agentmTLS AgentMTLS, id string, maxConcurrentCap
 		id:                    id,
 		maxConcurrentCaptures: maxConcurrentCaptures,
 	}
-
 	api.tlsCredentials, err = loadTLSCredentials(agentmTLS)
 	if err != nil {
 		return nil, fmt.Errorf("create api failed: %w", err)
@@ -66,29 +66,32 @@ func (a AgentEndpoint) String() string {
 
 // AgentResolver defines resolver for different request types that ultimately lead to a selection of AgentEndpoints.
 type AgentResolver interface {
-	// name provides the name of the handler for outputs and internal mapping.
-	name() string
-	// canResolve determines if this handler is responsible for handling the Capture
-	canResolve(*Capture) bool
-	// resolve either resolves and returns the agents targeted by Capture or provides an error
-	resolve(*Capture, *zap.Logger) ([]AgentEndpoint, error)
+	// Name provides the name of the handler for outputs and internal mapping.
+	Name() string
+	// CanResolve determines if this handler is responsible for handling the Capture
+	CanResolve(*EndpointRequest) bool
+	// Resolve either resolves and returns the agents targeted by Capture or provides an error
+	Resolve(*EndpointRequest, *zap.Logger) ([]AgentEndpoint, error)
+	// Healthy determines, whether this handler is healthy or not
+	Healthy() bool
 }
 
 func (api *API) RegisterResolver(resolver AgentResolver) {
-	api.resolvers[resolver.name()] = resolver
+	api.resolvers[resolver.Name()] = resolver
 }
 
 // Status provides the current status information for the pcap-api service.
+//
+// The service is marked unhealthy when there are no healthy resolvers available, or the API is draining (shutting down).
 func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
-	bosh := api.handlerRegistered("bosh")
-	cf := api.handlerRegistered("cf")
+	healthyResolvers := api.HealthyResolverNames()
+	isHealthy := !api.draining() && len(healthyResolvers) > 0
 
 	apiStatus := &StatusResponse{
-		Healthy:            !api.draining(),
+		Healthy:            isHealthy,
 		CompatibilityLevel: 0,
 		Message:            "Ready.",
-		Bosh:               bosh,
-		Cf:                 cf,
+		Resolvers:          healthyResolvers,
 	}
 
 	if api.draining() {
@@ -98,11 +101,26 @@ func (api *API) Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	return apiStatus, nil
 }
 
-// handlerRegistered checks if handler is registered.
-// returns false, if the handler is not registered.
-func (api *API) handlerRegistered(handler string) *bool {
+// HealthyResolverNames provides a list of resolver names that are configured and marked healthy.
+func (api *API) HealthyResolverNames() []string {
+	resolverNames := make([]string, len(api.resolvers))
+	i := 0
+	for name, resolver := range api.resolvers {
+		if !resolver.Healthy() {
+			continue
+		}
+		resolverNames[i] = name
+		i++
+	}
+	return resolverNames
+}
+
+// HasResolver checks if handler is registered.
+//
+// Returns false, if the handler is not registered.
+func (api *API) HasResolver(handler string) bool {
 	_, ok := api.resolvers[handler]
-	return &ok
+	return ok
 }
 
 // Stop the server. This will gracefully stop any captures that are currently running
@@ -151,7 +169,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		return errorf(codes.Unavailable, "api is draining")
 	}
 
-	ctx, cancel := WithCancelCause(stream.Context())
+	ctx, cancel := context.WithCancelCause(stream.Context())
 	defer func() {
 		cancel(nil)
 	}()
@@ -183,9 +201,11 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		return errorf(codes.InvalidArgument, "expected start message, got %v: %w", req.Operation, errUnexpectedMessage)
 	}
 
-	targets, resolveErr := api.resolveAgentEndpoints(opts.Start.Capture, log)
-	if errors.Is(resolveErr, errValidationFailed) {
-		return errorf(codes.InvalidArgument, "capture targets not found: %w", err)
+	targets, resolveErr := api.resolveAgentEndpoints(opts.Start.Request, log)
+	if errors.Is(resolveErr, ErrValidationFailed) {
+		return errorf(codes.InvalidArgument, "capture targets not found: %w", resolveErr)
+	} else if resolveErr != nil {
+		return errorf(codes.InvalidArgument, "could not resolve agent endpoints: %w", resolveErr)
 	}
 
 	// Start capture
@@ -211,8 +231,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		// just to be sure that the error was already propagated
 		<-ctx.Done()
 	}
-
-	err = Cause(ctx)
+	err = context.Cause(ctx)
 	// Cancelling the context with nil causes context.Cancelled to be set
 	// which is a non-error in our case.
 	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, errDraining) {
@@ -224,31 +243,34 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	return nil
 }
 
-func loadTLSCredentials(agents AgentMTLS) (credentials.TransportCredentials, error) {
-	if agents.MTLS == nil || agents.MTLS.SkipVerify {
+func loadTLSCredentials(agentMTLS *MutualTLS) (credentials.TransportCredentials, error) {
+	if agentMTLS == nil || agentMTLS.SkipVerify {
 		return insecure.NewCredentials(), nil
 	}
-	mTLS := agents.MTLS
-	return LoadTLSCredentials(mTLS.Certificate, mTLS.PrivateKey, nil, &mTLS.CertificateAuthority, &mTLS.CommonName)
+
+	return LoadTLSCredentials(agentMTLS.Certificate, agentMTLS.PrivateKey, nil, &agentMTLS.CertificateAuthority, &agentMTLS.CommonName)
 }
 
 // resolveAgentEndpoints tries all registered api.resolvers until one responds or none can be found that
-// support this capture request. The responsible handler is then queried for the applicable pcap-agent endpoints corresponding to this capture request.
-func (api *API) resolveAgentEndpoints(capture *Capture, log *zap.Logger) ([]AgentEndpoint, error) {
+// support this EndpointRequest. The responsible resolver is then queried for the applicable pcap-agent endpoints corresponding to this EndpointRequest.
+func (api *API) resolveAgentEndpoints(request *EndpointRequest, log *zap.Logger) ([]AgentEndpoint, error) {
 	for name, resolver := range api.resolvers {
-		if resolver.canResolve(capture) {
+		if resolver.CanResolve(request) {
 			log.Debug("resolving agent endpoints")
+			if !resolver.Healthy() {
+				return nil, fmt.Errorf("error while resolving request via %s: %w", name, ErrResolverUnhealthy)
+			}
 
-			agents, err := resolver.resolve(capture, log)
+			agents, err := resolver.Resolve(request, log)
 			if err != nil {
-				return nil, fmt.Errorf("error while handling %v via %s: %w", capture, name, err)
+				return nil, fmt.Errorf("error while resolving request via %s: %w", name, err)
 			}
 
 			return agents, nil
 		}
 	}
 
-	return nil, fmt.Errorf("no resolver for %v", capture)
+	return nil, fmt.Errorf("no resolver for %v", request)
 }
 
 func checkAgentStatus(statusRes *StatusResponse, err error, target AgentEndpoint) error {
@@ -315,15 +337,14 @@ func connectToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpo
 	}
 
 	agentContext := context.Background()
-
 	vcapID, ok := ctx.Value(HeaderVcapID).(string)
 	if !ok {
 		agentContext, _ = setVcapID(agentContext, log, nil)
 	} else {
 		agentContext, _ = setVcapID(agentContext, log, &vcapID)
 	}
-
 	captureStream, err := agent.Capture(agentContext)
+
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +359,6 @@ func connectToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpo
 	if err != nil {
 		return nil, err
 	}
-
 	return captureStream, nil
 }
 
@@ -370,7 +390,7 @@ func readMsgFromStream(ctx context.Context, captureStream captureReceiver, targe
 				return
 			}
 			if err != nil {
-				msg := fmt.Sprintf("Capturing stopped on agent pcap-agent %s", target)
+				msg := fmt.Sprintf("Capturing stopped on agent pcap-agent %s: %v", target, err.Error())
 				out <- newMessageResponse(MessageType_INSTANCE_UNAVAILABLE, msg, target.Identifier)
 				return
 			}
@@ -410,7 +430,7 @@ type requestReceiver interface {
 // stopCmd reads the next message from the stream. It ensures that the message
 // has a payload of StopCapture. If any error is encountered or the payload is
 // of a different type an appropriate cause is set and the cancel function is called.
-func stopCmd(cancel CancelCauseFunc, stream requestReceiver) {
+func stopCmd(cancel context.CancelCauseFunc, stream requestReceiver) {
 	go func() {
 		msg, err := stream.Recv()
 		if err != nil {
@@ -440,15 +460,14 @@ type streamPreparer func(context.Context, *CaptureOptions, AgentEndpoint, creden
 
 func (api *API) capture(ctx context.Context, stream responseSender, opts *CaptureOptions, targets []AgentEndpoint, log *zap.Logger, prepareStream streamPreparer) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
-	runningCaptures := 0
 
+	runningCaptures := 0
 	patchedFilter, err := patchFilter(opts.Filter)
 	if err != nil {
 		return nil, errorf(codes.FailedPrecondition, "expanding the pcap filter to exclude traffic to pcap-api failed: %w", err)
 	}
 
 	opts.Filter = patchedFilter
-
 	for _, target := range targets {
 		log = log.With(zap.String(LogKeyTarget, target.String()))
 		log.Info("starting capture")
@@ -492,6 +511,7 @@ func convertAgentStatusCodeToMsg(err error, targetIdentifier string) *CaptureRes
 			code = status.Code(unwrappedError)
 		}
 	}
+
 	err = fmt.Errorf("capturing from agent %s: %w", targetIdentifier, err)
 
 	switch code { //nolint:exhaustive // we do not need to cover all the codes here
