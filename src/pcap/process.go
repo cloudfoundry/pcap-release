@@ -33,27 +33,20 @@ type WaitingStoppable interface {
 func StopOnSignal(log *zap.Logger, stoppable Stoppable, server *grpc.Server, stopSignals ...os.Signal) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, stopSignals...)
-	for {
-		sig := <-signals
 
-		for _, stopSignal := range stopSignals {
-			if sig == stopSignal {
-				log.Info("received signal, stopping.", zap.String("signal", sig.String()))
-				stoppable.Stop()
+	for sig := range signals {
+		log.Info("received signal, stopping.", zap.String("signal", sig.String()))
+		stoppable.Stop()
 
-				if waitingStoppable, ok := stoppable.(WaitingStoppable); ok {
-					log.Info("waiting for stop")
-					waitingStoppable.Wait()
-				}
-
-				if server != nil {
-					log.Info("shutting down server")
-					server.GracefulStop()
-				}
-				return
-			}
+		if waitingStoppable, ok := stoppable.(WaitingStoppable); ok {
+			log.Info("waiting for stop")
+			waitingStoppable.Wait()
 		}
 
-		log.Warn("ignoring unhandled signal", zap.String("signal", sig.String()))
+		if server != nil {
+			log.Info("shutting down server")
+			server.GracefulStop()
+		}
+		return
 	}
 }
