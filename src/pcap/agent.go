@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/pcap"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/pcap"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 )

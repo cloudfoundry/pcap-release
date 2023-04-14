@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/gopacket"
+	"github.com/gopacket/gopacket"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc/metadata"
