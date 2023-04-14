@@ -1,15 +1,20 @@
 <%=
 config = {
+  "id" => p("pcap-agent.id"),
   "log_level" => p("pcap-agent.log_level"),
-  "listen" => p("pcap-agent.listen"),
-  "container_store" => p("pcap-agent.container_store"),
-  "runc" => p("pcap-agent.runc"),
-  "runc_root" => p("pcap-agent.runc_root"),
-  "id" => p("pcap-agent.id")
-  "cert" => "/var/vcap/jobs/pcap-agent/config/certs/pcap_agent.crt",
-  "key" => "/var/vcap/jobs/pcap-agent/config/certs/pcap_agent.key",
-  "ca_cert" => "/var/vcap/jobs/pcap-agent/config/certs/client_ca.crt",
-  "enable_tls" => p("pcap-agent.enable_tls"),
+  "listen" => {
+    "port" => p("pcap-agent.listen.port"),
+    "tls" => {
+      "certificate"=> "/var/vcap/jobs/pcap-agent/config/certs/pcap-agent.crt",
+      "private_key" => "/var/vcap/jobs/pcap-agent/config/certs/pcap-agent.key",
+      "ca" => "/var/vcap/jobs/pcap-agent/config/certs/client-ca.crt",
+    },
+  },
+  "buffer" => {
+    "size" => p("pcap-agent.buffer.size"),
+    "upper_limit" => p("pcap-agent.buffer.upper_limit"),
+    "lower_limit" => p("pcap-agent.buffer.lower_limit"),
+  },
 }
 YAML.dump(config)
 %>

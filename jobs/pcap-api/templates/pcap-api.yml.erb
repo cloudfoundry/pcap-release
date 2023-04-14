@@ -1,23 +1,56 @@
 <%=
 config = {
-  "listen" => p("pcap-api.listen"),
+  "id" => spec.name+"/"+spec.id,
   "log_level" => p("pcap-api.log_level"),
-  "id" => p("pcap-api.id"),
-  "enable_server_tls" => p("pcap-api.enable_server_tls"),
-  "tls" => {
-  "certificate"=> "/var/vcap/jobs/pcap-api/config/pcap-api.crt",
-  "key" => "/var/vcap/jobs/pcap-api/config/pcap-api.key",
+  "buffer" => {
+    "size" => p("pcap-api.buffer.size"),
+    "upper_limit" => p("pcap-api.buffer.upper_limit"),
+    "lower_limit" => p("pcap-api.buffer.lower_limit"),
   },
-  "cf_api" => p("pcap-api.cf_api"),
-  "bosh_director_api" => p("pcap-api.bosh_director_api"),
-  "bosh_director_ca" => "/var/vcap/jobs/pcap-api/config/pcap-api-bosh.ca",
-  "agent_port" => p("pcap-api.agent_port"),
-  "client_cert" => "/var/vcap/jobs/pcap-api/config/pcap-api-client.crt",
-  "client_key" => "/var/vcap/jobs/pcap-api/config/pcap-api-client.key",
-  "agent_ca" => "/var/vcap/jobs/pcap-api/config/pcap-api-client.ca",
-  "agent_common_name" => p("pcap-api.agent_common_name"),
-  "agent_tls_skip_verify" => p("pcap-api.agent_tls_skip_verify"),
+  "concurrent_captures" => p("pcap-api.concurrent_captures"),
+  "listen" => {
+    "port" => p("pcap-api.listen.port"),
+    "tls" => {
+      "certificate"=> "/var/vcap/jobs/pcap-api/config/certs/pcap-api.crt",
+      "private_key" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api.key",
+      "ca" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api-ca.crt",
+    },
+  },
   "cli_download_root" => p("pcap-api.cli_download_root")
 }
+
+if p("pcap-api.agents_mtls.enabled").to_s == "true"
+  config["agents_mtls"] = {
+      "common_name" => p("pcap-api.agents_mtls.common_name"),
+      "skip_verify" => p("pcap-api.agents_mtls.skip_verify"),
+      "tls" => {
+        "certificate" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.crt",
+        "private_key" => '/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.key',
+        "ca" => '/var/vcap/jobs/pcap-api/config/certs/pcap-api-client-ca.crt'
+       }
+    }
+end
+
+if_p("pcap-api.bosh.director_url", "pcap-api.bosh.token_scope") do
+  bosh_mtls = nil
+  if p("pcap-api.bosh.mtls.enabled").to_s == "true"
+    bosh_mtls = {
+      "common_name" => p("pcap-api.bosh.mtls.common_name"),
+      "skip_verify" => p("pcap-api.bosh.mtls.skip_verify"),
+      "tls" => {
+        "certificate" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.crt',
+        "private_key" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.key',
+        "ca" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh-ca.crt'
+       }
+    }
+  end
+  config['bosh'] = {
+      "agent_port" => p("pcap-api.bosh.agent_port"),
+      "director_url" => p("pcap-api.bosh.director_url"),
+      "token_scope" => p("pcap-api.bosh.token_scope"),
+      "mtls" => bosh_mtls
+  }
+end
+
 YAML.dump(config)
 %>
