@@ -10,7 +10,9 @@ bundle exec rake spec
 
 echo "> Running unit tests"
 pushd src/pcap
-  go test -count=1 -v $(go list ./... | grep -v test/integration)
+  # The xargs call explicitly quotes each package name.
+  # shellcheck disable=SC2046
+  go test -count=1 -v $(go list ./... | grep -v test/integration | xargs -n1 -I {} echo "{}")
 popd
 
 echo "> Running integration tests (ginkgo)"
