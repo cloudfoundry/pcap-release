@@ -20,9 +20,9 @@ import (
 
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 
-	"github.com/google/gopacket"
-	gopcap "github.com/google/gopacket/pcap"
 	"github.com/google/uuid"
+	"github.com/gopacket/gopacket"
+	gopcap "github.com/gopacket/gopacket/pcap"
 	. "github.com/onsi/ginkgo/v2" //nolint:revive,stylecheck // this is the common way to import ginkgo and gomega
 	. "github.com/onsi/gomega"    //nolint:revive,stylecheck // this is the common way to import ginkgo and gomega
 	"go.uber.org/zap"

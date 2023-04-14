@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/gopacket"
 	"github.com/google/uuid"
+	"github.com/gopacket/gopacket"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
