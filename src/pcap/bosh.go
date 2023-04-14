@@ -291,16 +291,12 @@ func (br *BoshResolver) info() (*BoshInfo, error) {
 		return nil, fmt.Errorf("received non-OK response from Bosh Director: %s", response.Status)
 	}
 
-	var apiResponse *BoshInfo
-	data, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("could not read bosh-director API response: %w", err)
-	}
-	err = json.Unmarshal(data, &apiResponse)
+	var apiResponse BoshInfo
+	err = json.NewDecoder(response.Body).Decode(&apiResponse)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse bosh-director API response: %w", err)
 	}
-	return apiResponse, nil
+	return &apiResponse, nil
 }
 
 // Healthy returns true if the resolver can retrieve /info to the BOSH director.
@@ -349,18 +345,17 @@ func (br *BoshResolver) getInstances(deployment string, authToken string) ([]Bos
 
 	defer func() { _ = res.Body.Close() }()
 
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("expected status code %d but got status code %d: %s", http.StatusOK, res.StatusCode, string(data))
+		data, dataReadErr := io.ReadAll(res.Body)
+		if dataReadErr != nil {
+			return nil, fmt.Errorf("failed reading data of non-OK response, status %d: %w", res.StatusCode, dataReadErr)
+		}
+		return nil, fmt.Errorf("expected status code %d but got status code %d. received body: %s", http.StatusOK, res.StatusCode, string(data))
 	}
 
 	var response []BoshInstance
 
-	err = json.Unmarshal(data, &response)
+	err = json.NewDecoder(res.Body).Decode(&response)
 	if err != nil {
 		return nil, err
 	}
