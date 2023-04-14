@@ -34,19 +34,18 @@ func StopOnSignal(log *zap.Logger, stoppable Stoppable, server *grpc.Server, sto
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, stopSignals...)
 
-	for sig := range signals {
-		log.Info("received signal, stopping.", zap.String("signal", sig.String()))
-		stoppable.Stop()
+	sig := <-signals
 
-		if waitingStoppable, ok := stoppable.(WaitingStoppable); ok {
-			log.Info("waiting for stop")
-			waitingStoppable.Wait()
-		}
+	log.Info("received signal, stopping.", zap.String("signal", sig.String()))
+	stoppable.Stop()
 
-		if server != nil {
-			log.Info("shutting down server")
-			server.GracefulStop()
-		}
-		return
+	if waitingStoppable, ok := stoppable.(WaitingStoppable); ok {
+		log.Info("waiting for stop")
+		waitingStoppable.Wait()
+	}
+
+	if server != nil {
+		log.Info("shutting down server")
+		server.GracefulStop()
 	}
 }
