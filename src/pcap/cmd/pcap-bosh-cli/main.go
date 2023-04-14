@@ -212,7 +212,10 @@ func checkOutputFile(file string, overwrite bool) error {
 // and if it supports requests to the Bosh Environment specified in environmentAlias.
 func checkAPIHealth(c *pcap.Client, environmentAlias string) error {
 	err := c.CheckAPIHandler(fmt.Sprintf("bosh/%v", environmentAlias))
-	return fmt.Errorf("pcap-api does not support BOSH environment %v: %w", environmentAlias, err)
+	if err != nil {
+		return fmt.Errorf("pcap-api does not support BOSH environment %v: %w", environmentAlias, err)
+	}
+	return nil
 }
 
 // setLogLevel sets the log level of the zap.Logger created in setupLogging via atomicLogLevel
