@@ -242,18 +242,19 @@ func setLogLevel(verbose bool, quiet bool) error {
 // configFromFile fetches the content of the specified bosh-config file under path configFilename
 // and returns a Config struct.
 func configFromFile(configFilename string) (*Config, error) {
-	configFilename = os.ExpandEnv(configFilename)
-	configReader, err := os.Open(configFilename)
+	configReader, err := os.Open(os.ExpandEnv(configFilename))
 	if err != nil {
 		return nil, fmt.Errorf("could not open bosh-config: %w", err)
 	}
-	config := &Config{}
-	err = yaml.NewDecoder(configReader).Decode(config)
+
+	var config Config
+	err = yaml.NewDecoder(configReader).Decode(&config)
 	if err != nil {
-		return nil, fmt.Errorf("could not parse the provided bosh-config: %w", err)
+		return nil, fmt.Errorf("could not parse the provided bosh-config %w", err)
 	}
+
 	logger.Debug("read bosh-config")
-	return config, nil
+	return &config, nil
 }
 
 // urlWithScheme prepends url with https:// if no scheme is specified.
