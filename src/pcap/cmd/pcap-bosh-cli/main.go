@@ -26,7 +26,8 @@ var (
 	logger         *zap.Logger
 	atomicLogLevel zap.AtomicLevel
 
-	// schemaPattern defines a regular expression pattern that checks for a typical URL schema with two slashes, such as HTTP/HTTPS.
+	// schemaPattern defines a regular expression pattern that matches a URI scheme
+	// followed by an authority delimiter, e.g. 'https://' or `ftp://`.
 	schemaPattern = regexp.MustCompile(`^([\w+.-_]+://)`)
 )
 
@@ -340,6 +341,8 @@ type Config struct {
 }
 
 // Environment contains all the necessary information to connect to a specific bosh-director.
+//
+// Must be initialized using `Environment.connect()`
 type Environment struct {
 	AccessToken     string       `yaml:"access_token" validate:"required"`
 	AccessTokenType string       `yaml:"access_token_type" validate:"required"`

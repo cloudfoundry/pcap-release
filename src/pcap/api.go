@@ -248,8 +248,7 @@ func loadTLSCredentials(agentMTLS *MutualTLS) (credentials.TransportCredentials,
 		return insecure.NewCredentials(), nil
 	}
 
-	mTLS := *agentMTLS
-	return LoadTLSCredentials(mTLS.Certificate, mTLS.PrivateKey, nil, &mTLS.CertificateAuthority, &mTLS.CommonName)
+	return LoadTLSCredentials(agentMTLS.Certificate, agentMTLS.PrivateKey, nil, &agentMTLS.CertificateAuthority, &agentMTLS.CommonName)
 }
 
 // resolveAgentEndpoints tries all registered api.resolvers until one responds or none can be found that
