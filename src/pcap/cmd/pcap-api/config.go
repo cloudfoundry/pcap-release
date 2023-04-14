@@ -33,7 +33,7 @@ type APIConfig struct {
 	ConcurrentCaptures uint            `yaml:"concurrent_captures"`
 	DrainTimeout       time.Duration   `yaml:"drain_timeout"`
 
-	BoshResolverConfigs []pcap.BoshResolverConfig `yaml:"bosh,omitempty" validate:"dive"`
+	BoshResolverConfig *pcap.BoshResolverConfig `yaml:"bosh,omitempty" validate:"dive"`
 	// TODO: Add CF specific config fragments
 }
 

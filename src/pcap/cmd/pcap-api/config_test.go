@@ -47,36 +47,18 @@ func TestAPIConfig(t *testing.T) {
 		},
 		ConcurrentCaptures: 5,
 		DrainTimeout:       time.Second * 10,
-		BoshResolverConfigs: []pcap.BoshResolverConfig{
-			{
-				RawDirectorURL:   "https://bosh:8080",
-				EnvironmentAlias: "bootstrap_bosh",
-				AgentPort:        9494,
-				TokenScope:       "bosh.admin",
-				MTLS: &pcap.MutualTLS{
-					TLS: pcap.TLS{
-						Certificate:          "bootstrap-bosh-client-cert.pem",
-						PrivateKey:           "bootstrap-bosh-client-key.key",
-						CertificateAuthority: "bootstrap-bosh-ca.pem",
-					},
-					SkipVerify: false,
-					CommonName: "bootstrap-bosh",
+		BoshResolverConfig: &pcap.BoshResolverConfig{
+			RawDirectorURL: "https://bosh.service.cf.internal:8080",
+			AgentPort:      9494,
+			TokenScope:     "bosh.admin",
+			MTLS: &pcap.MutualTLS{
+				TLS: pcap.TLS{
+					Certificate:          "bosh-client-cert.pem",
+					PrivateKey:           "bosh-client-key.key",
+					CertificateAuthority: "bosh-ca.pem",
 				},
-			},
-			{
-				RawDirectorURL:   "https://bosh.service.cf.internal:8080",
-				EnvironmentAlias: "bosh",
-				AgentPort:        9494,
-				TokenScope:       "bosh.admin",
-				MTLS: &pcap.MutualTLS{
-					TLS: pcap.TLS{
-						Certificate:          "bosh-client-cert.pem",
-						PrivateKey:           "bosh-client-key.key",
-						CertificateAuthority: "bosh-ca.pem",
-					},
-					SkipVerify: false,
-					CommonName: "bosh.service.cf.internal",
-				},
+				SkipVerify: false,
+				CommonName: "bosh.service.cf.internal",
 			},
 		},
 	}

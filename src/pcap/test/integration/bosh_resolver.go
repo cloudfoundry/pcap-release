@@ -45,7 +45,6 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 	var deploymentName = "test-deployment"
 	var boshDirectorServer *httptest.Server
 	var boshResolver *pcap.BoshResolver
-	var boshEnvironment = "bosh"
 	var messageWriter *MemoryMessageWriter
 	var captureDuration = 2 * time.Second
 	var mockUAA *httptest.Server
@@ -63,10 +62,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 
 			// boshConfig.RawDirectorURL is populated when creating the mock server.
 			boshConfig := pcap.BoshResolverConfig{
-				EnvironmentAlias: "bosh",
-				AgentPort:        agentPort,
-				TokenScope:       "bosh.admin",
-				MTLS:             nil,
+				AgentPort:  agentPort,
+				TokenScope: "bosh.admin",
+				MTLS:       nil,
 			}
 
 			var err error
@@ -111,14 +109,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				client = nil
 			})
 
-			It("resolves a valid BOSH environment handler", func() {
-				err := client.CheckAPIHandler(fmt.Sprintf("bosh/%s", boshEnvironment))
+			It("resolves with the BOSH resolver", func() {
+				err := client.CheckAPIHandler(pcap.BoshResolverName)
 				Expect(err).ShouldNot(HaveOccurred(), "expected handler is not supported")
-			})
-
-			It("rejects an invalid BOSH environment handler", func() {
-				err := client.CheckAPIHandler("bosh/something_made_up")
-				Expect(err).Should(HaveOccurred(), "Wrong handler should not be marked as supported")
 			})
 
 			Context("with a valid token", func() {
@@ -132,9 +125,8 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 					endpointRequest = &pcap.EndpointRequest{
 						Request: &pcap.EndpointRequest_Bosh{
 							Bosh: &pcap.BoshRequest{
-								Environment: boshEnvironment,
-								Token:       validToken,
-								Deployment:  deploymentName,
+								Token:      validToken,
+								Deployment: deploymentName,
 								// The group names are taken from the prefixes defined in agentID1, agentID2.
 								Groups: []string{"router", "other"},
 							},
@@ -205,9 +197,8 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 					endpointRequest = &pcap.EndpointRequest{
 						Request: &pcap.EndpointRequest_Bosh{
 							Bosh: &pcap.BoshRequest{
-								Environment: boshEnvironment,
-								Token:       "this-is-not-a-valid-token",
-								Deployment:  deploymentName,
+								Token:      "this-is-not-a-valid-token",
+								Deployment: deploymentName,
 								// The group names are taken from the prefixes defined in agentID1, agentID2.
 								Groups: []string{"router", "other"},
 							},
@@ -269,9 +260,8 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				endpointRequest := &pcap.EndpointRequest{
 					Request: &pcap.EndpointRequest_Bosh{
 						Bosh: &pcap.BoshRequest{
-							Environment: boshEnvironment,
-							Token:       validToken,
-							Deployment:  deploymentName,
+							Token:      validToken,
+							Deployment: deploymentName,
 							// The group names are taken from the prefixes defined in agentID1, agentID2.
 							Groups: []string{"router", "other"},
 						},
@@ -314,9 +304,8 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				endpointRequest := &pcap.EndpointRequest{
 					Request: &pcap.EndpointRequest_Bosh{
 						Bosh: &pcap.BoshRequest{
-							Environment: boshEnvironment,
-							Token:       validToken,
-							Deployment:  deploymentName,
+							Token:      validToken,
+							Deployment: deploymentName,
 							// The group names are taken from the prefixes defined in agentID1, agentID2.
 							Groups: []string{"router", "other"},
 						},

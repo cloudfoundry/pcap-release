@@ -83,8 +83,7 @@ agent:
     port: 8080
   agents:
     listen: 8080
-  bosh_environments:
-  - alias: "bosh"
+  bosh_environment:
     director_url: "%v"
     agent_port: 8083
     token_scope: "bosh.admin"
