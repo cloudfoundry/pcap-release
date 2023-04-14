@@ -41,11 +41,13 @@ func main() {
 
 	if err != nil {
 		log.Error("Unable to initialize", zap.Error(err))
+		return
 	}
 
 	err = config.validate()
 	if err != nil {
 		log.Error("Failed to validate config", zap.Error(err))
+		return
 	}
 
 	pcap.SetLogLevel(log, config.LogLevel)
@@ -53,6 +55,7 @@ func main() {
 	api, err := pcap.NewAPI(config.Buffer, config.AgentsMTLS, config.ID, config.ConcurrentCaptures)
 	if err != nil {
 		log.Error("Unable to create api", zap.Error(err))
+		return
 	}
 
 	// set up a BoshResolver for each bosh environment
