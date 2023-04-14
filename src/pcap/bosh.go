@@ -79,7 +79,7 @@ type BoshResolver struct {
 func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 	directorURL, err := url.Parse(config.RawDirectorURL)
 	if err != nil {
-		return nil, fmt.Errorf("cannot initialize BoshResolver for environment %s. %w", config.EnvironmentAlias, err)
+		return nil, fmt.Errorf("cannot initialize BoshResolver for environment %s: %w", config.EnvironmentAlias, err)
 	}
 
 	// Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
@@ -201,7 +201,7 @@ func (br *BoshResolver) Validate(endpointRequest *EndpointRequest) error {
 	boshRequest := endpointRequest.GetBosh()
 
 	if boshRequest == nil {
-		return fmt.Errorf("invalid message: br: %w", errNilField)
+		return fmt.Errorf("invalid bosh request: %w", errNilField)
 	}
 
 	if boshRequest.Token == "" {
@@ -344,7 +344,7 @@ func (br *BoshResolver) getInstances(deployment string, authToken string) ([]Bos
 
 	res, err := br.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request to Bosh-director failed: %v", zap.Error(err))
+		return nil, fmt.Errorf("request to Bosh-director failed: %w", err)
 	}
 
 	defer func() { _ = res.Body.Close() }()

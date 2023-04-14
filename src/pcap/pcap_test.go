@@ -413,7 +413,7 @@ func (m *mockPacketSender) Send(res *CaptureResponse) error {
 	m.resCounter++
 
 	if m.stopAfterErrorOccurs && isMsg && message.Message.Type == MessageType_CONGESTED {
-		return fmt.Errorf("%w", errDiscardedMsg)
+		return errDiscardedMsg
 	}
 
 	if !m.stopAfterErrorOccurs && m.sentRes == m.resCounter {

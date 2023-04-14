@@ -108,12 +108,12 @@ func main() {
 	// set up pcap-client/pcap-api connection
 	client, err = pcap.NewClient(opts.File, logger, pcap.LogMessageWriter{Log: logger})
 	if err != nil {
-		err = fmt.Errorf("could not set up pcap-client %w", err)
+		err = fmt.Errorf("could not set up pcap-client: %w", err)
 		return
 	}
 	err = client.ConnectToAPI(apiURL)
 	if err != nil {
-		err = fmt.Errorf("could not connect to pcap-api %w", err)
+		err = fmt.Errorf("could not connect to pcap-api: %w", err)
 		return
 	}
 	err = checkAPIHealth(client, environment.Alias)
@@ -204,7 +204,7 @@ func checkOutputFile(file string, overwrite bool) error {
 // and if it supports requests to the Bosh Environment specified in environmentAlias.
 func checkAPIHealth(c *pcap.Client, environmentAlias string) error {
 	err := c.CheckAPIHandler(fmt.Sprintf("bosh/%v", environmentAlias))
-	return fmt.Errorf("pcap-api does not support BOSH environment %v, %w", environmentAlias, err)
+	return fmt.Errorf("pcap-api does not support BOSH environment %v: %w", environmentAlias, err)
 }
 
 // setLogLevel sets the log level of the zap.Logger created in setupLogging via atomicLogLevel
@@ -235,12 +235,12 @@ func configFromFile(configFilename string) (*Config, error) {
 	configFilename = os.ExpandEnv(configFilename)
 	configReader, err := os.Open(configFilename)
 	if err != nil {
-		return nil, fmt.Errorf("could not open bosh-config %w", err)
+		return nil, fmt.Errorf("could not open bosh-config: %w", err)
 	}
 	config := &Config{}
 	err = yaml.NewDecoder(configReader).Decode(config)
 	if err != nil {
-		return nil, fmt.Errorf("could not parse the provided bosh-config %w", err)
+		return nil, fmt.Errorf("could not parse the provided bosh-config: %w", err)
 	}
 	logger.Debug("read bosh-config")
 	return config, nil
@@ -321,12 +321,12 @@ func createCaptureOptions(device string, filter string, snaplen uint32) *pcap.Ca
 func writeBoshConfig(config *Config, configFileName string) error {
 	configWriter, err := os.Create(configFileName)
 	if err != nil {
-		return fmt.Errorf("failed to create bosh-config file %w", err)
+		return fmt.Errorf("failed to create bosh-config file: %w", err)
 	}
 
 	err = yaml.NewEncoder(configWriter).Encode(config)
 	if err != nil {
-		return fmt.Errorf("failed to update bosh-config file %w", err)
+		return fmt.Errorf("failed to update bosh-config file: %w", err)
 	}
 	logger.Info("wrote updated bosh config/tokens to file", zap.String("config-file", configFileName))
 	return nil
@@ -362,7 +362,7 @@ func (e *Environment) UpdateTokens() error {
 
 	err := e.refreshTokens()
 	if err != nil {
-		return fmt.Errorf("failed to refresh bosh access token %w", err)
+		return fmt.Errorf("failed to refresh bosh access token: %w", err)
 	}
 	return nil
 }
@@ -373,7 +373,7 @@ func (e *Environment) connect() error {
 	var err error
 	e.DirectorURL, err = url.Parse(e.URL)
 	if err != nil {
-		return fmt.Errorf("error parsing environment url (%v) %w", e.URL, err)
+		return fmt.Errorf("error parsing environment url (%v): %w", e.URL, err)
 	}
 
 	// Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
@@ -419,7 +419,7 @@ func (e *Environment) fetchUAAURL() error {
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("could not get response from bosh-director %w", err)
+		return fmt.Errorf("could not get response from bosh-director: %w", err)
 	}
 
 	defer func() { _ = res.Body.Close() }()

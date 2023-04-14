@@ -111,7 +111,7 @@ func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 	if apiURL.Scheme == "https" {
 		creds, err = LoadTLSCredentials("", "", nil, nil, nil)
 		if err != nil {
-			return fmt.Errorf("could not generate TLS credentials %w", err)
+			return fmt.Errorf("could not generate TLS credentials: %w", err)
 		}
 	} else { // plain http
 		creds = insecure.NewCredentials()
@@ -119,7 +119,7 @@ func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 
 	c.cc, err = grpc.Dial(apiURL.Host, grpc.WithTransportCredentials(creds))
 	if err != nil {
-		return fmt.Errorf("could not connect to pcap-api (%v)", apiURL)
+		return fmt.Errorf("could not connect to pcap-api %q", apiURL)
 	}
 
 	return nil
