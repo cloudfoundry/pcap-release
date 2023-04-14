@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -78,18 +79,24 @@ func main() {
 		environment *Environment
 	)
 
-	// Parse command-line arguments
-	_, err = flags.Parse(&opts)
-	if err != nil {
-		os.Exit(1)
-	}
-
 	defer func() {
 		if err != nil {
-			logger.Error("execution failed", zap.Error(err))
+			var flagsError *flags.Error
+			if !errors.As(err, &flagsError) {
+				// The flags package prints out an error message about missing / incorrect flags already.
+				// Printing out the error via logger duplicates the information and looks messy.
+				// So only log the error if it's not a flags.Error.
+				logger.Error("execution failed", zap.Error(err))
+			}
 			os.Exit(1)
 		}
 	}()
+
+	// Parse command-line arguments
+	_, err = flags.Parse(&opts)
+	if err != nil {
+		return
+	}
 
 	// we cannot log to Debug before this point
 	err = setLogLevel(opts.Verbose, opts.Quiet)
@@ -232,7 +239,6 @@ func setLogLevel(verbose bool, quiet bool) error {
 // configFromFile fetches the content of the specified bosh-config file under path configFilename
 // and returns a Config struct.
 func configFromFile(configFilename string) (*Config, error) {
-	var err error
 	configFilename = os.ExpandEnv(configFilename)
 	configReader, err := os.Open(configFilename)
 	if err != nil {
@@ -342,7 +348,7 @@ type Config struct {
 
 // Environment contains all the necessary information to connect to a specific bosh-director.
 //
-// Must be initialized using `Environment.connect()`
+// Must be initialized using `Environment.connect()`.
 type Environment struct {
 	AccessToken     string       `yaml:"access_token" validate:"required"`
 	AccessTokenType string       `yaml:"access_token_type" validate:"required"`
