@@ -4,33 +4,37 @@ name: pcap-agent
 templates:
   ctl.erb: bin/ctl
   pcap-agent.yml.erb: config/pcap-agent.yml
-  pcap-agent.key.erb: config/certs/pcap_agent.key
-  pcap-agent.crt.erb: config/certs/pcap_agent.crt
-  client-ca.crt.erb: config/certs/client_ca.crt
+  pcap-agent.key.erb: config/certs/pcap-agent.key
+  pcap-agent.crt.erb: config/certs/pcap-agent.crt
+  client-ca.crt.erb: config/certs/client-ca.crt
 
 packages: 
 - pcap-agent
 
 properties:
-  pcap-agent.listen:
-    description: "Listen address for the pcap agent"
-    default: ":9494"
-  pcap-agent.log_level:
-    default: "info"
   pcap-agent.id:
     description: "ID of the instance or app where the agent is co-located"
     example: "router/d55baeba-f645-4219-8b49-2b4654a17165"
-  pcap-agent.container_store:
-    default: "/var/vcap/data/container-metadata/store.json"
-  pcap-agent.runc:
-    default: "/var/vcap/packages/runc/bin/runc"
-  pcap-agent.runc_root:
-    default: "/run/containerd/runc/garden"
-  pcap-agent.cert:
-    description: "TLS certificate for this server"
-  pcap-agent.key:
-    description: "Key for the TLS certificate"
-  pcap-agent.ca_cert:
-    description: "CA to validate client certificates"
+  pcap-agent.log_level:
+    default: "info"
+    description: Log level. Allowed values are info, debug, warn, error.
+  pcap-agent.buffer.size:
+    description: "Number of responses that can be buffered per stream"
+    default: 100
+  pcap-agent.buffer.upper_limit:
+    description: "Limit above which the buffer manager starts to discards packets. The recommendation is to set the upper limit slightly below the size to account for data put into the buffer while checking the fill condition or performing work."
+    default: 98
+  pcap-agent.buffer.lower_limit:
+    description: "Limit under which the buffer manager stops to discard packages"
+    default: 70
+  pcap-agent.listen.port:
+    description: "The port for the pcap-agent to listen on"
+    default: 9494
+  pcap-agent.listen.tls.certificate:
+    description: "Certificate and certificate chain to talk to pcap-api in PEM format"
+  pcap-agent.listen.tls.private_key:
+    description: "Private key to talk to pcap-api in PEM format"
+  pcap-agent.listen.tls.ca:
+    description: "CA bundle which is used to request and verify client certificates"
   pcap-agent.enable_tls:
     default: true

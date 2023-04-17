@@ -5,7 +5,7 @@ set -e
 # $BOSH_INSTALL_TARGET - where you copy/install files to be included in package
 
 # FIXME: Adjust to vendored BOSH package
-tar xzf golang/go1.20.2.linux-amd64.tar.gz
+tar xzf golang/go1.18.5.linux-amd64.tar.gz
 export GOROOT=$BOSH_COMPILE_TARGET/go
 
 # TODO: maybe these are not needed? Where does this get executed?
@@ -21,8 +21,8 @@ export GOCACHE=$BOSH_COMPILE_TARGET/gocache
 pushd pcap-api
   $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/pcap-api github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-api
 
-  GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-cf-cli-linux-amd64 github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-cf-cli-plugin
-  GOOS=darwin GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-cf-cli-mac-amd64 github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-cf-cli-plugin
+#  GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-cf-cli-linux-amd64 github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-cf-cli-plugin
+#  GOOS=darwin GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-cf-cli-mac-amd64 github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-cf-cli-plugin
 
   GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-bosh-cli-linux-amd64 github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-bosh-cli
   GOOS=darwin GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-bosh-cli-mac-amd64 github.com/cloudfoundry/pcap-release/src/pcap-api/cmd/pcap-bosh-cli
