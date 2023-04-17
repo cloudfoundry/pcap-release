@@ -124,7 +124,7 @@ func main() {
 		err = fmt.Errorf("could not connect to pcap-api: %w", err)
 		return
 	}
-	err = checkAPIHealth(client, environment.Alias)
+	err = checkAPIHealth(client)
 	if err != nil {
 		return
 	}
@@ -133,7 +133,7 @@ func main() {
 
 	go pcap.StopOnSignal(logger, client, nil, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
-	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups, environment.Alias)
+	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups)
 	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, uint32(opts.SnapLength))
 
 	err = client.CaptureRequest(endpointRequest, captureOptions)
@@ -210,10 +210,10 @@ func checkOutputFile(file string, overwrite bool) error {
 //
 // Using the clients connection to the pcap-api it checks whether the api endpoint is healthy in general
 // and if it supports requests to the Bosh Environment specified in environmentAlias.
-func checkAPIHealth(c *pcap.Client, environmentAlias string) error {
-	err := c.CheckAPIHandler(fmt.Sprintf("bosh/%v", environmentAlias))
+func checkAPIHealth(c *pcap.Client) error {
+	err := c.CheckAPIHandler(pcap.BoshResolverName)
 	if err != nil {
-		return fmt.Errorf("pcap-api does not support BOSH environment %v: %w", environmentAlias, err)
+		return fmt.Errorf("pcap-api does not support BOSH resolver: %w", err)
 	}
 	return nil
 }
@@ -298,18 +298,17 @@ func connectToEnvironment(environmentAlias string, config *Config) (*Environment
 			return &environment, nil
 		}
 	}
-	return nil, fmt.Errorf("could not find bosh-environment %s in config", environmentAlias)
+	return nil, fmt.Errorf("could not find bosh-environment %s in BOSH CLI config", environmentAlias)
 }
 
 // createEndpointRequest is a helper function to create a pcap.EndpointRequest from parameters.
-func createEndpointRequest(token string, deployment string, instanceGroups []string, environmentAlias string) *pcap.EndpointRequest {
+func createEndpointRequest(token string, deployment string, instanceGroups []string) *pcap.EndpointRequest {
 	endpointRequest := &pcap.EndpointRequest{
 		Request: &pcap.EndpointRequest_Bosh{
 			Bosh: &pcap.BoshRequest{
-				Token:       token,
-				Deployment:  deployment,
-				Groups:      instanceGroups,
-				Environment: environmentAlias,
+				Token:      token,
+				Deployment: deployment,
+				Groups:     instanceGroups,
 			},
 		},
 	}

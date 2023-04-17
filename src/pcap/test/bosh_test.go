@@ -29,18 +29,16 @@ func TestNewBoshResolver(t *testing.T) {
 		{
 			name: "validEnvironment",
 			apiBoshConfig: pcap.BoshResolverConfig{
-				EnvironmentAlias: "bosh",
-				RawDirectorURL:   boshAPI.URL,
-				AgentPort:        8083,
+				RawDirectorURL: boshAPI.URL,
+				AgentPort:      8083,
 			},
 			wantErr: false,
 		},
 		{
 			name: "empty Bosh Director URL",
 			apiBoshConfig: pcap.BoshResolverConfig{
-				EnvironmentAlias: "",
-				RawDirectorURL:   "",
-				AgentPort:        0,
+				RawDirectorURL: "",
+				AgentPort:      0,
 			},
 			wantErr:     true,
 			expectedErr: nil,
@@ -48,9 +46,8 @@ func TestNewBoshResolver(t *testing.T) {
 		{
 			name: "unreacheable Bosh Director",
 			apiBoshConfig: pcap.BoshResolverConfig{
-				EnvironmentAlias: "",
-				RawDirectorURL:   "localhost:60000",
-				AgentPort:        0,
+				RawDirectorURL: "localhost:60000",
+				AgentPort:      0,
 			},
 			wantErr:     true,
 			expectedErr: nil,
@@ -154,11 +151,10 @@ func TestResolve(t *testing.T) {
 	request := &pcap.EndpointRequest{
 		Request: &pcap.EndpointRequest_Bosh{
 			Bosh: &pcap.BoshRequest{
-				Token:       validToken,
-				Deployment:  deploymentName,
-				Groups:      []string{"test-instance-group"},
-				Instances:   nil,
-				Environment: "bosh/bosh",
+				Token:      validToken,
+				Deployment: deploymentName,
+				Groups:     []string{"test-instance-group"},
+				Instances:  nil,
 			},
 		},
 	}
@@ -183,7 +179,7 @@ func TestCanResolveEndpointRequest(t *testing.T) {
 			name: "BoshRequest",
 			req: &pcap.EndpointRequest{
 				Request: &pcap.EndpointRequest_Bosh{
-					Bosh: &pcap.BoshRequest{Environment: "bosh"},
+					Bosh: &pcap.BoshRequest{},
 				},
 			},
 			expectedResult: true,
@@ -248,20 +244,14 @@ func TestValidateBoshEndpointRequest(t *testing.T) {
 		},
 		{
 			name:    "Bosh metadata Groups field is not present",
-			req:     &pcap.BoshRequest{Token: "123d24", Deployment: "cf", Environment: "bosh"},
-			wantErr: true,
-			//expectedErr: errEmptyField,
-		},
-		{
-			name:    "Bosh metadata Environment field is not present",
-			req:     &pcap.BoshRequest{Token: "123d24", Deployment: "cf", Groups: []string{"router"}},
+			req:     &pcap.BoshRequest{Token: "123d24", Deployment: "cf"},
 			wantErr: true,
 			//expectedErr: errEmptyField,
 		},
 		{
 			name: "Valid request",
 			req: &pcap.BoshRequest{
-				Token: "123d24", Deployment: "cf", Groups: []string{"router"}, Environment: "bosh",
+				Token: "123d24", Deployment: "cf", Groups: []string{"router"},
 			},
 			wantErr:     false,
 			expectedErr: nil,
@@ -293,10 +283,9 @@ func TestAPIRegisterHandler(t *testing.T) {
 	boshAPI := mock.NewMockBoshDirectorAPI(nil, jwtapi.URL)
 
 	config := pcap.BoshResolverConfig{
-		RawDirectorURL:   boshAPI.URL,
-		EnvironmentAlias: "bosh",
-		MTLS:             nil,
-		AgentPort:        8083,
+		RawDirectorURL: boshAPI.URL,
+		MTLS:           nil,
+		AgentPort:      8083,
 	}
 	boshResolver, err := pcap.NewBoshResolver(config)
 	if err != nil {
@@ -313,7 +302,7 @@ func TestAPIRegisterHandler(t *testing.T) {
 			name:               "Register bosh handler and check the handler with correct name",
 			resolver:           boshResolver,
 			wantRegistered:     true,
-			wantedResolverName: "bosh/bosh",
+			wantedResolverName: pcap.BoshResolverName,
 		},
 		{
 			name:               "Register bosh handler and check the handler with invalid name",
