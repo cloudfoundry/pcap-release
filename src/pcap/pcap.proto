@@ -114,7 +114,6 @@ message BoshRequest {
   string deployment = 2;
   repeated string groups = 3;
   repeated string instances = 4;
-  string environment = 5;
 }
 
 message CloudfoundryRequest {

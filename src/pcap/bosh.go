@@ -18,6 +18,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var BoshResolverName = "bosh"
+
 // BoshInfo corresponds to the relevant data that is provided as JSON from the BOSH Director
 // endpoint /info. This struct is limited to the fields needed for the supported operation types (i.e. using UAA).
 type BoshInfo struct {
@@ -52,11 +54,10 @@ type BoshInstance struct {
 
 // BoshResolverConfig defines the configuration for a specific BOSH environment used for a BoshResolver.
 type BoshResolverConfig struct {
-	RawDirectorURL   string     `yaml:"director_url" validate:"required,url"`
-	EnvironmentAlias string     `yaml:"alias" validate:"required"`
-	AgentPort        int        `yaml:"agent_port" validate:"required,gt=0,lte=65535"`
-	TokenScope       string     `yaml:"token_scope" validate:"required"`
-	MTLS             *MutualTLS `yaml:"mtls" validate:"omitempty"`
+	RawDirectorURL string     `yaml:"director_url" validate:"required,url"`
+	AgentPort      int        `yaml:"agent_port" validate:"required,gt=0,lte=65535"`
+	TokenScope     string     `yaml:"token_scope" validate:"required"`
+	MTLS           *MutualTLS `yaml:"mtls" validate:"omitempty"`
 }
 
 // BoshResolver uses a BOSH director to resolve AgentEndpoint s.
@@ -79,7 +80,7 @@ type BoshResolver struct {
 func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 	directorURL, err := url.Parse(config.RawDirectorURL)
 	if err != nil {
-		return nil, fmt.Errorf("cannot initialize BoshResolver for environment %s: %w", config.EnvironmentAlias, err)
+		return nil, fmt.Errorf("cannot initialize BoshResolver for URL %s: %w", config.RawDirectorURL, err)
 	}
 
 	// Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
@@ -96,7 +97,7 @@ func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 	}
 
 	resolver := &BoshResolver{
-		logger:      zap.L().With(zap.String(LogKeyHandler, config.EnvironmentAlias)),
+		logger:      zap.L().With(zap.String(LogKeyHandler, BoshResolverName)),
 		Config:      config,
 		DirectorURL: directorURL,
 		boshRootCAs: boshRootCAs,
@@ -110,7 +111,7 @@ func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 }
 
 func (br *BoshResolver) Name() string {
-	return fmt.Sprintf("bosh/%s", br.Config.EnvironmentAlias)
+	return BoshResolverName
 }
 
 func (br *BoshResolver) CanResolve(request *EndpointRequest) bool {
@@ -118,10 +119,7 @@ func (br *BoshResolver) CanResolve(request *EndpointRequest) bool {
 		return false
 	}
 
-	if boshRequest := request.GetBosh(); boshRequest != nil {
-		return boshRequest.Environment == br.Config.EnvironmentAlias
-	}
-	return false
+	return request.GetBosh() != nil
 }
 
 // Resolve returns applicable AgentEndpoint s for request
@@ -210,10 +208,6 @@ func (br *BoshResolver) Validate(endpointRequest *EndpointRequest) error {
 
 	if boshRequest.Deployment == "" {
 		return fmt.Errorf("invalid message: deployment: %w", errEmptyField)
-	}
-
-	if boshRequest.Environment == "" {
-		return fmt.Errorf("invalid message: environment: %w", errEmptyField)
 	}
 
 	if len(boshRequest.Groups) == 0 {

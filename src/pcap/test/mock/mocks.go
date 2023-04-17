@@ -68,9 +68,8 @@ func NewMockJWTAPI() (*httptest.Server, string) {
 
 func NewResolverWithMockBoshAPI(responses map[string]string) (*pcap.BoshResolver, *httptest.Server, *httptest.Server, error) {
 	config := pcap.BoshResolverConfig{
-		EnvironmentAlias: "bosh",
-		AgentPort:        8083,
-		TokenScope:       "bosh.admin",
+		AgentPort:  8083,
+		TokenScope: "bosh.admin",
 	}
 	return NewResolverWithMockBoshAPIWithConfig(responses, config)
 }
@@ -91,9 +90,8 @@ func NewResolverWithMockBoshAPIWithConfig(responses map[string]string, config pc
 
 func NewDefaultResolverWithMockBoshAPIWithEndpoints(endpoints []pcap.AgentEndpoint, deploymentName string) (*pcap.BoshResolver, *httptest.Server, *httptest.Server, error) {
 	config := pcap.BoshResolverConfig{
-		EnvironmentAlias: "bosh",
-		AgentPort:        8083,
-		TokenScope:       "bosh.admin",
+		AgentPort:  8083,
+		TokenScope: "bosh.admin",
 	}
 	return NewResolverWithMockBoshAPIWithEndpoints(endpoints, config, deploymentName)
 }
@@ -241,13 +239,13 @@ func verifyJWTTokenMock(jku string) (string, string) {
 		panic(err)
 	}
 	publicKey := privateKey.PublicKey
-	publickeybytes, err := x509.MarshalPKIXPublicKey(&publicKey)
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&publicKey)
 	if err != nil {
 		panic(err)
 	}
 	block := &pem.Block{
 		Type:  "PUBLIC KEY",
-		Bytes: publickeybytes,
+		Bytes: publicKeyBytes,
 	}
 	publicPem := pem.EncodeToMemory(block)
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)

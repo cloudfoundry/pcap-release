@@ -4,18 +4,18 @@
 <!-- TOC -->
 * [PCAP Release API Documentation](#pcap-release-api-documentation)
   * [CF Case Overview](#cf-case-overview)
-    * [Target Identification via Cloud Controller (Option)](#target-identification-via-cloud-controller--option-)
-    * [Target Registration via NATS (Option)](#target-registration-via-nats--option-)
+    * [Target Identification via Cloud Controller (Option)](#target-identification-via-cloud-controller-option)
+    * [Target Registration via NATS (Option)](#target-registration-via-nats-option)
   * [BOSH Case Overview](#bosh-case-overview)
   * [Interactions](#interactions)
-    * [pcap-cli -> pcap-api](#pcap-cli----pcap-api)
-    * [pcap-bosh-cli -> BOSH Director UAA](#pcap-bosh-cli----bosh-director-uaa)
+    * [pcap-cli -> pcap-api](#pcap-cli---pcap-api)
+    * [pcap-bosh-cli -> BOSH Director UAA](#pcap-bosh-cli---bosh-director-uaa)
     * [pcap-cf-cli](#pcap-cf-cli)
     * [pcap-api](#pcap-api)
-    * [NATS -> pcap-api (option)](#nats----pcap-api--option-)
-    * [pcap-agent -> pcap-api](#pcap-agent----pcap-api)
-    * [Diego route registrar -> NATS (Option)](#diego-route-registrar----nats--option-)
-    * [pcap-api -> pcap-cli](#pcap-api----pcap-cli)
+    * [NATS -> pcap-api (option)](#nats---pcap-api-option)
+    * [pcap-agent -> pcap-api](#pcap-agent---pcap-api)
+    * [Diego route registrar -> NATS (Option)](#diego-route-registrar---nats-option)
+    * [pcap-api -> pcap-cli](#pcap-api---pcap-cli)
   * [Data Structures](#data-structures)
     * [Capture Request](#capture-request)
       * [Common Fields for `pcap-agent`](#common-fields-for-pcap-agent)
@@ -113,8 +113,8 @@ In the CF case, `pcap-agent` runs in the app container. The availability and IP/
 
 Identifying the `pcap-agent` in a specific app container can be done:
 
-- by querying the [Cloud Controller](#target-identification-via-cloud-controller--option-)
-- by sending [Registration Messages transported via NATS](#target-registration-via-nats--option-)
+- by querying the [Cloud Controller](#target-identification-via-cloud-controller-option)
+- by sending [Registration Messages transported via NATS](#target-registration-via-nats-option)
 
 Both options are described below.
 
@@ -154,7 +154,7 @@ sequenceDiagram
     diego-cell1 ->> nats: pcap.deregister (pcap-agent-[instance1], diego-ip:61404)
     nats ->> pcap-api: pcap.deregister (pcap-agent-[instance1], diego-ip:61404)
     note right of pcap-api: Remove agent<br>endpoint: pcap-agent-[instance1], diego-ip:61404
-    pcap-api --> pcap-api: 
+    pcap-api --> pcap-api: <br/>
 
     diego-cell2 ->> nats: pcap.deregister (pcap-agent-[instance2], diego-ip:61294)
     nats ->> pcap-api: pcap.deregister (pcap-agent-[instance2], diego-ip:61294)
@@ -423,13 +423,12 @@ The status is provided by `pcap-agent` and `pcap-api`. It SHALL be used by the c
 
 Compatibility level is particularly important to stop communication with outdated (and potentially vulnerable) `pcap-agent`s.
 
-| Parameter            | Type      | Required? | Description                                                                                                                                             |
-|----------------------|-----------|-----------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `healthy`            | `boolean` | yes       | The health state of the agent in question                                                                                                               |
-| `compatibilityLevel` | `integer` | yes       | The compatibility level. Once there is a change (like a security issue) that requires both parties to be updated this value MUST be incremented by one. |
-| `message`            | `string`  | yes       | A human readable status message.                                                                                                                        |
-| `cf`                 | `boolean` | no        | Supports CF requests (only for pcap-api)                                                                                                                |                                                                                               
-| `bosh`               | `boolean` | no        | Supports BOSH requests (only for pcap-api)                                                                                                              |                                                                                                
+| Parameter            | Type       | Required? | Description                                                                                                                                             |
+|----------------------|------------|-----------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `healthy`            | `boolean`  | yes       | The health state of the agent in question                                                                                                               |
+| `compatibilityLevel` | `integer`  | yes       | The compatibility level. Once there is a change (like a security issue) that requires both parties to be updated this value MUST be incremented by one. |
+| `message`            | `string`   | yes       | A human readable status message.                                                                                                                        |
+| `resolvers`          | `[]string` | no        | List of active resolvers                                                                                                                                |                                                                                               
 
 Examples:
 ```json
@@ -437,8 +436,7 @@ Examples:
   "healthy": true,
   "compatibilityLevel": 1,
   "message": "Up with CF and BOSH endpoints",
-  "cf": true,
-  "bosh": true
+  "resolvers": ["cf", "bosh"]
 }
 ```
 
