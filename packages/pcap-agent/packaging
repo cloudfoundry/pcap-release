@@ -28,7 +28,7 @@ pushd "${BOSH_COMPILE_TARGET}/libpcap"
 popd
 
 echo "Build pcap-agent"
-pushd pcap-agent
+pushd pcap
   # -I adds the local libpcap to the search path for the compiler
   export CGO_CFLAGS="-I${BOSH_COMPILE_TARGET}/libpcap"
   # -L adds the local libpcap to the search path for the linker
