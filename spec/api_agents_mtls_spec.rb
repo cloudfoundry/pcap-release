@@ -36,7 +36,7 @@ describe "config/pcap-api.yml agents properties" do
       expect(pcap_api_conf['agents_mtls']['common_name']).to include('pcap-agent-test.service.cf.internal')
       expect(pcap_api_conf['agents_mtls']['tls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.crt')
       expect(pcap_api_conf['agents_mtls']['tls']['private_key']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.key')
-      expect(pcap_api_conf['agents_mtls']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.ca')
+      expect(pcap_api_conf['agents_mtls']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client-ca.crt')
 
     end
   end
@@ -55,7 +55,7 @@ describe "config/pcap-api.yml agents properties" do
       expect(pcap_api_conf['agents_mtls']['common_name']).to include('pcap-agent.service.cf.internal')
       expect(pcap_api_conf['agents_mtls']['tls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.crt')
       expect(pcap_api_conf['agents_mtls']['tls']['private_key']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.key')
-      expect(pcap_api_conf['agents_mtls']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.ca')
+      expect(pcap_api_conf['agents_mtls']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client-ca.crt')
 
     end
   end

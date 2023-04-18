@@ -6,14 +6,15 @@ description:
 templates:
   ctl.erb: bin/ctl
   pcap-api.yml.erb: config/pcap-api.yml
-  pcap-api.crt.erb: config/pcap-api.crt
-  pcap-api.key.erb: config/pcap-api.key
-  bosh_mtls/pcap-api-bosh.ca.erb: config/certs/bosh/pcap-api-bosh.ca
+  pcap-api.crt.erb: config/certs/pcap-api.crt
+  pcap-api.key.erb: config/certs/pcap-api.key
+  pcap-api.ca.erb: config/certs/pcap-api-ca.crt
+  bosh_mtls/pcap-api-bosh.ca.erb: config/certs/bosh/pcap-api-bosh-ca.crt
   bosh_mtls/pcap-api-bosh.crt.erb: config/certs/bosh/pcap-api-bosh.crt
   bosh_mtls/pcap-api-bosh.key.erb: config/certs/bosh/pcap-api-bosh.key
   agents_mtls/pcap-api-client.crt.erb: config/certs/pcap-api-client.crt
   agents_mtls/pcap-api-client.key.erb: config/certs/pcap-api-client.key
-  agents_mtls/pcap-api-client.ca.erb: config/certs/pcap-api-client.ca
+  agents_mtls/pcap-api-client.ca.erb: config/certs/pcap-api-client-ca.crt
 
 packages:
 - pcap-api

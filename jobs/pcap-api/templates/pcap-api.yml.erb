@@ -11,8 +11,9 @@ config = {
   "listen" => {
     "port" => p("pcap-api.listen.port"),
     "tls" => {
-      "certificate"=> "/var/vcap/jobs/pcap-api/config/pcap-api.crt",
-      "key" => "/var/vcap/jobs/pcap-api/config/pcap-api.key",
+      "certificate"=> "/var/vcap/jobs/pcap-api/config/certs/pcap-api.crt",
+      "key" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api.key",
+      "ca" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api-ca.crt",
     },
   },
   "cli_download_root" => p("pcap-api.cli_download_root")
@@ -25,7 +26,7 @@ if p("pcap-api.agents_mtls.enabled")
       "tls" => {
         "certificate" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.crt",
         "private_key" => '/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.key',
-        "ca" => '/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.ca'
+        "ca" => '/var/vcap/jobs/pcap-api/config/certs/pcap-api-client-ca.crt'
        }
     }
 end
@@ -39,7 +40,7 @@ if_p("pcap-api.bosh.director_url", "pcap-api.bosh.token_scope") do
       "tls" => {
         "certificate" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.crt',
         "private_key" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.key',
-        "ca" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.ca'
+        "ca" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh-ca.crt'
        }
     }
   end

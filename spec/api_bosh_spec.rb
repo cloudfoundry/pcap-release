@@ -51,7 +51,7 @@ describe "config/pcap-api.yml bosh properties" do
       expect(pcap_api_conf['bosh']['mtls']['skip_verify']).to be(true)
       expect(pcap_api_conf['bosh']['mtls']['tls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.crt')
       expect(pcap_api_conf['bosh']['mtls']['tls']['private_key']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.key')
-      expect(pcap_api_conf['bosh']['mtls']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.ca')
+      expect(pcap_api_conf['bosh']['mtls']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh-ca.crt')
 
     end
   end
@@ -77,7 +77,7 @@ describe "config/pcap-api.yml bosh properties" do
       expect(pcap_api_conf['bosh']['mtls']['skip_verify']).to be(false)
       expect(pcap_api_conf['bosh']['mtls']['tls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.crt')
       expect(pcap_api_conf['bosh']['mtls']['tls']['private_key']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.key')
-      expect(pcap_api_conf['bosh']['mtls']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.ca')
+      expect(pcap_api_conf['bosh']['mtls']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh-ca.crt')
 
     end
   end
