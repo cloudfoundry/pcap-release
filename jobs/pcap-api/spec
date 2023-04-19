@@ -1,7 +1,7 @@
 ---
 name: pcap-api
 
-description:
+description: "Communication element between client and capturing pcap-agents"
 
 templates:
   ctl.erb: bin/ctl

@@ -1,6 +1,8 @@
 ---
 name: pcap-agent
 
+description: "Agent captures packets and streams them back to pcap-api"
+
 templates:
   ctl.erb: bin/ctl
   pcap-agent.yml.erb: config/pcap-agent.yml
