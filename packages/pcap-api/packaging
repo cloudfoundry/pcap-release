@@ -36,7 +36,7 @@ pushd pcap
   # -extldflags -static: pass -static to ld, see man 1 ld (https://linux.die.net/man/1/ld) for details
   export CGO_LDFLAGS="-L${BOSH_COMPILE_TARGET}/libpcap -static"
 
-  $GOROOT/bin/go build -ldflags '-linkmode external' -o $BOSH_INSTALL_TARGET/bin/pcap-api github.com/cloudfoundry/pcap-release/src/pcap/cmd/pcap-api
+  $GOROOT/bin/go build -ldflags '-linkmode external' -o "${BOSH_INSTALL_TARGET}/bin/pcap-api" github.com/cloudfoundry/pcap-release/src/pcap/cmd/pcap-api
 
-  GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o $BOSH_INSTALL_TARGET/bin/cli/build/pcap-bosh-cli-linux-amd64 github.com/cloudfoundry/pcap-release/src/pcap/cmd/pcap-bosh-cli
+  GOOS=linux GOARCH=amd64 $GOROOT/bin/go build -o "${BOSH_INSTALL_TARGET}/bin/cli/build/pcap-bosh-cli-linux-amd64" github.com/cloudfoundry/pcap-release/src/pcap/cmd/pcap-bosh-cli
 popd

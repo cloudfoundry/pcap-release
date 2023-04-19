@@ -35,5 +35,5 @@ pushd pcap
   # -linkmode external: use an external linker: https://cs.opensource.google/go/go/+/refs/tags/go1.18:src/cmd/cgo/doc.go;l=794
   # -extldflags -static: pass -static to ld, see man 1 ld (https://linux.die.net/man/1/ld) for details
   export CGO_LDFLAGS="-L${BOSH_COMPILE_TARGET}/libpcap -static"
-  go build -a -ldflags '-linkmode external' -o "${BOSH_INSTALL_TARGET}/bin/pcap-agent"
+  go build -a -ldflags '-linkmode external' -o "${BOSH_INSTALL_TARGET}/bin/pcap-agent" github.com/cloudfoundry/pcap-release/src/pcap/cmd/pcap-agent
 popd
