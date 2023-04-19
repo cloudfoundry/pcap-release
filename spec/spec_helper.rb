@@ -12,7 +12,7 @@ module SharedContext
   let(:pcap_api_spec) do
     {
       'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048',
-      'name' => "pcap-api"
+      'name' => 'pcap-api'
     }
   end
 end
