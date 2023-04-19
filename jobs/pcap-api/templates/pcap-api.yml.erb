@@ -23,11 +23,9 @@ if p("pcap-api.agents_mtls.enabled").to_s == "true"
   config["agents_mtls"] = {
       "common_name" => p("pcap-api.agents_mtls.common_name"),
       "skip_verify" => p("pcap-api.agents_mtls.skip_verify"),
-      "tls" => {
-        "certificate" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.crt",
-        "private_key" => '/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.key',
-        "ca" => '/var/vcap/jobs/pcap-api/config/certs/pcap-api-client-ca.crt'
-       }
+      "certificate" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.crt",
+      "private_key" => '/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.key',
+      "ca" => '/var/vcap/jobs/pcap-api/config/certs/pcap-api-client-ca.crt'
     }
 end
 
@@ -37,11 +35,9 @@ if_p("pcap-api.bosh.director_url", "pcap-api.bosh.token_scope") do
     bosh_mtls = {
       "common_name" => p("pcap-api.bosh.mtls.common_name"),
       "skip_verify" => p("pcap-api.bosh.mtls.skip_verify"),
-      "tls" => {
-        "certificate" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.crt',
-        "private_key" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.key',
-        "ca" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh-ca.crt'
-       }
+      "certificate" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.crt',
+      "private_key" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.key',
+      "ca" => '/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh-ca.crt'
     }
   end
   config['bosh'] = {
