@@ -1,6 +1,6 @@
 <%=
 config = {
-  "id" => p("pcap-api.id"),
+  "id" => spec.name+"/"+spec.id,
   "log_level" => p("pcap-api.log_level"),
   "buffer" => {
     "size" => p("pcap-api.buffer.size"),
@@ -12,14 +12,14 @@ config = {
     "port" => p("pcap-api.listen.port"),
     "tls" => {
       "certificate"=> "/var/vcap/jobs/pcap-api/config/certs/pcap-api.crt",
-      "key" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api.key",
+      "private_key" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api.key",
       "ca" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api-ca.crt",
     },
   },
   "cli_download_root" => p("pcap-api.cli_download_root")
 }
 
-if p("pcap-api.agents_mtls.enabled")
+if p("pcap-api.agents_mtls.enabled").to_s == "true"
   config["agents_mtls"] = {
       "common_name" => p("pcap-api.agents_mtls.common_name"),
       "skip_verify" => p("pcap-api.agents_mtls.skip_verify"),
@@ -33,7 +33,7 @@ end
 
 if_p("pcap-api.bosh.director_url", "pcap-api.bosh.token_scope") do
   bosh_mtls = nil
-  if p("pcap-api.bosh.mtls.enabled")
+  if p("pcap-api.bosh.mtls.enabled").to_s == "true"
     bosh_mtls = {
       "common_name" => p("pcap-api.bosh.mtls.common_name"),
       "skip_verify" => p("pcap-api.bosh.mtls.skip_verify"),

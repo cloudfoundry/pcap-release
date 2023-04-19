@@ -5,25 +5,24 @@ require 'yaml'
 describe "config/pcap-api.yml agents properties" do
   let(:template) { pcap_api_job.template('config/pcap-api.yml') }
 
-  let(:pcap_api_conf) { YAML.safe_load(template.render({ 'pcap-api' => properties })) }
+  let(:pcap_api_conf) { YAML.safe_load(template.render({ 'pcap-api' => properties }, spec: pcap_api_spec)) }
 
-  context 'when pcap-api.agents_mtls is provided without mTLS' do
+  context 'when pcap-api.agents_mtls is disabled' do
     let(:properties) do
       {
-        'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048',
         'agents_mtls' => {
-          'enabled' => 'false'
+          'enabled' => "false"
         }
       }
     end
     it 'configures correctly' do
+      expect(pcap_api_conf['agents_mtls']).to be(nil)
     end
   end
 
   context 'when pcap-api.agents_mtls is provided with skip server verification' do
     let(:properties) do
       {
-        'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048',
         'agents_mtls' => {
               'enabled' => true,
               'common_name' => 'pcap-agent-test.service.cf.internal',
@@ -44,7 +43,6 @@ describe "config/pcap-api.yml agents properties" do
   context 'when pcap-api.agents_mtls is enabled with mTLS configuration' do
     let(:properties) do
       {
-        'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048',
         'agents_mtls' => {
           'enabled' => true,
         }

@@ -59,7 +59,7 @@ describe "config/pcap-agent.yml global properties" do
       expect(pcap_agent_conf['buffer']['lower_limit']).to eq(900)
     end
   end
-  context 'when pcap_agent.listen.tls is no provided' do
+  context 'when pcap_agent.listen is no provided' do
     let(:agent_properties) do
       {
         'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048'
