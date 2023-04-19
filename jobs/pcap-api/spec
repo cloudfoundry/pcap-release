@@ -20,9 +20,6 @@ packages:
 - pcap-api
 
 properties:
-  pcap-api.id:
-    description: "Bosh instance id"
-    example: "f9281cda-1234-bbcd-ef12-1337cafe0048"
   pcap-api.log_level:
     default: "info"
     description: Log level. Allowed values are info, debug, warn, error.
