@@ -22,19 +22,17 @@ properties:
     description: "Number of responses that can be buffered per stream"
     default: 100
   pcap-agent.buffer.upper_limit:
-    description: "Limit above which the buffer manager starts to discards packets. The recommendation is to set the upper limit slightly below the size to account for data put into the buffer while checking the fill condition or performing work."
+    description: "Limit above which the buffer manager starts to discards responses. The recommendation is to set the upper limit slightly below the size to account for data put into the buffer while checking the fill condition or performing work."
     default: 98
   pcap-agent.buffer.lower_limit:
-    description: "Limit under which the buffer manager stops to discard packages"
+    description: "Limit under which the buffer manager stops to discard responses"
     default: 70
   pcap-agent.listen.port:
     description: "The port for the pcap-agent to listen on"
     default: 9494
   pcap-agent.listen.tls.certificate:
-    description: "Certificate and certificate chain to talk to pcap-api in PEM format"
+    description: "Certificate and chain to talk to pcap-api in PEM format"
   pcap-agent.listen.tls.private_key:
     description: "Private key to talk to pcap-api in PEM format"
   pcap-agent.listen.tls.ca:
     description: "CA bundle which is used to request and verify client certificates"
-  pcap-agent.enable_tls:
-    default: true

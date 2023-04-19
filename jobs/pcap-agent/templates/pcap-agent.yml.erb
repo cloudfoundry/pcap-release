@@ -6,7 +6,7 @@ config = {
     "port" => p("pcap-agent.listen.port"),
     "tls" => {
       "certificate"=> "/var/vcap/jobs/pcap-agent/config/certs/pcap-agent.crt",
-      "key" => "/var/vcap/jobs/pcap-agent/config/certs/pcap-agent.key",
+      "private_key" => "/var/vcap/jobs/pcap-agent/config/certs/pcap-agent.key",
       "ca" => "/var/vcap/jobs/pcap-agent/config/certs/client-ca.crt",
     },
   },
