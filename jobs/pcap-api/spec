@@ -25,17 +25,16 @@ properties:
     description: Log level. Allowed values are info, debug, warn, error.
   pcap-api.buffer.size:
     description: "Number of responses that can be buffered per stream"
-    default: 1000
+    example: 1000
   pcap-api.buffer.upper_limit:
     description: "Limit above which the buffer manager starts to discards responses. The recommendation is to set the upper limit slightly below the size to account for data put into the buffer while checking the fill condition or performing work."
-    default: 998
+    example: 998
   pcap-api.buffer.lower_limit:
     description: "Limit under which the buffer manager stops to discard responses"
-    default: 900
+    example: 900
   pcap-api.concurrent_captures:
     description: "Maximum of possible concurrent captures per client"
     example: 5
-    default: 5
   pcap-api.listen.port:
     description: "The port for the pcap-api to listen on"
     default: 8080

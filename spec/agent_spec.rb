@@ -12,7 +12,12 @@ describe 'config/pcap-agent.yml global properties' do
   context 'when pcap-agent.log_level is not provided' do
     let(:agent_properties) do
       {
-        'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048'
+        'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048',
+        'buffer' => {
+          'size' => 100,
+          'upper_limit' => 98,
+          'lower_limit' => 90
+        }
       }
     end
 
@@ -25,7 +30,12 @@ describe 'config/pcap-agent.yml global properties' do
     let(:agent_properties) do
       {
         'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048',
-        'log_level' => 'debug'
+        'log_level' => 'debug',
+        'buffer' => {
+          'size' => 100,
+          'upper_limit' => 98,
+          'lower_limit' => 90
+        }
       }
     end
 
@@ -34,21 +44,26 @@ describe 'config/pcap-agent.yml global properties' do
     end
   end
 
-  context 'when pcap-agent.buffer is not provided' do
+  context 'when pcap_agent.buffer provided' do
     let(:agent_properties) do
       {
-        'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048'
+        'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048',
+        'buffer' => {
+          'size' => 100,
+          'upper_limit' => 98,
+          'lower_limit' => 90
+        }
       }
     end
 
     it 'configures values correctly' do
       expect(pcap_agent_conf['buffer']['size']).to eq(100)
       expect(pcap_agent_conf['buffer']['upper_limit']).to eq(98)
-      expect(pcap_agent_conf['buffer']['lower_limit']).to eq(70)
+      expect(pcap_agent_conf['buffer']['lower_limit']).to eq(90)
     end
   end
 
-  context 'when pcap_agent.buffer provided' do
+  context 'when pcap_agent.listen is no provided' do
     let(:agent_properties) do
       {
         'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048',
@@ -57,20 +72,6 @@ describe 'config/pcap-agent.yml global properties' do
           'upper_limit' => 998,
           'lower_limit' => 900
         }
-      }
-    end
-
-    it 'configures values correctly' do
-      expect(pcap_agent_conf['buffer']['size']).to eq(1000)
-      expect(pcap_agent_conf['buffer']['upper_limit']).to eq(998)
-      expect(pcap_agent_conf['buffer']['lower_limit']).to eq(900)
-    end
-  end
-
-  context 'when pcap_agent.listen is no provided' do
-    let(:agent_properties) do
-      {
-        'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048'
       }
     end
 
@@ -86,6 +87,11 @@ describe 'config/pcap-agent.yml global properties' do
     let(:agent_properties) do
       {
         'id' => 'f9281cda-1234-bbcd-ef12-1337cafe0048',
+        'buffer' => {
+          'size' => 1000,
+          'upper_limit' => 998,
+          'lower_limit' => 900
+        },
         'listen' => {
           'port' => 9495
         }

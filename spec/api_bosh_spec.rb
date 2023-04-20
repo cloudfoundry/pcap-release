@@ -8,8 +8,19 @@ describe 'config/pcap-api.yml bosh properties' do
 
   let(:pcap_api_conf) { YAML.safe_load(template.render({ 'pcap-api' => properties }, spec: pcap_api_spec)) }
 
+  let(:properties) do
+    {
+      'concurrent_captures' => 5,
+      'buffer' => {
+        'size' => 100,
+        'upper_limit' => 98,
+        'lower_limit' => 90
+      }
+    }
+  end
+
   context 'when pcap-api.bosh is provided without mTLS' do
-    let(:properties) do
+    let(:bosh_properties) do
       {
         'bosh' =>
           {
@@ -25,6 +36,7 @@ describe 'config/pcap-api.yml bosh properties' do
     end
 
     it 'configures bosh correctly' do
+      properties.merge!(bosh_properties)
       expect(pcap_api_conf['bosh']['agent_port']).to be(9495)
       expect(pcap_api_conf['bosh']['director_url']).to include('https://bosh.service.cf.internal:8080')
       expect(pcap_api_conf['bosh']['token_scope']).to include('bosh.admin')
@@ -33,7 +45,7 @@ describe 'config/pcap-api.yml bosh properties' do
   end
 
   context 'when pcap-api.bosh is provided with skip server verification' do
-    let(:properties) do
+    let(:bosh_properties) do
       {
         'bosh' =>
           {
@@ -49,6 +61,7 @@ describe 'config/pcap-api.yml bosh properties' do
     end
 
     it 'configures bosh correctly' do
+      properties.merge!(bosh_properties)
       expect(pcap_api_conf['bosh']['director_url']).to include('https://bosh.service.cf.internal:8080')
       expect(pcap_api_conf['bosh']['mtls']['skip_verify']).to be(true)
       expect(pcap_api_conf['bosh']['mtls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.crt')
@@ -58,7 +71,7 @@ describe 'config/pcap-api.yml bosh properties' do
   end
 
   context 'when pcap-api.bosh is provided with TLS configuration' do
-    let(:properties) do
+    let(:bosh_properties) do
       {
         'bosh' =>
           {
@@ -74,6 +87,7 @@ describe 'config/pcap-api.yml bosh properties' do
     end
 
     it 'configures bosh correctly' do
+      properties.merge!(bosh_properties)
       expect(pcap_api_conf['bosh']['director_url']).to include('https://bosh.service.cf.internal:8080')
       expect(pcap_api_conf['bosh']['mtls']['skip_verify']).to be(false)
       expect(pcap_api_conf['bosh']['mtls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.crt')
