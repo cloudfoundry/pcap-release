@@ -1,55 +1,88 @@
 ---
 name: pcap-api
 
+description: "Communication element between client and capturing pcap-agents"
+
 templates:
   ctl.erb: bin/ctl
   pcap-api.yml.erb: config/pcap-api.yml
-  pcap-api.crt.erb: config/pcap-api.crt
-  pcap-api.key.erb: config/pcap-api.key
-  pcap-api-bosh.ca.erb: config/pcap-api-bosh.ca
-  pcap-api-client.crt.erb: config/pcap-api-client.crt
-  pcap-api-client.key.erb: config/pcap-api-client.key
-  pcap-api-client.ca.erb: config/pcap-api-client.ca
+  pcap-api.crt.erb: config/certs/pcap-api.crt
+  pcap-api.key.erb: config/certs/pcap-api.key
+  pcap-api.ca.erb: config/certs/pcap-api-ca.crt
+  bosh_mtls/pcap-api-bosh.ca.erb: config/certs/bosh/pcap-api-bosh-ca.crt
+  bosh_mtls/pcap-api-bosh.crt.erb: config/certs/bosh/pcap-api-bosh.crt
+  bosh_mtls/pcap-api-bosh.key.erb: config/certs/bosh/pcap-api-bosh.key
+  agents_mtls/pcap-api-client.crt.erb: config/certs/pcap-api-client.crt
+  agents_mtls/pcap-api-client.key.erb: config/certs/pcap-api-client.key
+  agents_mtls/pcap-api-client.ca.erb: config/certs/pcap-api-client-ca.crt
 
 packages:
 - pcap-api
 
 properties:
-  pcap-api.listen:
-    description: "Listen address for the pcap-api"
-    default: ":8080"
   pcap-api.log_level:
     default: "info"
-  pcap-api.id:
-    description: "bosh instance id"
-    example: "f9281cda-1234-bbcd-ef12-1337cafe0048"
-  pcap-api.enable_server_tls:
+    description: Log level. Allowed values are info, debug, warn, error.
+  pcap-api.buffer.size:
+    description: "Number of responses that can be buffered per stream"
+    example: 1000
+  pcap-api.buffer.upper_limit:
+    description: "Limit above which the buffer manager starts to discards responses. The recommendation is to set the upper limit slightly below the size to account for data put into the buffer while checking the fill condition or performing work."
+    example: 998
+  pcap-api.buffer.lower_limit:
+    description: "Limit under which the buffer manager stops to discard responses"
+    example: 900
+  pcap-api.concurrent_captures:
+    description: "Maximum of possible concurrent captures per client"
+    example: 5
+  pcap-api.listen.port:
+    description: "The port for the pcap-api to listen on"
+    default: 8080
+  pcap-api.listen.tls.certificate:
+    description: "Certificate chain to talk to gorouter in PEM format"
+  pcap-api.listen.tls.private_key:
+    description: "Private key to talk to gorouter in PEM format"
+  pcap-api.listen.tls.ca:
+    description: "CA bundle which is used to request and verify client certificates" # platform CA (gorouter CA)
+
+  pcap-api.agents_mtls.enabled:
     default: true
-  pcap-api.tls.certificate:
-    description: "TLS certificate for this server"
-  pcap-api.tls.private_key:
-    description: "Key for the TLS certificate"
-  pcap-api.cf_api:
-    description: "Endpoint of the cf API"
-  pcap-api.bosh_director_api:
-    description: "Endpoint of the BOSH Director API"
-  pcap-api.bosh_director_ca:
-    description: "CA of the BOSH Director cert"
-  pcap-api.agent_port:
-    description: "Port of the pcap-agent that runs on the diego cells"
-    default: "9494"
-  pcap-api.client_certificate:
-    description: "mTLS client certificate to talk to the pcap-agent"
-  pcap-api.client_key:
-    description: "Key for mTLS client certificate"
-  pcap-api.agent_ca:
-    description: "CA of the pcap-agent cert"
-  pcap-api.agent_common_name:
-    description: "CN of the pcap-agent"
+  pcap-api.agents_mtls.common_name:
+    description: "Common name of the pcap-agent"
     default: "pcap-agent.service.cf.internal"
-  pcap-api.agent_tls_skip_verify:
-    description: "skip server verification for connection to pcap-agent"
+  pcap-api.agents_mtls.skip_verify:
+    description: "Skip server verification for connection to pcap-agent"
     default: false
+  pcap-api.agents_mtls.certificate:
+    description: "Client certificate to talk to pcap-agent in PEM format"
+  pcap-api.agents_mtls.private_key:
+    description: "Private key to talk to pcap-agent in PEM format"
+  pcap-api.agents_mtls.ca:
+    description: "CA bundle which is used to request and verify pcap-agent client certificates"
+
+
+  pcap-api.bosh.agent_port:
+    description: "Port of the pcap-agent that runs on the Bosh VMs"
+    default: "9494"
+  pcap-api.bosh.director_url:
+    description: "Endpoint of the BOSH Director API"
+  pcap-api.bosh.token_scope:
+    description: "Scope of the token"
+  pcap-api.bosh.mtls.enabled:
+    default: true
+  pcap-api.bosh.mtls.common_name:
+    description: "Common name of the Bosh Director"
+  pcap-api.bosh.mtls.skip_verify:
+    description: "Skip server verification for connection to Bosh Director"
+    default: false
+  pcap-api.bosh.mtls.certificate:
+    description: "Client certificate to talk to Bosh Director in PEM format"
+  pcap-api.bosh.mtls.private_key:
+    description: "Private key to talk to Bosh Director in PEM format"
+  pcap-api.bosh.mtls.ca:
+    description: "CA bundle which is used to request and verify Bosh Director client certificates"
+
+
   pcap-api.cli_download_root:
     description: "Root directory of CLI downloads"
     default: "/var/vcap/packages/pcap-api/bin/cli/build/"
