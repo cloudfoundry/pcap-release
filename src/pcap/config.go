@@ -83,7 +83,7 @@ func (c NodeConfig) TLSCredentials() (credentials.TransportCredentials, error) {
 // LoadTLSCredentials creates TLS transport credentials from the given parameters.
 func LoadTLSCredentials(certFile, keyFile string, caFile *string, peerCAFile *string, peerCommonName *string) (credentials.TransportCredentials, error) {
 	tlsConf := &tls.Config{
-		MinVersion: tls.VersionTLS13,
+		MinVersion: tls.VersionTLS12,
 		MaxVersion: tls.VersionTLS13,
 		ClientAuth: tls.RequireAndVerifyClientCert,
 	}
