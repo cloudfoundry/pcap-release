@@ -6,6 +6,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"os"
+	"regexp"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -124,15 +125,22 @@ func createCAPool(certificateAuthorityFile string) (*x509.CertPool, error) {
 		return nil, err
 	}
 
+	// remove all empty lines so pem.Decode can parse the file
+	re := regexp.MustCompile(`(?m)^\s*$[\r\n]*`)
+	blocks := re.ReplaceAll(caFile, []byte{})
+
 	caPool := x509.NewCertPool()
 
 	// We do not use x509.CertPool.AppendCertsFromPEM because it swallows any errors.
 	// We would like to know if any certificate failed (and not just if any certificate
 	// could be parsed).
-	for len(caFile) > 0 {
+	for len(blocks) > 0 {
 		var block *pem.Block
 
-		block, caFile = pem.Decode(caFile)
+		block, blocks = pem.Decode(blocks)
+		if block == nil {
+			return nil, fmt.Errorf("could not parse ca-file %s: %v", certificateAuthorityFile, blocks)
+		}
 		if block.Type != "CERTIFICATE" {
 			return nil, fmt.Errorf("ca file contains non-certificate blocks")
 		}

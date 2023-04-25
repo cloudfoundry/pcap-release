@@ -1,7 +1,3 @@
-<%
-  if_p("pcap-api.listen.tls.ca") do |pem|
-%>
-  <%= pem %>
-<%
-  end
-%>
+<%- if_p("pcap-api.listen.tls.ca") do |pem| -%>
+<%= pem %>
+<%- end -%>
