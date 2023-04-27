@@ -5,7 +5,7 @@ set -e
 # $BOSH_INSTALL_TARGET - where you copy/install files to be included in package
 
 # FIXME: Adjust to vendored BOSH package
-tar xzf golang/go1.20.2.linux-amd64.tar.gz
+tar xzf golang/go1.20.3.linux-amd64.tar.gz
 export GOROOT=$BOSH_COMPILE_TARGET/go
 
 # TODO: maybe these are not needed? Where does this get executed?
