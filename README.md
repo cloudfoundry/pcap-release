@@ -100,11 +100,12 @@ bosh -e bosh upload-release
 
 # adjust the release to a dev release instead of the URL
 vim manifests/pcap-api.yml
-vim manifests/ops-files/add-pcap-agent-haproxy.yml
+vim manifests/ops-files/add-pcap-agent.yml
 
-# deploy pcap-agent to the HAProxy deployment(s)
-bosh interpolate -o manifests/ops-files/add-pcap-agent.yml haproxy.yml > haproxy-pcap.yml
-bosh -d cf haproxy haproxy-pcap.yml
+# deploy pcap-agent to the desired deployment(s) (example: diego-cells in cf deployment)
+bosh -d cf manifest > cf.yml
+bosh interpolate -o manifests/ops-files/add-pcap-agent.yml cf.yml > cf-pcap.yml
+bosh -d cf deploy cf-pcap.yml
 
 # deploy pcap-api
 cp manifests/vars-template.yml manifests/vars.yml

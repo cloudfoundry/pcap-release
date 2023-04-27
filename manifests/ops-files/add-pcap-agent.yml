@@ -23,7 +23,7 @@
     type: certificate
     update_mode: converge
     options:
-      ca: pcap_ca
+      ca: /bosh/pcap/pcap.ca
       common_name: pcap_agent_mtls
       alternative_names:
         - pcap-agent.service.cf.internal
@@ -38,6 +38,15 @@
     release: pcap
     properties:
       pcap-agent:
-        cert: ((pcap_agent_mtls.certificate))
-        key: ((pcap_agent_mtls.private_key))
-        ca_cert: ((pcap_agent_mtls.ca))
+        id: pcap-agent
+        log_level: "info"
+        buffer:
+          size: 100
+          upper_limit: 95
+          lower_limit: 90
+        listen:
+          port: 9494
+          tls:
+            cert: ((pcap_agent_mtls.certificate))
+            key: ((pcap_agent_mtls.private_key))
+            ca: ((/bosh/pcap/pcap_ca.ca))
