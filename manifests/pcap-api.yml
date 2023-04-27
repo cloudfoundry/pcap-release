@@ -18,7 +18,7 @@ addons:
                   domain: bosh
                   instance_group: nats
                   network: cf
-                  query: '*'
+                  query: "*"
             - domain: _.nats.service.cf.internal
               targets:
                 - deployment: cf
@@ -30,7 +30,7 @@ instance_groups:
   - name: pcap-api
     azs:
       - z1
-    instances: 2
+    instances: 1
     vm_type: ((pcap_api.vm_type))
     stemcell: default
     networks: ((pcap_api.networks))
@@ -39,15 +39,34 @@ instance_groups:
         release: pcap
         properties:
           pcap-api:
-            agent_tls_skip_verify: true
-            enable_server_tls: false
-            cf_api: ((pcap_api.cf_api))
-            bosh_director_api: ((pcap_api.bosh_director_api))
-            bosh_director_ca: ((pcap_api.bosh_director_ca))
-            client_cert: ((pcap_api_mtls.certificate))
-            client_key: ((pcap_api_mtls.private_key))
-            agent_ca: ((pcap_api_mtls.ca))
-            agent_common_name: pcap-agent.service.cf.internal
+            log_level: info
+            buffer:
+              size: 1000
+              upper_limit: 995
+              lower_limit: 900
+            concurrent_captures: 5
+            listen:
+              port: 8080
+            #              tls:
+            #                certificate: ((pcap_api_platform_mtls.certificate))
+            #                private_key: ((pcap_api_platform_mtls.private_key))
+            #                ca: ((/bosh-aws-cfn07/cf/router_ca.ca))
+            bosh:
+              director_url: ((pcap_api.bosh_director_api))
+              token_scope: bosh.admin
+              agent_port: 9494
+              mtls:
+                common_name: bosh.service.cf.internal
+                skip_verify: false
+                certificate: ((pcap_api_bosh_mtls.certificate))
+                private_key: ((pcap_api_bosh_mtls.private_key))
+                ca: ((/bootstrap-bosh-aws-cfn07/bosh/default_ca.ca))
+            agents_mtls:
+              common_name: pcap-agent.service.cf.internal
+              skip_verify: false
+              certificate: ((pcap_api_mtls.certificate))
+              private_key: ((pcap_api_mtls.private_key))
+              ca: ((pcap_agent_mtls.ca))
       - name: route_registrar
         release: routing
         consumes:
@@ -60,14 +79,31 @@ instance_groups:
               - name: pcap-api-public-endpoint
                 registration_interval: 20s
                 port: 8080
+                #                tls_port: 8080
+                #                server_cert_domain_san: pcap-api.service.cf.internal
                 uris:
                   - ((route_registrar.public_route))
-            port: 8080
           nats:
             tls:
               enabled: true
               client_cert: ((nats.client_cert))
               client_key: ((nats.client_key))
+      - name: pcap-agent
+        release: pcap
+        properties:
+          pcap-agent:
+            id: pcap-agent/123
+            log_level: info
+            buffer:
+              size: 100
+              upper_limit: 95
+              lower_limit: 90
+            listen:
+              port: 9494
+              tls:
+                certificate: ((pcap_agent_mtls.certificate))
+                private_key: ((pcap_agent_mtls.private_key))
+                ca: ((pcap_agent_mtls.ca))
 
 update:
   canaries: 1
@@ -78,36 +114,67 @@ update:
 
 stemcells:
   - alias: default
-    os: ubuntu-bionic
+    os: ubuntu-jammy
     version: latest
 
 releases:
   - name: bpm
-    version: 1.1.8
-    url: https://bosh.io/d/github.com/cloudfoundry/bpm-release?v=1.1.8
-    sha1: c956394fce7e74f741e4ae8c256b480904ad5942
+    url: https://bosh.io/d/github.com/cloudfoundry/bpm-release?v=1.1.21
+    version: 1.1.21
+    sha1: e8abe19ec186962828de843f8f281cddb6141904
   - name: pcap
-    version: 0+dev.7
-    url: https://github.com/domdom82/pcap-server-release/releases/download/v0.0.1/pcap-server-0.0.1.tgz
-    sha1: a1655c1992b911fef3ad0b46c5abb8a0217ef0a2
+    version: 0+dev.1682596802
   - name: bosh-dns-aliases
     version: 0.0.4
     url: https://bosh.io/d/github.com/cloudfoundry/bosh-dns-aliases-release?v=0.0.4
     sha1: 55b3dced813ff9ed92a05cda02156e4b5604b273
   - name: routing
-    version: 0.232.0
-    url: https://bosh.io/d/github.com/cloudfoundry/routing-release?v=0.232.0
-    sha1: 1150a7c89a04db07145c906ccdbfda7424e6dfc6
+    url: https://bosh.io/d/github.com/cloudfoundry/routing-release?v=0.259.0
+    version: 0.259.0
 
 variables:
+  - name: pcap_ca
+    type: certificate
+    options:
+      common_name: pcap_ca
+      is_ca: true
   - name: pcap_api_mtls
     type: certificate
-    update_mode: converge
     options:
-      ca: ((pcap_api.ca_path))
+      ca: pcap_ca
       common_name: pcap_api_mtls
       alternative_names:
         - pcap-api.service.cf.internal
       extended_key_usage:
         - client_auth
         - server_auth
+  - name: pcap_agent_mtls
+    type: certificate
+    update_mode: converge
+    options:
+      ca: pcap_ca
+      common_name: pcap_agent_mtls
+      alternative_names:
+        - pcap-agent.service.cf.internal
+      extended_key_usage:
+        - client_auth
+        - server_auth
+  - name: pcap_api_bosh_mtls
+    type: certificate
+    options:
+      ca: /bootstrap-bosh-aws-cfn07/bosh/default_ca
+      common_name: pcap_api_bosh_mtls
+      alternative_names:
+        - pcap-api.service.cf.internal
+      extended_key_usage:
+        - client_auth
+#  - name: pcap_api_platform_mtls
+#    type: certificate
+#    options:
+#      ca: /bosh-aws-cfn07/cf/router_ca
+#      common_name: pcap_api_platform_mtls
+#      alternative_names:
+#        - pcap-api.service.cf.internal
+#      extended_key_usage:
+#        - server_auth
+#        - client_auth
