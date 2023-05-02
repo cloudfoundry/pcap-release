@@ -47,6 +47,6 @@
         listen:
           port: 9494
           tls:
-            cert: ((pcap_agent_mtls.certificate))
-            key: ((pcap_agent_mtls.private_key))
+            certificate: ((pcap_agent_mtls.certificate))
+            private_key: ((pcap_agent_mtls.private_key))
             ca: ((/bosh/pcap/pcap_ca.ca))
