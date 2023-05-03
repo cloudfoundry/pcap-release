@@ -61,14 +61,14 @@ func main() {
 	// set up a BoshResolver, if one is defined.
 	err = registerBoshResolver(config.BoshResolverConfig, api)
 	if err != nil {
-		log.Error("Could not register BOSH Resolver", zap.Error(err))
+		log.Error("could not register BOSH Resolver", zap.Error(err))
 		return
 	}
 
 	//TODO: CFAgentResolver
 
 	if len(api.HealthyResolverNames()) == 0 {
-		log.Error("Could not register any AgentResolvers. Please check the configuration.")
+		log.Error("could not register any AgentResolvers. Please check the configuration.")
 		return
 	}
 
