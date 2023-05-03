@@ -10,14 +10,17 @@ config = {
   "concurrent_captures" => p("pcap-api.concurrent_captures"),
   "listen" => {
     "port" => p("pcap-api.listen.port"),
-    "tls" => {
-      "certificate"=> "/var/vcap/jobs/pcap-api/config/certs/pcap-api.crt",
-      "private_key" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api.key",
-      "ca" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api-ca.crt",
-    },
   },
   "cli_download_root" => p("pcap-api.cli_download_root")
 }
+
+if p("pcap-api.listen.tls.enabled").to_s == "true"
+    config["listen"]["tls"] = {
+        "certificate"=> "/var/vcap/jobs/pcap-api/config/certs/pcap-api.crt",
+        "private_key" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api.key",
+        "ca" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api-ca.crt"
+    }
+end
 
 if p("pcap-api.agents_mtls.enabled").to_s == "true"
   config["agents_mtls"] = {

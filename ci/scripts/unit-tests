@@ -5,7 +5,7 @@ set -euo pipefail
 cd "${REPO_ROOT}"
 
 echo "> Running 'bundle exec rake spec'"
-bundle package
+bundle install
 bundle exec rake spec
 
 echo "> Running unit tests"

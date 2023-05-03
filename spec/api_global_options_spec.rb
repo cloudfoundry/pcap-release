@@ -78,6 +78,44 @@ describe 'config/pcap-api.yml global properties' do
     end
   end
 
+  context 'when platform-TLS is disabled' do
+    let(:listen) do
+      {
+        'listen' => {
+          'tls' => {
+            'enabled' => 'false'
+          }
+        }
+      }
+    end
+
+    it 'does not configure certificates for pcap-api' do
+      properties.merge!(listen)
+      expect(pcap_api_conf['listen']).not_to have_key('tls')
+    end
+  end
+
+  context 'when pcap-api.tls config provided' do
+    let(:listen) do
+      {
+        'listen' => {
+          'tls' => {
+            'certificate' => 'test',
+            'private_key' => 'test',
+            'ca' => 'test'
+          }
+        }
+      }
+    end
+
+    it 'configures pcap-api TLS settings correctly' do
+      properties.merge!(listen)
+      expect(pcap_api_conf['listen']['tls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api.crt')
+      expect(pcap_api_conf['listen']['tls']['private_key']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api.key')
+      expect(pcap_api_conf['listen']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-ca.crt')
+    end
+  end
+
   context 'when pcap-api.buffer provided' do
     let(:buffer) do
       {

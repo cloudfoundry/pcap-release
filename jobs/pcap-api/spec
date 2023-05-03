@@ -38,6 +38,8 @@ properties:
   pcap-api.listen.port:
     description: "The port for the pcap-api to listen on"
     default: 8080
+  pcap-api.listen.tls.enabled:
+    default: true
   pcap-api.listen.tls.certificate:
     description: "Certificate chain to talk to gorouter in PEM format"
   pcap-api.listen.tls.private_key:
