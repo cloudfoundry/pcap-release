@@ -50,7 +50,7 @@ instance_groups:
             #              tls:
             #                certificate: ((pcap_api_platform_mtls.certificate))
             #                private_key: ((pcap_api_platform_mtls.private_key))
-            #                ca: ((/bosh-aws-cfn07/cf/router_ca.ca))
+            #                ca: ((/bosh/cf/router_ca.ca))
             bosh:
               director_url: ((pcap_api.bosh_director_api))
               token_scope: bosh.admin
@@ -60,7 +60,7 @@ instance_groups:
                 skip_verify: false
                 certificate: ((pcap_api_bosh_mtls.certificate))
                 private_key: ((pcap_api_bosh_mtls.private_key))
-                ca: ((/bootstrap-bosh-aws-cfn07/bosh/default_ca.ca))
+                ca: ((/bootstrap-bosh/bosh/default_ca.ca))
             agents_mtls:
               common_name: pcap-agent.service.cf.internal
               skip_verify: false
@@ -162,7 +162,7 @@ variables:
   - name: pcap_api_bosh_mtls
     type: certificate
     options:
-      ca: /bootstrap-bosh-aws-cfn07/bosh/default_ca
+      ca: /bootstrap/bosh/default_ca
       common_name: pcap_api_bosh_mtls
       alternative_names:
         - pcap-api.service.cf.internal
@@ -171,7 +171,7 @@ variables:
 #  - name: pcap_api_platform_mtls
 #    type: certificate
 #    options:
-#      ca: /bosh-aws-cfn07/cf/router_ca
+#      ca: /bosh/cf/router_ca
 #      common_name: pcap_api_platform_mtls
 #      alternative_names:
 #        - pcap-api.service.cf.internal
