@@ -47,10 +47,8 @@ instance_groups:
             concurrent_captures: 5
             listen:
               port: 8080
-            #              tls:
-            #                certificate: ((pcap_api_platform_mtls.certificate))
-            #                private_key: ((pcap_api_platform_mtls.private_key))
-            #                ca: ((/bosh/cf/router_ca.ca))
+              tls:
+                enabled: false
             bosh:
               director_url: ((pcap_api.bosh_director_api))
               token_scope: bosh.admin
@@ -79,8 +77,6 @@ instance_groups:
               - name: pcap-api-public-endpoint
                 registration_interval: 20s
                 port: 8080
-                #                tls_port: 8080
-                #                server_cert_domain_san: pcap-api.service.cf.internal
                 uris:
                   - ((route_registrar.public_route))
           nats:
@@ -168,13 +164,3 @@ variables:
         - pcap-api.service.cf.internal
       extended_key_usage:
         - client_auth
-#  - name: pcap_api_platform_mtls
-#    type: certificate
-#    options:
-#      ca: /bosh/cf/router_ca
-#      common_name: pcap_api_platform_mtls
-#      alternative_names:
-#        - pcap-api.service.cf.internal
-#      extended_key_usage:
-#        - server_auth
-#        - client_auth

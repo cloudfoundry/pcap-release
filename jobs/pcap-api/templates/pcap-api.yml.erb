@@ -14,13 +14,11 @@ config = {
   "cli_download_root" => p("pcap-api.cli_download_root")
 }
 
-if_p("pcap-api.listen.tls.certificate", "pcap-api.listen.tls.private_key", "pcap-api.listen.tls.ca") do
-    config["listen"] = {
-      "tls" => {
+if p("pcap-api.listen.tls.enabled").to_s == "true"
+    config["listen"]["tls"] = {
         "certificate"=> "/var/vcap/jobs/pcap-api/config/certs/pcap-api.crt",
         "private_key" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api.key",
         "ca" => "/var/vcap/jobs/pcap-api/config/certs/pcap-api-ca.crt"
-      }
     }
 end
 

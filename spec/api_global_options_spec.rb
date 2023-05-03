@@ -78,18 +78,19 @@ describe 'config/pcap-api.yml global properties' do
     end
   end
 
-  context 'when incomplete pcap-api.tls config provided' do
+  context 'when platform-TLS is disabled' do
     let(:listen) do
       {
         'listen' => {
           'tls' => {
-            'certificate' => 'test'
+            'enabled' => 'false'
           }
         }
       }
     end
 
     it 'does not configure certificates for pcap-api' do
+      properties.merge!(listen)
       expect(pcap_api_conf['listen']).not_to have_key('tls')
     end
   end
