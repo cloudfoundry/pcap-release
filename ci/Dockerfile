@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y libpcap-dev && rm -rf /var/lib/apt/list
 RUN curl -fsSL https://deb.nodesource.com/setup_current.x | sudo -E bash - && \
     apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
 
+RUN npm install -g semantic-release && \
+    npm install -g @semantic-release/exec
+
 RUN rm -rf /usr/local/go
 COPY --from=golang:1.20 /usr/local/go/ /usr/local/go/
 ENV GOPATH=/go PATH=${PATH}:/go/bin

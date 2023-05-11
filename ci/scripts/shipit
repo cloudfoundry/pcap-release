@@ -45,8 +45,5 @@ git submodule update --init --recursive --force
 cd -
 
 cd "${REPO_ROOT}"
-header "Installing dependencies for semantic-release..."
-npm install @semantic-release/exec -D
-
 header "Running semantic-release..."
-npx semantic-release "$DRY_RUN_ARG"
+semantic-release "$DRY_RUN_ARG"

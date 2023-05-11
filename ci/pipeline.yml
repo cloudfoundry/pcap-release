@@ -142,7 +142,7 @@ jobs:
             type: docker-image
             source:
               repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-              tag:        semantic
+              tag:        latest
               username:   ((docker.username))
               password:   ((docker.password))
           inputs:
@@ -186,7 +186,7 @@ jobs:
             type: docker-image
             source:
               repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-              tag:        semantic
+              tag:        latest
               username:   ((docker.username))
               password:   ((docker.password))
           inputs:
