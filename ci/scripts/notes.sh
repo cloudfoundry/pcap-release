@@ -2,8 +2,8 @@
 
 set -e
 
-RELEASE_GIT_TAG="$1"
-VERSION="$2"
+RELEASE_GIT_TAG="${1:?Release Git Tag is mandatory}"
+VERSION="${2:?Version defining the target release version is mandatory}"
 
 RELEASE_TGZ="/tmp/pcap-${RELEASE_GIT_TAG}.tgz"
 SHA1=$(sha1sum "${RELEASE_TGZ}" | head -n1 | awk '{print $1}')
