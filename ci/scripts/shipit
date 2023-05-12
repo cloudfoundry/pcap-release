@@ -1,0 +1,49 @@
+#!/bin/bash
+
+set -eu
+
+header() {
+	echo
+	echo "###############################################"
+	echo
+	echo "$*"
+	echo
+}
+
+: "${REPO_ROOT:?required}" # Contains the Git repo
+: "${RELEASE_NAME:?required}" # Contains release name
+: "${RELEASE_ROOT:?required}" # Contains any information that is passed on to subsequent steps, e.g. GitHub publish
+: "${GCP_SERVICE_KEY:?required}" # The GCP service key for accessing the blobstore, written to a temporary private.yml.
+: "${GITHUB_TOKEN:?required}" # The github access token
+: "${DRY_RUN:=false}" # Whether to do a dry run or a real release
+
+###############################################################
+
+CONCOURSE_ROOT="$(pwd)"
+export CONCOURSE_ROOT
+
+DRY_RUN_ARG="--dry-run=$DRY_RUN"
+
+cd "${REPO_ROOT}"
+
+# YAML needs to be indented. The GCP service key is a multiline YAML and needs to be indented uniformly.
+# Bash does not allow variables in a sequence literal. $PAD is a 6 spaces indent.
+PAD=$(printf ' %.0s' {1..6})
+PADDED_GCP_SERVICE_KEY=$(sed -E 's/^(.*)$/'"${PAD}"'\1/g' <<<"${GCP_SERVICE_KEY}")
+
+cat > config/private.yml <<YAML
+---
+blobstore:
+  options:
+    credentials_source: static
+    json_key: |
+${PADDED_GCP_SERVICE_KEY}
+YAML
+
+header "Pulling in any git submodules..."
+git submodule update --init --recursive --force
+cd -
+
+cd "${REPO_ROOT}"
+header "Running semantic-release..."
+semantic-release "$DRY_RUN_ARG"

@@ -14,11 +14,15 @@
 # Dependency directories & default folders/files
 .bundle
 .dev_builds
+.final_builds
 pcap-release.tgz
 config/private.yml
 blobs
 dev_releases
 vendor
+node_modules
+package-lock.json
+package.json
 
 # Releases/tarballs
 .final_builds/jobs/**/*.tgz
