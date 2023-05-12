@@ -248,4 +248,4 @@ resources:
     source:
       bucket:   pcap-release
       json_key: ((gcp.service_key))
-      regexp:   pcap-([0-9\.+-]+).tgz
+      regexp:   pcap-v[0-9a-z\.+-]+.tgz
