@@ -118,3 +118,23 @@ Note that you can use the `dir` parameter in `run` to define the working directo
 ```
 
 Don't forget to remove separate pipelines that were created for testing.
+
+## Concourse Pipeline for Releases
+
+The releases of a `pcap-release` is done using [semantic-release](https://github.com/semantic-release/semantic-release).
+
+The next version is determined based on the last git tag and a series of commits, following [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/).
+
+The configuration for semantic-release is defined in [.releaserc](../.releaserc).
+
+The following markers in commits will lead to a new major release (all case-insensitive):
+* `BREAKING CHANGE`
+* `BREAKING-CHANGE`
+
+Otherwise, the [angular rules for semantic-release](https://github.com/conventional-changelog/conventional-changelog/tree/master/packages/conventional-changelog-angular) apply.
+
+### Concourse Pipeline
+
+The Concourse pipeline has the following jobs for releases:
+* `rc` provides a semantic-release try run, which shows what would happen if you ran `shipit` now. It provides a preview of the version to be created and the full release note.
+* `shipit` uses semantic-release, following the rules defined above and creates a bosh-release with the appropriate next version, creates a release note based on conventional commits and publishes the release to GitHub.
