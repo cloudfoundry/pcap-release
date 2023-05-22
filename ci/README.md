@@ -12,14 +12,12 @@ Credentials and admin access lie with that team. <!-- TODO: If you have question
 
 Concourse is used as CI system. There are two main types of tests and various release specific steps, all of which are defined in [pipeline.yml](pipeline.yml).
 
-* `unit-tests` and `unit-tests-pr` run a series of unit tests on the Ruby templating based configuration file generators and includes linters for all code and test code.
+* `unit-tests` and `unit-tests-pr` run a series of tests on the Ruby templating based configuration file generators as well Go unit and integration tests. They also include linters for all code and test code.
 
 
 ## Current State
 
-Currently, the PR validation uses the docker image `iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight`. This is suboptimal as that image doesn't contain `libpcap-dev` but contains several `haproxy-boshrelease` specific packages instead.
-
-A decision still has to be made on whether to adjust the image to work for both `pcap-release` and `haproxy-boshrelease` or if a new image should be created and maintained for `pcap-release`. This will be done during implementation of acceptance tests and automatic release creation.
+Currently, the PR validation uses the docker image `cf-routing.common.repositories.cloud.sap/pcap-release-testflight`. 
 
 <!-- TODO: * `acceptance-tests` and `acceptance-tests-pr` runs a series of acceptance tests developed in Go.
   * `acceptance-tests-pr` is executed for each PR that is marked with the `run-ci` label, while
