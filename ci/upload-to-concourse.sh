@@ -33,4 +33,8 @@ fly -t "$CONCOURSE_TARGET" validate-pipeline -c pipeline.yml
 fly -t "$CONCOURSE_TARGET" set-pipeline -p pcap-release -c pipeline.yml --load-vars-from vars.yml
 fly -t "$CONCOURSE_TARGET" expose-pipeline -p pcap-release
 
+fly -t "$CONCOURSE_TARGET" validate-pipeline -c pipeline-dev.yml
+fly -t "$CONCOURSE_TARGET" set-pipeline -p pcap-release-dev -c pipeline-dev.yml --load-vars-from vars.yml
+fly -t "$CONCOURSE_TARGET" expose-pipeline -p pcap-release-dev
+
 echo "Done."
