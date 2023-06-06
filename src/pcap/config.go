@@ -102,6 +102,7 @@ func LoadTLSCredentials(certFile, keyFile string, caFile *string, peerCAFile *st
 			return nil, fmt.Errorf("load certificate authority file failed: %w", err)
 		}
 		tlsConf.ClientCAs = caPool
+		tlsConf.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
 	if peerCAFile != nil {
