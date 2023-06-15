@@ -237,6 +237,7 @@ resources:
       repository: cloudfoundry/pcap-release
       base_branch: main
       labels: [run-ci]
+      required_review_approvals: 1
 
   - name: notify
     type: slack-notification
