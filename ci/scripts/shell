@@ -1,16 +1,8 @@
 #!/bin/bash
 
-set -e
+set -eu
 
-stemcell_jammy_path=$PWD/stemcell/*.tgz
-
-if [ -n "$FOCUS" ]; then
-  echo "------------------------------------------------------------------"
-  echo "FOCUS is set. Will only run tests matching '$FOCUS'"
-  echo "Docker won't be stopped afterwards, so you can debug the test."
-  echo "------------------------------------------------------------------"
-  ADDITIONAL_ARGS=("--focus" "$FOCUS")
-fi
+stemcell_path=$PWD/stemcell/*.tgz
 
 cd ${REPO_ROOT:?required}
 echo "----- Pulling in any git submodules..."
@@ -25,9 +17,7 @@ function stop_docker() {
   service docker stop
 }
 
-if [ -z "$FOCUS" ]; then
-  trap stop_docker EXIT
-fi
+trap stop_docker EXIT
 
 source /tmp/local-bosh/director/env
 
@@ -40,8 +30,8 @@ release_final_version=$(spruce json dev_releases/*/index.yml | jq -r ".builds[].
 export RELEASE_VERSION="${release_final_version}.latest"
 echo "----- Created ${RELEASE_VERSION}"
 
-echo "----- Uploading Jammy stemcell"
-bosh -n upload-stemcell $stemcell_jammy_path
+echo "----- Uploading stemcell"
+bosh -n upload-stemcell $stemcell_path
 
 echo "----- Uploading os-conf (used for tests only)"
 bosh -n upload-release --sha1 386293038ae3d00813eaa475b4acf63f8da226ef \
@@ -50,14 +40,4 @@ bosh -n upload-release --sha1 386293038ae3d00813eaa475b4acf63f8da226ef \
 export BOSH_PATH=$(which bosh)
 export BASE_MANIFEST_PATH="$PWD/manifests/pcap-acceptance-tests.yml"
 
-cd "acceptance-tests"
-
-echo "----- Installing dependencies"
-go mod download
-
-echo "----- Running tests"
-
-export PATH=$PATH:$GOPATH/bin
-
-ginkgo version
-ginkgo -v -p -r --trace --show-node-events --randomize-all --flake-attempts 5 "${ADDITIONAL_ARGS[@]}"
+bash

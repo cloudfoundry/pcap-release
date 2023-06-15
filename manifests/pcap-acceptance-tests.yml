@@ -29,15 +29,23 @@ instance_groups:
               mtls:
                 common_name: bosh.service.cf.internal
                 skip_verify: false
-                certificate: ((pcap_api_bosh_mtls.certificate))
-                private_key: ((pcap_api_bosh_mtls.private_key))
-                ca: ((bosh_director_ca))
+                certificate: ((director_ssl_cert))
+                private_key: ((director_ssl_key))
+                ca: ((director_ssl_ca))
             agents_mtls:
               common_name: pcap-agent.service.cf.internal
               skip_verify: false
-              certificate: ((pcap_api_mtls.certificate))((pcap_agent_mtls.ca))
+              certificate: ((pcap_api_mtls.certificate))((pcap_api_mtls.ca))
               private_key: ((pcap_api_mtls.private_key))
-              ca: ((pcap_agent_mtls.ca))
+              ca: ((pcap_api_mtls.ca))
+  - name: pcap-agent
+    azs:
+      - z1
+    instances: 1
+    vm_type: default
+    stemcell: default
+    networks: [{name: default}]
+    jobs:
       - name: pcap-agent
         release: pcap
         properties:
@@ -54,6 +62,7 @@ instance_groups:
                 certificate: ((pcap_agent_mtls.certificate))
                 private_key: ((pcap_agent_mtls.private_key))
                 ca: ((pcap_agent_mtls.ca))
+
 update:
   canaries: 1
   max_in_flight: 1
@@ -94,14 +103,4 @@ variables:
       extended_key_usage:
         - client_auth
         - server_auth
-    type: certificate
-    update_mode: converge
-  - name: pcap_api_bosh_mtls
-    options:
-      alternative_names:
-        - pcap-api.service.cf.internal
-      ca: /bootstrap-bosh-aws-cfn07/bosh/default_ca
-      common_name: pcap_api_bosh_mtls
-      extended_key_usage:
-        - client_auth
     type: certificate
