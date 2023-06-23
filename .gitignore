@@ -14,7 +14,7 @@
 # Dependency directories & default folders/files
 .bundle
 .dev_builds
-.final_builds
+!.final_builds/packages/golang-1-linux/*
 pcap-release.tgz
 config/private.yml
 blobs
