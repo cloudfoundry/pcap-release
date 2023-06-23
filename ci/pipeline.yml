@@ -205,6 +205,42 @@ jobs:
             GITHUB_OWNER:  cloudfoundry
             GITHUB_TOKEN: ((github.access_token))
             GCP_SERVICE_KEY: ((gcp.service_key))
+  - name: autobump-golang
+    public: true
+    serial: true
+    plan:
+      - do:
+          - get: daily
+            trigger: true
+          - get: git
+          - get: golang-release
+          - task: autobump-golang-release
+            config:
+              inputs:
+                - name: git
+                - name: golang-release
+              platform: linux
+              image_resource:
+                type: docker-image
+                source:
+                  repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
+                  tag: latest
+                  username: ((docker.username))
+                  password: ((docker.password))
+              run:
+                dir: git
+                path: /usr/bin/python3
+                args: [ "ci/scripts/bump-go-package" ]
+              params:
+                GO_PACKAGE_REPO_ROOT: golang-release
+                REPO_ROOT: git
+                PR_BASE: main
+                PR_ORG: cloudfoundry
+                PR_LABEL: run-ci
+
+                GCP_SERVICE_KEY: ((gcp.service_key))
+                GITHUB_COM_TOKEN: ((github.access_token))
+
 
 resource_types:
   - name: slack-notification
