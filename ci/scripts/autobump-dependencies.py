@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
+import functools
 import os
 import re
+import shutil
 from dataclasses import dataclass
 import subprocess
 import sys
 import textwrap
 from typing import List, Optional, Tuple
 import yaml
+
 
 import github  # PyGithub
 import requests
@@ -266,6 +269,17 @@ class WebLinkDependency(Dependency):
 
         raise Exception(f"Failed to get latest {self.name} version from {self.root_url}")
 
+def wget(url: str, path: str, auth: Optional[Tuple[str, str]] = None):
+    """
+    downloads a file, optionally decoding any compression applied on HTTP level
+    """
+    with requests.get(url, stream=True, allow_redirects=True, auth=auth) as resp:
+        if resp.status_code != 200:
+            raise Exception(f"request failed {resp.status_code}")
+        # see https://github.com/psf/requests/issues/2155#issuecomment-50771010
+        resp.raw.read = functools.partial(resp.raw.read, decode_content=True)
+        with open(path, "wb") as file:
+            shutil.copyfileobj(resp.raw, file)
 
 def write_private_yaml():
     """
