@@ -1,12 +1,5 @@
 version: 2
 updates:
-- package-ecosystem: gomod
-  directory: /acceptance-tests
-  schedule:
-    interval: weekly
-    day: "monday"
-    time: "09:00"
-    timezone: "Europe/Berlin"
 - package-ecosystem: pip
   directory: /ci/scripts
   schedule:
