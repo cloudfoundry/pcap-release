@@ -18,7 +18,7 @@ export GOPATH=$BOSH_COMPILE_TARGET/gopath
 export GOCACHE=$BOSH_COMPILE_TARGET/gocache
 
 echo "Build libpcap"
-LIBPCAP_VERSION="1.10.1"
+LIBPCAP_VERSION=1.10.1 # https://www.tcpdump.org/release/
 mkdir "${BOSH_COMPILE_TARGET}/libpcap"
 tar xzf libpcap-${LIBPCAP_VERSION}.tgz --strip-components 1 -C "${BOSH_COMPILE_TARGET}/libpcap"
 
