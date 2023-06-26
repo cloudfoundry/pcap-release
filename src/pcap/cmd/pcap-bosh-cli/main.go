@@ -23,6 +23,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const BoshDefaultPort = 25555
+
 var (
 	logger         *zap.Logger
 	atomicLogLevel zap.AtomicLevel
@@ -40,7 +42,7 @@ type options struct {
 	Interface          string   `short:"i" long:"interface" description:"Specifies the network interface to listen on." default:"eth0" required:"false"`
 	Type               string   `short:"t" long:"type" description:"Specifies the type of process to capture for the app." default:"web" required:"false"`
 	BoshConfigFilename string   `short:"c" long:"bosh-config" description:"Path to the BOSH config file, used for the UAA Token" default:"${HOME}/.bosh/config" required:"false"`
-	BoshEnvironment    string   `short:"e" long:"bosh-environment" description:"The BOSH environment to use for retrieving the BOSH UAA token from the BOSH config file" default:"bosh" required:"false"`
+	BoshEnvironment    string   `short:"e" long:"bosh-environment" description:"The BOSH environment to use for retrieving the BOSH UAA token from the BOSH config file" env:"BOSH_ENVIRONMENT" required:"false"`
 	Deployment         string   `short:"d" long:"deployment" description:"The name of the deployment in which you would like to capture." required:"true"`
 	InstanceGroups     []string `short:"g" long:"instance-group" description:"The name of an instance group in the deployment in which you would like to capture. Can be defined multiple times." required:"true"`
 	InstanceIds        []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"`
@@ -385,6 +387,22 @@ func (e *Environment) UpdateTokens() error {
 // connect uses the URL from the parsed Bosh environment of a config, sets up the http client for use with either TLS or plain HTTP
 // and uses this client to establish a connection to the BOSH Director and its UAA.
 func (e *Environment) connect() error {
+	err := e.setup()
+
+	if err != nil {
+		return err
+	}
+
+	err = e.fetchUAAURL()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setup configures the BOSH http client for a given environment.
+func (e *Environment) setup() error {
 	var err error
 	e.DirectorURL, err = url.Parse(urlWithScheme(e.URL))
 	if err != nil {
@@ -394,6 +412,11 @@ func (e *Environment) connect() error {
 	// Workaround for URL.JoinPath, which is buggy: https://github.com/golang/go/issues/58605
 	if e.DirectorURL.Path == "" {
 		e.DirectorURL.Path = "/"
+	}
+
+	// If no port was provided, use BOSH default port
+	if e.DirectorURL.Port() == "" {
+		e.DirectorURL.Host = fmt.Sprintf("%s:%d", e.DirectorURL.Host, BoshDefaultPort)
 	}
 
 	if e.DirectorURL.Scheme != "https" {
@@ -416,12 +439,6 @@ func (e *Environment) connect() error {
 			Transport: transport,
 		}
 	}
-
-	err = e.fetchUAAURL()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
