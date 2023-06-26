@@ -6,4 +6,4 @@ dependencies: []
 files:
 - golang/go1.20.3.linux-amd64.tar.gz
 - pcap/**/*
-- libpcap-1.10.1.tgz
+- libpcap-*.tgz
