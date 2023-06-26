@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
@@ -35,22 +34,20 @@ type API struct {
 	UnimplementedAPIServer
 }
 
-func NewAPI(bufConf BufferConf, agentmTLS *MutualTLS, id string, maxConcurrentCaptures uint) (*API, error) {
-	var err error
+func NewAPI(bufConf BufferConf, clientTls *ClientTls, id string, maxConcurrentCaptures uint) (*API, error) {
+	clientTlsConf, err := clientTls.Config()
+	if err != nil {
+		return nil, fmt.Errorf("create api failed: %w", err)
+	}
 
-	api := &API{
+	return &API{
 		done:                  make(chan struct{}),
 		bufConf:               bufConf,
 		resolvers:             make(map[string]AgentResolver),
 		id:                    id,
 		maxConcurrentCaptures: maxConcurrentCaptures,
-	}
-	api.tlsCredentials, err = loadTLSCredentials(agentmTLS)
-	if err != nil {
-		return nil, fmt.Errorf("create api failed: %w", err)
-	}
-
-	return api, nil
+		tlsCredentials:        credentials.NewTLS(clientTlsConf),
+	}, nil
 }
 
 // AgentEndpoint defines the endpoint for a pcap-agent.
@@ -241,14 +238,6 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 	forwardWG.Wait()
 
 	return nil
-}
-
-func loadTLSCredentials(agentMTLS *MutualTLS) (credentials.TransportCredentials, error) {
-	if agentMTLS == nil || agentMTLS.SkipVerify {
-		return insecure.NewCredentials(), nil
-	}
-
-	return LoadTLSCredentials(agentMTLS.Certificate, agentMTLS.PrivateKey, nil, &agentMTLS.CertificateAuthority, &agentMTLS.CommonName)
 }
 
 // resolveAgentEndpoints tries all registered api.resolvers until one responds or none can be found that

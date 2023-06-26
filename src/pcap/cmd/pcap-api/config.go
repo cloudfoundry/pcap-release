@@ -29,7 +29,7 @@ var DefaultAPIConfig = APIConfig{
 
 type APIConfig struct {
 	pcap.NodeConfig    `yaml:"-,inline"`
-	AgentsMTLS         *pcap.MutualTLS `yaml:"agents_mtls" validate:"omitempty"`
+	AgentsMTLS         *pcap.ClientTls `yaml:"agents_mtls" validate:"omitempty"`
 	ConcurrentCaptures uint            `yaml:"concurrent_captures"`
 	DrainTimeout       time.Duration   `yaml:"drain_timeout"`
 

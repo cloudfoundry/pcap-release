@@ -11,6 +11,8 @@ import (
 	"os"
 	"syscall"
 
+	"google.golang.org/grpc/credentials"
+
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 
 	"go.uber.org/zap"
@@ -78,11 +80,14 @@ func main() {
 		return
 	}
 
-	tlsCredentials, err := config.TLSCredentials()
+	tlsConfig, err := config.NodeConfig.Listen.TLS.Config()
 	if err != nil {
 		log.Error("unable to load provided TLS credentials", zap.Error(err))
 		return
 	}
+
+	tlsCredentials := credentials.NewTLS(tlsConfig)
+
 	server := grpc.NewServer(grpc.Creds(tlsCredentials))
 	pcap.RegisterAPIServer(server, api)
 
