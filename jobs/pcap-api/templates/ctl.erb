@@ -5,6 +5,8 @@ LOG_DIR=/var/vcap/sys/log/pcap-api
 PACKAGE_DIR=/var/vcap/packages/pcap-api
 PIDFILE=${RUN_DIR}/pid
 
+source /var/vcap/packages/golang-1-linux/bosh/runtime.env
+
 case $1 in
 
   start)
