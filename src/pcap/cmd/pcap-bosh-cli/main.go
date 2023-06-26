@@ -246,6 +246,9 @@ func configFromFile(configFilename string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not open bosh-config: %w", err)
 	}
+	defer func() {
+		_ = configReader.Close()
+	}()
 
 	var config Config
 	err = yaml.NewDecoder(configReader).Decode(&config)
@@ -262,9 +265,9 @@ func configFromFile(configFilename string) (*Config, error) {
 // Returns url with scheme prefix.
 func urlWithScheme(url string) string {
 	if !schemaPattern.MatchString(url) {
+		logger.Debug("URL has no scheme. Defaulting to https.", zap.String("url", url))
 		return "https://" + url
 	}
-	logger.Debug("pcap-api URL contains a scheme")
 	return url
 }
 
@@ -383,7 +386,7 @@ func (e *Environment) UpdateTokens() error {
 // and uses this client to establish a connection to the BOSH Director and its UAA.
 func (e *Environment) connect() error {
 	var err error
-	e.DirectorURL, err = url.Parse(e.URL)
+	e.DirectorURL, err = url.Parse(urlWithScheme(e.URL))
 	if err != nil {
 		return fmt.Errorf("error parsing environment url (%v): %w", e.URL, err)
 	}
@@ -396,21 +399,22 @@ func (e *Environment) connect() error {
 	if e.DirectorURL.Scheme != "https" {
 		logger.Warn("using unencrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
 		e.client = http.DefaultClient
-		return nil
-	}
+	} else {
+		logger.Info("using TLS-encrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
+		transport := http.DefaultTransport.(*http.Transport).Clone()
 
-	logger.Info("using TLS-encrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
-	boshCA := x509.NewCertPool()
-	ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
-	if !ok {
-		return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed")
-	}
+		if e.CaCert != "" {
+			boshCA := x509.NewCertPool()
+			ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
+			if !ok {
+				return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed")
+			}
+			transport.TLSClientConfig.RootCAs = boshCA
+		}
 
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig.RootCAs = boshCA
-
-	e.client = &http.Client{
-		Transport: transport,
+		e.client = &http.Client{
+			Transport: transport,
+		}
 	}
 
 	err = e.fetchUAAURL()
