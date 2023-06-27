@@ -81,8 +81,8 @@ class Release:
         print(f"[{self.name}] download '{self.url}' to '{self.file}'")
         wget(self.url, self.file)
 
-    def add_blob(self, package):
-        target_path = f"{package}/{self.file}"
+    def add_blob(self):
+        target_path = f"{self.file}"
         BoshHelper.add_blob(self.file, target_path)
 
 @dataclass(repr=False)
@@ -320,8 +320,6 @@ def main() -> None:
         ),
     ]
 
-    write_private_yaml()
-
     for dependency in dependencies:
         current_version = dependency.current_version
         latest_release = dependency.latest_release
@@ -337,9 +335,10 @@ def main() -> None:
         print(f"[{dependency.name}] Version-Bump required: {current_version} --> {latest_version}")
         latest_release.download()
         dependency.remove_current_blob()
-        latest_release.add_blob(dependency.package)
+        latest_release.add_blob()
         dependency.update_packaging_file()
         if not DRY_RUN:
+            write_private_yaml()
             BoshHelper.upload_blobs()
         dependency.create_pr()
 
