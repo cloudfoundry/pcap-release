@@ -14,7 +14,7 @@ require (
 	github.com/onsi/gomega v1.27.8
 	go.uber.org/zap v1.24.0
 	google.golang.org/grpc v1.51.0
-	google.golang.org/protobuf v1.28.1
+	google.golang.org/protobuf v1.31.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
