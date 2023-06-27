@@ -104,7 +104,7 @@ class Dependency:
 
     @property
     def pr_branch(self):
-        return f"{self.name}-auto-bump-{PR_BASE}"
+        return f"{self.package}-{self.name}-auto-bump-{PR_BASE}"
 
     @property
     def current_version(self) -> version.Version:
@@ -158,7 +158,7 @@ class Dependency:
 
     def update_packaging_file(self):
         """
-        Writes the new dependency version and download-url into packages/haproxy/packaging
+        Writes the new dependency version and download-url into packages/<package>/packaging
         """
         with open(PACKAGING_PATH.format(self.package), "r") as packaging_file:
             replacement = ""
@@ -186,7 +186,7 @@ class Dependency:
             f"""
             Automatic bump from version {self.current_version} to version {self.latest_release.version}, downloaded from {self.latest_release.url}.
 
-            After merge, consider releasing a new version of haproxy-boshrelease.
+            After merge, consider releasing a new version of pcap-release.
         """
         )
         if not DRY_RUN:
@@ -196,7 +196,7 @@ class Dependency:
                 self.remote_repo,
                 PACKAGING_PATH.format(self.package),
                 self.pr_branch,
-                f"Bump {self.name} version to {self.latest_release.version}",
+                f"dep: Bump {self.name} version to {self.latest_release.version}",
             )
             self._update_file(
                 self.remote_repo,
@@ -206,7 +206,7 @@ class Dependency:
             )
 
             pr = self.remote_repo.create_pull(
-                title=f"Bump {self.name} version to {self.latest_release.version}",
+                title=f"dep: Bump {self.name} version to {self.latest_release.version}",
                 body=pr_body,
                 base=PR_BASE,
                 head=f"{PR_ORG}:{self.pr_branch}",
