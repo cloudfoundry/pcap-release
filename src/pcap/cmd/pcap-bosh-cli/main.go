@@ -335,7 +335,7 @@ func createCaptureOptions(device string, filter string, snaplen uint32) *pcap.Ca
 
 // writeBoshConfig writes the Config to the config-file under configFileName.
 func writeBoshConfig(config *Config, configFileName string) error {
-	configWriter, err := os.Create(configFileName)
+	configWriter, err := os.Create(os.ExpandEnv(configFileName))
 	if err != nil {
 		return fmt.Errorf("failed to create bosh-config file: %w", err)
 	}
