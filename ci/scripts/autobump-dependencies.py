@@ -10,7 +10,6 @@ import textwrap
 from typing import List, Optional, Tuple
 import yaml
 
-
 import github  # PyGithub
 import requests
 from packaging import version
@@ -78,6 +77,10 @@ class Release:
     version: version.Version
 
     def download(self) -> None:
+        if os.path.isfile(self.file):
+            print(f"[{self.name}] already exists")
+            return
+
         print(f"[{self.name}] download '{self.url}' to '{self.file}'")
         wget(self.url, self.file)
 
@@ -96,15 +99,16 @@ class Dependency:
     version_var_name: str
     pinned_version: str
     root_url: str
-    package: str
+    packages: List[str]
     remote_repo = gh.get_repo(f"{PR_ORG}/pcap-release")
 
     _latest_release: Optional[Release] = None
     _current_version: version.Version = None
+    _current_package: str = None
 
     @property
     def pr_branch(self):
-        return f"{self.package}-{self.name}-auto-bump-{PR_BASE}"
+        return f"{self.name}-auto-bump-{PR_BASE}"
 
     @property
     def current_version(self) -> version.Version:
@@ -112,9 +116,7 @@ class Dependency:
         Fetches the current version of the release from the packaging file if not already known.
         (Should always be identical to the version in blobs.yml)
         """
-        if self._current_version:
-            return self._current_version
-        with open(PACKAGING_PATH.format(self.package), "r") as packaging_file:
+        with open(PACKAGING_PATH.format(self._current_package), "r") as packaging_file:
             for line in packaging_file.readlines():
                 if line.startswith(self.version_var_name):
                     # Regex: expecting e.g. "RELEASE_VERSION=1.2.3  # http://release.org/download". extracting Semver Group
@@ -132,6 +134,10 @@ class Dependency:
             self._latest_release = self.fetch_latest_release()
         return self._latest_release
 
+    def check_current_version(self, package) -> version.Version:
+        self._current_package = package
+        return self.current_version
+
     # fetch_latest_release is implemented by subclasses
     def fetch_latest_release(self) -> Release:
         """
@@ -141,8 +147,9 @@ class Dependency:
         """
         raise NotImplementedError
 
-    def remove_current_blob(self):
-        current_blob_path = f"{self.package}/{self.name}-{self.current_version}.tar.gz"
+    def remove_current_blob(self, package):
+        blob_current_version = self.check_current_version(package)
+        current_blob_path = f"{self.name}-{blob_current_version}.tar.gz"
         if self._check_blob_exists(current_blob_path):
             BoshHelper.remove_blob(current_blob_path)
         else:
@@ -156,18 +163,18 @@ class Dependency:
             yml = yaml.safe_load(blobs_file)
             return blob_path in yml.keys()
 
-    def update_packaging_file(self):
+    def update_packaging_file(self, package):
         """
         Writes the new dependency version and download-url into packages/<package>/packaging
         """
-        with open(PACKAGING_PATH.format(self.package), "r") as packaging_file:
+        with open(PACKAGING_PATH.format(package), "r") as packaging_file:
             replacement = ""
             for line in packaging_file.readlines():
                 if line.startswith(self.version_var_name):
                     line = f"{self.version_var_name}={self.latest_release.version}  # {self.latest_release.url}\n"
                 replacement += line
 
-        with open(PACKAGING_PATH.format(self.package), "w") as packaging_file_write:
+        with open(PACKAGING_PATH.format(package), "w") as packaging_file_write:
             packaging_file_write.write(replacement)
 
     def open_pr_exists(self) -> bool:
@@ -184,35 +191,39 @@ class Dependency:
         print(f"[{self.name}] Creating bump branch {PR_ORG}:{self.pr_branch} and PR...")
         pr_body = textwrap.dedent(
             f"""
-            Automatic bump from version {self.current_version} to version {self.latest_release.version}, downloaded from {self.latest_release.url}.
+            Automatic bump to version {self.latest_release.version}, downloaded from {self.latest_release.url}.
 
             After merge, consider releasing a new version of pcap-release.
         """
         )
-        if not DRY_RUN:
-            self._create_branch(self.remote_repo, self.pr_branch)
+        if DRY_RUN:
+            return
 
+        self._create_branch(self.remote_repo, self.pr_branch)
+
+        for package in self.packages:
             self._update_file(
                 self.remote_repo,
-                PACKAGING_PATH.format(self.package),
+                PACKAGING_PATH.format(package),
                 self.pr_branch,
                 f"dep: Bump {self.name} version to {self.latest_release.version}",
             )
-            self._update_file(
-                self.remote_repo,
-                BLOBS_PATH,
-                self.pr_branch,
-                f"Update blob reference for {self.name} to version {self.latest_release.version}",
-            )
 
-            pr = self.remote_repo.create_pull(
-                title=f"dep: Bump {self.name} version to {self.latest_release.version}",
-                body=pr_body,
-                base=PR_BASE,
-                head=f"{PR_ORG}:{self.pr_branch}",
-            )
-            pr.add_to_labels(PR_LABEL)
-            print(f"[{self.name}] Created Pull Request: {pr.html_url}")
+        self._update_file(
+            self.remote_repo,
+            BLOBS_PATH,
+            self.pr_branch,
+            f"dep: Update blob reference for {self.name} to version {self.latest_release.version}",
+        )
+
+        pr = self.remote_repo.create_pull(
+            title=f"dep: Bump {self.name} version to {self.latest_release.version}",
+            body=pr_body,
+            base=PR_BASE,
+            head=f"{PR_ORG}:{self.pr_branch}",
+        )
+        pr.add_to_labels(PR_LABEL)
+        print(f"[{self.name}] Created Pull Request: {pr.html_url}")
 
 
     def _create_branch(self, repo, branch):
@@ -309,37 +320,34 @@ def main() -> None:
             "LIBPCAP_VERSION",
             "1.10",
             "https://www.tcpdump.org/release/",
-            package="pcap-api",
-        ),
-        WebLinkDependency(
-            "libpcap",
-            "LIBPCAP_VERSION",
-            "1.10",
-            "https://www.tcpdump.org/release/",
-            package="pcap-agent",
+            packages=["pcap-api", "pcap-agent"],
         ),
     ]
 
     for dependency in dependencies:
-        current_version = dependency.current_version
-        latest_release = dependency.latest_release
-        latest_version = latest_release.version
+        for package in dependency.packages:
+            current_version = dependency.check_current_version(package)
+            latest_release = dependency.latest_release
+            latest_version = latest_release.version
 
-        if latest_version <= current_version:
-            print(f"[{dependency.name}] already on the latest version: {latest_version} " f"(pinned: {dependency.pinned_version}.*)")
-            continue
+            if latest_version <= current_version:
+                print(f"[{dependency.name}] in {package} already on the latest version: {latest_version} " f"(pinned: {dependency.pinned_version}.*)")
+                continue
 
-        if dependency.open_pr_exists():
-            print(f"[{dependency.name}] Open bump PR exists (for branch: {dependency.pr_branch})")
-            continue
-        print(f"[{dependency.name}] Version-Bump required: {current_version} --> {latest_version}")
-        latest_release.download()
-        dependency.remove_current_blob()
-        latest_release.add_blob()
-        dependency.update_packaging_file()
-        if not DRY_RUN:
-            write_private_yaml()
-            BoshHelper.upload_blobs()
+            if dependency.open_pr_exists():
+                print(f"[{dependency.name}] Open bump PR exists (for branch: {dependency.pr_branch})")
+                continue
+            print(f"[{dependency.name}] Version-Bump required for package {package}: {current_version} --> {latest_version}")
+            latest_release.download()
+            # update blobs in specific package
+            dependency.remove_current_blob(package)
+            latest_release.add_blob()
+            dependency.update_packaging_file(package)
+            if not DRY_RUN:
+                write_private_yaml()
+                BoshHelper.upload_blobs()
+
+        # create only one PR per dependency
         dependency.create_pr()
 
         # clear the working directory for the next dependency bump.
