@@ -24,6 +24,7 @@ import (
 )
 
 const BoshDefaultPort = 25555
+const BoshAuthTypeUAA = "uaa"
 
 var (
 	logger         *zap.Logger
@@ -465,6 +466,10 @@ func (e *Environment) fetchUAAURL() error {
 	err = json.NewDecoder(res.Body).Decode(&info)
 	if err != nil {
 		return err
+	}
+
+	if info.UserAuthentication.Type != BoshAuthTypeUAA {
+		return fmt.Errorf("unsupported authentication type '%s'", info.UserAuthentication.Type)
 	}
 
 	uaaURL, err := url.Parse(info.UserAuthentication.Options.URL)

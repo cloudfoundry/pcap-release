@@ -64,6 +64,7 @@ func TestEnvironment_Connect(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/info", func(writer http.ResponseWriter, request *http.Request) {
 		info := pcap.BoshInfo{}
+		info.UserAuthentication.Type = BoshAuthTypeUAA
 		info.UserAuthentication.Options.URL = "https://uaa.fakebosh.com"
 
 		_ = json.NewEncoder(writer).Encode(info)
