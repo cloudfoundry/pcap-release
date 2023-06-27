@@ -7,6 +7,10 @@ updates:
     day: "monday"
     time: "09:00"
     timezone: "Europe/Berlin"
+  commit-message:
+    prefix: "ci"
+  labels:
+    - run-ci
 - package-ecosystem: gomod
   directory: /src/pcap
   schedule:
@@ -14,3 +18,7 @@ updates:
     day: "monday"
     time: "09:00"
     timezone: "Europe/Berlin"
+  commit-message:
+    prefix: "dep"
+  labels:
+    - run-ci
