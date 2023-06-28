@@ -311,6 +311,23 @@ func deleteDeployment(boshDeployment string) {
 	Eventually(session, timeout*time.Minute, time.Second).Should(gexec.Exit(0))
 }
 
+func login(username, password string) {
+	By(fmt.Sprintf("Calling bosh login (user: %s)", username))
+	cmd := config.boshInteractiveCmd("login")
+
+	stdin, err := cmd.StdinPipe()
+	Expect(err).NotTo(HaveOccurred())
+
+	stdin.Write([]byte(fmt.Sprintf("%s\n", username)))
+	stdin.Write([]byte(fmt.Sprintf("%s\n", password)))
+	stdin.Close()
+
+	session, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
+	Expect(err).NotTo(HaveOccurred())
+	const timeout = 10
+	Eventually(session, timeout*time.Minute, time.Second).Should(gexec.Exit(0))
+}
+
 func writeLog(s string) {
 	ginkgoConfig, _ := GinkgoConfiguration()
 	for _, line := range strings.Split(s, "\n") {

@@ -118,6 +118,19 @@ func (config *Config) boshCmd(boshDeployment string, args ...string) *exec.Cmd {
 	return cmd
 }
 
+func (config *Config) boshInteractiveCmd(args ...string) *exec.Cmd {
+	cmd := exec.Command(config.BoshPath, append([]string{"--tty", "--no-color"}, args...)...)
+	cmd.Env = []string{
+		fmt.Sprintf("BOSH_DIRECTOR_IP=%s", config.BoshDirectorAPI),
+		fmt.Sprintf("BOSH_DIRECTOR_CA=%s", config.BoshDirectorCA),
+		fmt.Sprintf("BOSH_DIRECTOR_CERT=%s", config.BoshDirectorCert),
+		fmt.Sprintf("BOSH_ENVIRONMENT=%s", config.BoshEnvironment),
+		fmt.Sprintf("HOME=%s", config.HomePath),
+	}
+
+	return cmd
+}
+
 func getEnvOrFail(key string) (string, error) {
 	value := os.Getenv(key)
 	if value == "" {
