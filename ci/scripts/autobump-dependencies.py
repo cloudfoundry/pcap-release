@@ -182,7 +182,7 @@ class Dependency:
 
         for pr in self.remote_repo.get_pulls(
             state="open", base=PR_BASE, head=f"{PR_ORG}:{self.pr_branch}"
-        ):  # theoretically there shold never be more than one open PR, print them anyways
+        ):  # theoretically there should never be more than one open PR, print them anyways
             print(f"Open {self.pr_branch} PR exists: {pr.html_url}")
             prs_exist = True
         return prs_exist
@@ -325,6 +325,9 @@ def main() -> None:
     ]
 
     for dependency in dependencies:
+
+        should_be_bumped = False
+
         for package in dependency.packages:
             current_version = dependency.check_current_version(package)
             latest_release = dependency.latest_release
@@ -337,7 +340,9 @@ def main() -> None:
             if dependency.open_pr_exists():
                 print(f"[{dependency.name}] Open bump PR exists (for branch: {dependency.pr_branch})")
                 continue
+
             print(f"[{dependency.name}] Version-Bump required for package {package}: {current_version} --> {latest_version}")
+            should_be_bumped = True
             latest_release.download()
             # update blobs in specific package
             dependency.remove_current_blob(package)
@@ -346,6 +351,9 @@ def main() -> None:
             if not DRY_RUN:
                 write_private_yaml()
                 BoshHelper.upload_blobs()
+
+        if not should_be_bumped:
+            continue
 
         # create only one PR per dependency
         dependency.create_pr()
