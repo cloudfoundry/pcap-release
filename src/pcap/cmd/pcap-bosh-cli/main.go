@@ -202,8 +202,11 @@ func checkOutputFile(file string, overwrite bool) error {
 	}
 	// File doesn't exist, check if path is valid
 	fileInfo, err := os.Stat(filepath.Dir(file))
-	if err != nil || !fileInfo.IsDir() {
-		return fmt.Errorf("cannot write file %s. %s does not exist", file, fileInfo.Name())
+	if err != nil {
+		if fileInfo != nil {
+			return fmt.Errorf("cannot write file %s. %s does not exist", file, fileInfo.Name())
+		}
+		return err
 	}
 	return nil
 }
