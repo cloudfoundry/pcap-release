@@ -488,6 +488,9 @@ func (e *Environment) fetchUAAURL() error {
 
 // refreshTokens connects to the bosh-uaa API to fetch updated bosh access- & refresh-token.
 func (e *Environment) refreshTokens() error {
+	if e.RefreshToken == "" {
+		return fmt.Errorf("no refresh token found in bosh config. please login first")
+	}
 	req := http.Request{
 		Method: http.MethodPost,
 		URL:    e.UaaURL.JoinPath("/oauth/token"),
