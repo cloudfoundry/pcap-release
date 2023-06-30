@@ -416,22 +416,27 @@ var _ = Describe("Using LocalResolver", func() {
 					SnapLen: 65000,
 				}
 
+				var stop time.Time
 				go func() {
-					time.Sleep(5 * time.Second)
+					time.Sleep(1 * time.Second)
 					GinkgoWriter.Println("sending Stop")
+					stop = time.Now().UTC()
 					client.StopRequest()
 				}()
 
 				err = client.ProcessCapture(ctx, endpointRequest, captureOptions, cancel)
 				Expect(err).To(BeNil())
 				validateAge := func(packets []gopacket.Packet) {
-					maxAge := 10 * time.Second
+					maxAge := 5 * time.Second
 					Expect(packets).ToNot(BeEmpty())
 
-					firstTimestamp := packets[0].Metadata().Timestamp
-					Expect(firstTimestamp).ToNot(BeNil())
-					delta := time.Since(firstTimestamp)
-					Expect(delta).To(BeNumerically("<", maxAge), "Expected %s to be %s before %s", firstTimestamp, maxAge, time.Now())
+					lastTimestamp := packets[len(packets)-1].Metadata().Timestamp
+					Expect(lastTimestamp).ToNot(BeNil())
+					delta := lastTimestamp.Sub(stop)
+					logger.Sugar().Infof("Captured %d packets. Last timestamp: %v, %v after stop command", len(packets), lastTimestamp, delta)
+					Expect(delta).To(BeNumerically("<", maxAge), "Expected %s to be up to %s after %s", lastTimestamp, maxAge, stop)
+					Expect(delta).To(BeNumerically(">", 0), "Expected delay of stop command and last packet to be > 0")
+
 				}
 				validatePcapFile(file, validateAge)
 			})
