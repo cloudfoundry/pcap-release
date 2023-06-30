@@ -49,7 +49,7 @@ func copyFileToRemote(user string, addr string, privateKey string, remotePath st
 	return scpClient.CopyFile(context.Background(), fileReader, remotePath, permissions)
 }
 
-func copyFileFromRemote(user string, addr string, privateKey string, remotePath string, localPath string, permissions os.FileMode) error {
+func copyFileFromRemote(user string, addr string, privateKey string, remotePath string, localFile *os.File, permissions os.FileMode) error {
 	clientConfig, err := buildSSHClientConfig(user, addr, privateKey)
 	if err != nil {
 		return err
@@ -60,18 +60,9 @@ func copyFileFromRemote(user string, addr string, privateKey string, remotePath 
 		return err
 	}
 
-	localFile, err := os.Create(localPath)
-
 	if err != nil {
 		return err
 	}
-
-	defer func() {
-		err = localFile.Close()
-		if err != nil {
-			writeLog(err.Error())
-		}
-	}()
 
 	err = localFile.Chmod(permissions)
 

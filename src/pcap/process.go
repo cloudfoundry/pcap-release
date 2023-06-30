@@ -24,7 +24,7 @@ type WaitingStoppable interface {
 
 // StopOnSignal is a reusable function to handle stop signals.
 //
-// The Stoppable interface defines what to do when topping a particular process, and stopSignals defines a list of
+// The Stoppable interface defines what to do when stopping a particular process, and stopSignals defines a list of
 // signals, for which Stop() is called.
 //
 // When a server is given, it is shut down gracefully.

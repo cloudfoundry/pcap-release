@@ -85,8 +85,21 @@ var opsfileAddSSHUser string = `---
     type: ssh
 `
 
+var opsfileStartApache = `
+# Add apache web server to generate some traffic
+- type: replace
+  path: /instance_groups/name=pcap-agent/jobs/-
+  value:
+    name: pre-start-script
+    release: os-conf
+    properties:
+      script: |-
+        #!/bin/bash
+        apt-get update && apt-get install apache2 -y && apache2ctl start
+`
+
 // opsfiles that need to be set for all tests
-var defaultOpsfiles = []string{opsfileChangeName, opsfileChangeVersion, opsfileAddSSHUser}
+var defaultOpsfiles = []string{opsfileChangeName, opsfileChangeVersion, opsfileAddSSHUser, opsfileStartApache}
 var defaultSSHUser string = "ginkgo"
 
 func buildManifestVars(baseManifestVars baseManifestVars, customVars map[string]interface{}) map[string]interface{} {
@@ -335,6 +348,6 @@ func writeLog(s string) {
 	}
 }
 
-func downloadFile(info pcapInfo, remotePath, localPath string, permissions os.FileMode) error {
-	return copyFileFromRemote(info.SSHUser, info.PcapAPIPublicIP, info.SSHPrivateKey, remotePath, localPath, permissions)
+func downloadFile(info pcapInfo, remotePath string, localFile *os.File, permissions os.FileMode) error {
+	return copyFileFromRemote(info.SSHUser, info.PcapAPIPublicIP, info.SSHPrivateKey, remotePath, localFile, permissions)
 }
