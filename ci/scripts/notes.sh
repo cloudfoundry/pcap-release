@@ -25,4 +25,10 @@ releases:
 \`\`\`
 EOF
 
+cat >> "${CONCOURSE_ROOT}/${RELEASE_ROOT}/notes.md" <<EOF
+
+### ✨ Built with Go $(cat "${CONCOURSE_ROOT}/${REPO_ROOT}/packages/golang-1-linux/version")
+
+EOF
+
 cat "${CONCOURSE_ROOT}/${RELEASE_ROOT}/notes.md"
