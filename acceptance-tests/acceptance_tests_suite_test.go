@@ -18,7 +18,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	// threads as JSON-encoded byte array
 	var err error
 	config, err = loadConfig()
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "loading common config")
 
 	// Deploy pcap-api deployment
 	deployPcap(

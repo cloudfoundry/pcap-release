@@ -348,6 +348,8 @@ func writeLog(s string) {
 	}
 }
 
+// downloadFile retrieves the file from remotePath via SSH and stores it in localFile with permissions. info contains the remote's credentials and IP address.
+// See copyFileFromRemote
 func downloadFile(info pcapInfo, remotePath string, localFile *os.File, permissions os.FileMode) error {
 	return copyFileFromRemote(info.SSHUser, info.PcapAPIPublicIP, info.SSHPrivateKey, remotePath, localFile, permissions)
 }
