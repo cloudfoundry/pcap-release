@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# This script works like the "acceptance-tests" script, except it does not launch the test suite.
+# Instead, it only deploys BOSH and creates a dev release and then leaves an open shell for the developer to manually
+# run any test or deployment.
+# To be executed by acceptance-tests/run-shell.sh.
+
 set -eu
 
 stemcell_path=$PWD/stemcell/*.tgz
