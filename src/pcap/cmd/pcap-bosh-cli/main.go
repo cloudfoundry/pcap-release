@@ -425,23 +425,24 @@ func (e *Environment) setup() error {
 	if e.DirectorURL.Scheme != "https" {
 		logger.Warn("using unencrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
 		e.client = http.DefaultClient
-	} else {
-		logger.Info("using TLS-encrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
-		transport := http.DefaultTransport.(*http.Transport).Clone()
-
-		if e.CaCert != "" {
-			boshCA := x509.NewCertPool()
-			ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
-			if !ok {
-				return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed")
-			}
-			transport.TLSClientConfig.RootCAs = boshCA
-		}
-
-		e.client = &http.Client{
-			Transport: transport,
-		}
+		return nil
 	}
+	logger.Info("using TLS-encrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+
+	if e.CaCert != "" {
+		boshCA := x509.NewCertPool()
+		ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
+		if !ok {
+			return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed")
+		}
+		transport.TLSClientConfig.RootCAs = boshCA
+	}
+
+	e.client = &http.Client{
+		Transport: transport,
+	}
+
 	return nil
 }
 
