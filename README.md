@@ -1,4 +1,4 @@
-# pcap-release CFN-3270-test
+# pcap-release CFN-3270-te
 
 [BOSH](https://bosh.io/) release of the pcap [Cloud Foundry](https://www.cloudfoundry.org/) add-on.
 
