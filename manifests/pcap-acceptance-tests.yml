@@ -59,9 +59,9 @@ instance_groups:
             listen:
               port: 9494
               tls:
-                certificate: ((pcap_agent_mtls.certificate))
-                private_key: ((pcap_agent_mtls.private_key))
-                ca: ((pcap_agent_mtls.ca))
+                certificate: ((pcap_agent_tls.certificate))
+                private_key: ((pcap_agent_tls.private_key))
+                ca: ((pcap_agent_tls.ca))
 
 update:
   canaries: 1
@@ -94,13 +94,12 @@ variables:
       extended_key_usage:
         - client_auth
         - server_auth
-  - name: pcap_agent_mtls
+  - name: pcap_agent_tls
     options:
       alternative_names:
         - pcap-agent.service.cf.internal
       ca: pcap_ca
-      common_name: pcap_agent_mtls
+      common_name: pcap_agent_tls
       extended_key_usage:
-        - client_auth
         - server_auth
     type: certificate
