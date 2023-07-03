@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// pcapInfo contains the state of a currently deployed pcap release, as needed for the test suite.
 type pcapInfo struct {
 	SSHPrivateKey           string
 	SSHPublicKey            string
@@ -102,6 +103,7 @@ var opsfileStartApache = `
 var defaultOpsfiles = []string{opsfileChangeName, opsfileChangeVersion, opsfileAddSSHUser, opsfileStartApache}
 var defaultSSHUser string = "ginkgo"
 
+// buildManifestVars returns a map of variables needed to deploy pcap.
 func buildManifestVars(baseManifestVars baseManifestVars, customVars map[string]interface{}) map[string]interface{} {
 	vars := map[string]interface{}{
 		"release-version":   config.ReleaseVersion,
@@ -119,6 +121,7 @@ func buildManifestVars(baseManifestVars baseManifestVars, customVars map[string]
 	return vars
 }
 
+// buildPcapInfo returns a pcapInfo object which contains the state of a currently deployed pcap release.
 func buildPcapInfo(baseManifestVars baseManifestVars, varsStoreReader varsStoreReader) pcapInfo {
 	var creds struct {
 		SSHKey struct {
@@ -160,6 +163,8 @@ func buildPcapInfo(baseManifestVars baseManifestVars, varsStoreReader varsStoreR
 	}
 }
 
+// deployPcap deploys the pcap release using baseManifestVars, customOpsfiles and customVars to customize the deployment.
+// If expectSuccess is true, the test will fail if the exit code is non-zero.
 func deployPcap(baseManifestVars baseManifestVars, customOpsfiles []string, customVars map[string]interface{}, expectSuccess bool) (pcapInfo, varsStoreReader) {
 	manifestVars := buildManifestVars(baseManifestVars, customVars)
 	opsfiles := append(defaultOpsfiles, customOpsfiles...)
@@ -185,12 +190,14 @@ func deployPcap(baseManifestVars baseManifestVars, customOpsfiles []string, cust
 	return pcapInfo, varsStoreReader
 }
 
+// dumpCmd prints the command line of cmd to the ginkgo log.
 func dumpCmd(cmd *exec.Cmd) {
 	writeLog("---------- Command to run ----------")
 	writeLog(cmd.String())
 	writeLog("------------------------------------")
 }
 
+// dumpPcapConfig prints the configuration of pcap-agent and pcap-api to the ginkgo log.
 func dumpPcapConfig(pcapInfo pcapInfo) {
 	By("Checking /var/vcap/jobs/pcap-api/config/pcap-api.yml")
 	pcapAPIConfig, _, err := runOnRemote(pcapInfo.SSHUser, pcapInfo.PcapAPIPublicIP, pcapInfo.SSHPrivateKey, "cat /var/vcap/jobs/pcap-api/config/pcap-api.yml")
@@ -207,7 +214,7 @@ func dumpPcapConfig(pcapInfo pcapInfo) {
 	writeLog("------------------------------------")
 }
 
-// Takes bosh deployment name, ops files and vars.
+// deployBaseManifestCmd takes bosh deployment name, ops files and vars.
 // Returns a cmd object and a callback to deserialise the bosh-generated vars store after cmd has executed.gofmt -w
 func deployBaseManifestCmd(boshDeployment string, opsFilesContents []string, vars map[string]interface{}) (*exec.Cmd, varsStoreReader) {
 	By(fmt.Sprintf("Deploying pcap (deployment name: %s)", boshDeployment))
@@ -276,6 +283,7 @@ func deployBaseManifestCmd(boshDeployment string, opsFilesContents []string, var
 	return config.boshCmd(boshDeployment, args...), varsStoreReader
 }
 
+// boshInstance represents a BOSH instance VM of a BOSH deployment.
 type boshInstance struct {
 	AgentID           string `json:"agent_id"`
 	Az                string `json:"az"`
@@ -292,10 +300,12 @@ type boshInstance struct {
 	VMType            string `json:"vm_type"`
 }
 
+// ParseIPs returns all IPs in a comma-separated string.
 func (instance boshInstance) ParseIPs() []string {
 	return strings.Split(instance.CommaSeparatedIPs, ",")
 }
 
+// boshInstances fetches all VMs in a BOSH deployment and returns their details.
 func boshInstances(boshDeployment string) []boshInstance {
 	writeLog("Fetching Bosh instances")
 	cmd := config.boshCmd(boshDeployment, "--json", "instances", "--details")
@@ -315,6 +325,7 @@ func boshInstances(boshDeployment string) []boshInstance {
 	return output.Tables[0].Rows
 }
 
+// deleteDeployment deletes a BOSH deployment.
 func deleteDeployment(boshDeployment string) {
 	By(fmt.Sprintf("Deleting pcap deployment (deployment name: %s)", boshDeployment))
 	cmd := config.boshCmd(boshDeployment, "delete-deployment")
@@ -324,6 +335,8 @@ func deleteDeployment(boshDeployment string) {
 	Eventually(session, timeout*time.Minute, time.Second).Should(gexec.Exit(0))
 }
 
+// login runs an interactive BOSH login using username and password. This will generate access_token and refresh_token
+// in the bosh config.
 func login(username, password string) {
 	By(fmt.Sprintf("Calling bosh login (user: %s)", username))
 	cmd := config.boshInteractiveCmd("login")
@@ -341,6 +354,7 @@ func login(username, password string) {
 	Eventually(session, timeout*time.Minute, time.Second).Should(gexec.Exit(0))
 }
 
+// writeLog writes s to the ginkgo log prefixed with the number of the current test process.
 func writeLog(s string) {
 	ginkgoConfig, _ := GinkgoConfiguration()
 	for _, line := range strings.Split(s, "\n") {

@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// runs command on remote machine
+// runOnRemote runs cmd on a remote machine using SSH.
 func runOnRemote(user string, addr string, privateKey string, cmd string) (string, string, error) {
 	client, err := buildSSHClient(user, addr, privateKey)
 	if err != nil {
@@ -35,8 +35,9 @@ func runOnRemote(user string, addr string, privateKey string, cmd string) (strin
 	return stdOutBuffer.String(), stdErrBuffer.String(), err
 }
 
+// copyFileToRemote copies a local file from fileReader to remotePath at the host addr with permissions via SSH.
 func copyFileToRemote(user string, addr string, privateKey string, remotePath string, fileReader io.Reader, permissions string) error {
-	clientConfig, err := buildSSHClientConfig(user, addr, privateKey)
+	clientConfig, err := buildSSHClientConfig(user, privateKey)
 	if err != nil {
 		return err
 	}
@@ -49,8 +50,10 @@ func copyFileToRemote(user string, addr string, privateKey string, remotePath st
 	return scpClient.CopyFile(context.Background(), fileReader, remotePath, permissions)
 }
 
+// copyFileFromRemote copies a remote file from remotePath on host addr to localFile with permissions via SSH. localFile
+// must exist and be writable.
 func copyFileFromRemote(user string, addr string, privateKey string, remotePath string, localFile *os.File, permissions os.FileMode) error {
-	clientConfig, err := buildSSHClientConfig(user, addr, privateKey)
+	clientConfig, err := buildSSHClientConfig(user, privateKey)
 	if err != nil {
 		return err
 	}
@@ -79,7 +82,7 @@ func copyFileFromRemote(user string, addr string, privateKey string, remotePath 
 	return localFile.Sync()
 }
 
-// Forwards a TCP connection from a given port on the local machine to a given port on the remote machine
+// startSSHPortForwarder forwards a TCP connection from a given port on the local machine to a given port on the remote machine
 // Starts in background, cancel via context
 func startSSHPortForwarder(user string, addr string, privateKey string, localPort, remotePort int, ctx context.Context) error {
 	remoteConn, err := buildSSHClient(user, addr, privateKey)
@@ -126,7 +129,7 @@ func startSSHPortForwarder(user string, addr string, privateKey string, localPor
 	return nil
 }
 
-// Forwards a TCP connection from a given port on the remote machine to a given port on the local machine
+// startReverseSSHPortForwarder forwards a TCP connection from a given port on the remote machine to a given port on the local machine
 // Starts in background, cancel via context
 func startReverseSSHPortForwarder(user string, addr string, privateKey string, remotePort, localPort int, ctx context.Context) error {
 	remoteConn, err := buildSSHClient(user, addr, privateKey)
@@ -173,6 +176,7 @@ func startReverseSSHPortForwarder(user string, addr string, privateKey string, r
 	return nil
 }
 
+// copyConnections copies data between two connections. The function blocks until both client and remote are done.
 func copyConnections(client net.Conn, remote net.Conn) {
 	chDone := make(chan bool)
 
@@ -197,7 +201,8 @@ func copyConnections(client net.Conn, remote net.Conn) {
 	<-chDone
 }
 
-func buildSSHClientConfig(user string, addr string, privateKey string) (*ssh.ClientConfig, error) {
+// buildSSHClientConfig creates a new SSH config to use with the ssh package.
+func buildSSHClientConfig(user string, privateKey string) (*ssh.ClientConfig, error) {
 	key, err := ssh.ParsePrivateKey([]byte(privateKey))
 	if err != nil {
 		return nil, err
@@ -213,8 +218,9 @@ func buildSSHClientConfig(user string, addr string, privateKey string) (*ssh.Cli
 	}, nil
 }
 
+// buildSSHClient creates a new SSH client that is connected to the host addr.
 func buildSSHClient(user string, addr string, privateKey string) (*ssh.Client, error) {
-	config, err := buildSSHClientConfig(user, addr, privateKey)
+	config, err := buildSSHClientConfig(user, privateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -223,6 +229,7 @@ func buildSSHClient(user string, addr string, privateKey string) (*ssh.Client, e
 	return ssh.Dial("tcp", net.JoinHostPort(addr, "22"), config)
 }
 
+// checkListening checks if a tcp port is open at addr.
 func checkListening(addr string) error {
 	conn, err := net.DialTimeout("tcp", addr, time.Second)
 	if err != nil {
