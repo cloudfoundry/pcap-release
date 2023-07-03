@@ -12,7 +12,7 @@ import (
 )
 
 var _ = Describe("Pcap Deployment", func() {
-	It("Deploys successfully", func() {
+	It("Deploys and Captures Traffic Successfully", func() {
 
 		info, _ := deployPcap(
 			baseManifestVars{
@@ -43,12 +43,12 @@ var _ = Describe("Pcap Deployment", func() {
 			"-d", deploymentNameForTestNode(),
 			"-g", "pcap-agent",
 			"-o", pcapFile,
-			"-u", fmt.Sprintf("http://%s:8080/", info.PcapAPIPublicIP),
+			"-u", fmt.Sprintf("http://%s:8080/", info.PcapAPIPublicIP), //TODO: make URL configurable in tests
 			"-v")
 		sessionPcap, err := gexec.Start(cmdPcap, GinkgoWriter, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Curling apache on pcap-agent instance to produce some traffic")
+		By("Calling apache on pcap-agent instance to produce some traffic")
 		for request := 1; request <= 10; request++ {
 			time.Sleep(time.Second)
 			response, err := http.Get(fmt.Sprintf("http://%s:80/", info.PcapAgentPublicIP))
