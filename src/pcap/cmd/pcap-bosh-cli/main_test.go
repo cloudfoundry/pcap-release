@@ -3,10 +3,11 @@ package main
 import (
 	"encoding/json"
 	"encoding/pem"
-	"github.com/cloudfoundry/pcap-release/src/pcap"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/cloudfoundry/pcap-release/src/pcap"
 )
 
 func TestParseAPIURL(t *testing.T) {
@@ -153,105 +154,105 @@ func TestEnvironment_Setup(t *testing.T) {
 	tests := []struct {
 		name    string
 		url     string
-		wantUrl string
+		wantURL string
 		cacert  string
 		wantErr bool
 	}{
 		{
 			name:    "valid - Setup TLS with full URL with CaCert",
 			url:     "https://bosh.services.cf.internal:443/",
-			wantUrl: "https://bosh.services.cf.internal:443/",
+			wantURL: "https://bosh.services.cf.internal:443/",
 			cacert:  bogusCert,
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup TLS with URL missing port with CaCert",
 			url:     "https://bosh.services.cf.internal/",
-			wantUrl: "https://bosh.services.cf.internal:25555/",
+			wantURL: "https://bosh.services.cf.internal:25555/",
 			cacert:  bogusCert,
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup TLS with IP:port only with CaCert",
 			url:     "1.2.3.4:443",
-			wantUrl: "https://1.2.3.4:443/",
+			wantURL: "https://1.2.3.4:443/",
 			cacert:  bogusCert,
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup TLS with IP:port only with slash with CaCert",
 			url:     "1.2.3.4:443/",
-			wantUrl: "https://1.2.3.4:443/",
+			wantURL: "https://1.2.3.4:443/",
 			cacert:  bogusCert,
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup TLS with IP only with CaCert",
 			url:     "1.2.3.4",
-			wantUrl: "https://1.2.3.4:25555/",
+			wantURL: "https://1.2.3.4:25555/",
 			cacert:  bogusCert,
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup TLS with IP and slash only with CaCert",
 			url:     "1.2.3.4/",
-			wantUrl: "https://1.2.3.4:25555/",
+			wantURL: "https://1.2.3.4:25555/",
 			cacert:  bogusCert,
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup TLS with full URL with System Certs only",
 			url:     "https://bosh.services.cf.internal:443",
-			wantUrl: "https://bosh.services.cf.internal:443/",
+			wantURL: "https://bosh.services.cf.internal:443/",
 			cacert:  "",
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup TLS with URL missing port with System Certs only",
 			url:     "https://bosh.services.cf.internal",
-			wantUrl: "https://bosh.services.cf.internal:25555/",
+			wantURL: "https://bosh.services.cf.internal:25555/",
 			cacert:  "",
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup non-TLS with full URL with CaCert",
 			url:     "http://bosh.services.cf.internal:80",
-			wantUrl: "http://bosh.services.cf.internal:80/",
+			wantURL: "http://bosh.services.cf.internal:80/",
 			cacert:  bogusCert,
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup non-TLS with URL missing port with CaCert",
 			url:     "http://bosh.services.cf.internal",
-			wantUrl: "http://bosh.services.cf.internal:25555/",
+			wantURL: "http://bosh.services.cf.internal:25555/",
 			cacert:  bogusCert,
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup non-TLS with full URL",
 			url:     "http://bosh.services.cf.internal:80",
-			wantUrl: "http://bosh.services.cf.internal:80/",
+			wantURL: "http://bosh.services.cf.internal:80/",
 			cacert:  "",
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup non-TLS with URL missing port",
 			url:     "http://bosh.services.cf.internal",
-			wantUrl: "http://bosh.services.cf.internal:25555/",
+			wantURL: "http://bosh.services.cf.internal:25555/",
 			cacert:  "",
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup non-TLS with IP:port",
 			url:     "http://1.2.3.4:80",
-			wantUrl: "http://1.2.3.4:80/",
+			wantURL: "http://1.2.3.4:80/",
 			cacert:  "",
 			wantErr: false,
 		},
 		{
 			name:    "valid - Setup non-TLS with IP only",
 			url:     "http://1.2.3.4",
-			wantUrl: "http://1.2.3.4:25555/",
+			wantURL: "http://1.2.3.4:25555/",
 			cacert:  "",
 			wantErr: false,
 		},
@@ -267,10 +268,9 @@ func TestEnvironment_Setup(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("%s: wantErr = %t, gotError = %v", tt.url, tt.wantErr, err)
 			}
-			if tt.wantUrl != environment.DirectorURL.String() {
-				t.Errorf("%s: wantUrl = %s, gotUrl = %s", tt.url, tt.wantUrl, environment.DirectorURL.String())
+			if tt.wantURL != environment.DirectorURL.String() {
+				t.Errorf("%s: wantURL = %s, gotUrl = %s", tt.url, tt.wantURL, environment.DirectorURL.String())
 			}
 		})
 	}
-
 }
