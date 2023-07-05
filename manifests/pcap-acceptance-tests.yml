@@ -1,0 +1,105 @@
+name: pcap
+instance_groups:
+  - name: pcap-api
+    azs:
+      - z1
+    instances: 1
+    vm_type: default
+    stemcell: default
+    networks: [{name: default}]
+    jobs:
+      - name: pcap-api
+        release: pcap
+        properties:
+          pcap-api:
+            log_level: debug
+            buffer:
+              size: 1000
+              upper_limit: 995
+              lower_limit: 900
+            concurrent_captures: 5
+            listen:
+              port: 8080
+              tls:
+                enabled: false
+            bosh:
+              director_url: ((bosh_director_api))
+              token_scope: bosh.admin
+              agent_port: 9494
+              mtls:
+                common_name: bosh.service.cf.internal
+                skip_verify: false
+                certificate: ((director_ssl_cert))
+                private_key: ((director_ssl_key))
+                ca: ((director_ssl_ca))
+            agents_mtls:
+              common_name: pcap-agent.service.cf.internal
+              skip_verify: false
+              certificate: ((pcap_api_mtls.certificate))((pcap_api_mtls.ca))
+              private_key: ((pcap_api_mtls.private_key))
+              ca: ((pcap_api_mtls.ca))
+  - name: pcap-agent
+    azs:
+      - z1
+    instances: 1
+    vm_type: default
+    stemcell: default
+    networks: [{name: default}]
+    jobs:
+      - name: pcap-agent
+        release: pcap
+        properties:
+          pcap-agent:
+            id: pcap-agent/123
+            log_level: info
+            buffer:
+              size: 100
+              upper_limit: 95
+              lower_limit: 90
+            listen:
+              port: 9494
+              tls:
+                certificate: ((pcap_agent_tls.certificate))
+                private_key: ((pcap_agent_tls.private_key))
+                ca: ((pcap_agent_tls.ca))
+
+update:
+  canaries: 1
+  max_in_flight: 1
+  canary_watch_time: 1000-30000
+  update_watch_time: 1000-30000
+  serial: false
+stemcells:
+  - alias: default
+    os: ubuntu-jammy
+    version: latest
+releases:
+  - name: pcap
+    version: "1.0.0"
+    url: "https://github.com/cloudfoundry/pcap-release/releases/download/v1.0.0/pcap-v1.0.0.tgz"
+    sha1: "3765c8d7e850d52ba1d6806734369ea0b07d1762"
+variables:
+  - name: pcap_ca
+    type: certificate
+    options:
+      common_name: pcap_ca
+      is_ca: true
+  - name: pcap_api_mtls
+    type: certificate
+    options:
+      ca: pcap_ca
+      common_name: pcap_api_mtls
+      alternative_names:
+        - pcap-api.service.cf.internal
+      extended_key_usage:
+        - client_auth
+        - server_auth
+  - name: pcap_agent_tls
+    options:
+      alternative_names:
+        - pcap-agent.service.cf.internal
+      ca: pcap_ca
+      common_name: pcap_agent_tls
+      extended_key_usage:
+        - server_auth
+    type: certificate

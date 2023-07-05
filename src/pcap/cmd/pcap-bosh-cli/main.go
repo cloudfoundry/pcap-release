@@ -23,6 +23,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const BoshDefaultPort = 25555
+const BoshAuthTypeUAA = "uaa"
+
 var (
 	logger         *zap.Logger
 	atomicLogLevel zap.AtomicLevel
@@ -38,9 +41,8 @@ type options struct {
 	PcapAPIURL         string   `short:"u" long:"pcap-api-url" description:"The URL of the PCAP API, e.g. pcap.cf.$LANDSCAPE_DOMAIN" env:"PCAP_API" required:"true"`
 	Filter             string   `short:"f" long:"filter" description:"Allows to provide a filter expression in pcap filter format." required:"false"`
 	Interface          string   `short:"i" long:"interface" description:"Specifies the network interface to listen on." default:"eth0" required:"false"`
-	Type               string   `short:"t" long:"type" description:"Specifies the type of process to capture for the app." default:"web" required:"false"`
 	BoshConfigFilename string   `short:"c" long:"bosh-config" description:"Path to the BOSH config file, used for the UAA Token" default:"${HOME}/.bosh/config" required:"false"`
-	BoshEnvironment    string   `short:"e" long:"bosh-environment" description:"The BOSH environment to use for retrieving the BOSH UAA token from the BOSH config file" default:"bosh" required:"false"`
+	BoshEnvironment    string   `short:"e" long:"bosh-environment" description:"The BOSH environment to use for retrieving the BOSH UAA token from the BOSH config file" env:"BOSH_ENVIRONMENT" required:"false"`
 	Deployment         string   `short:"d" long:"deployment" description:"The name of the deployment in which you would like to capture." required:"true"`
 	InstanceGroups     []string `short:"g" long:"instance-group" description:"The name of an instance group in the deployment in which you would like to capture. Can be defined multiple times." required:"true"`
 	InstanceIds        []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"`
@@ -200,8 +202,11 @@ func checkOutputFile(file string, overwrite bool) error {
 	}
 	// File doesn't exist, check if path is valid
 	fileInfo, err := os.Stat(filepath.Dir(file))
-	if err != nil || !fileInfo.IsDir() {
-		return fmt.Errorf("cannot write file %s. %s does not exist", file, fileInfo.Name())
+	if err != nil {
+		if fileInfo != nil {
+			return fmt.Errorf("cannot write file %s. %s does not exist", file, fileInfo.Name())
+		}
+		return err
 	}
 	return nil
 }
@@ -246,6 +251,9 @@ func configFromFile(configFilename string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not open bosh-config: %w", err)
 	}
+	defer func() {
+		_ = configReader.Close()
+	}()
 
 	var config Config
 	err = yaml.NewDecoder(configReader).Decode(&config)
@@ -262,9 +270,9 @@ func configFromFile(configFilename string) (*Config, error) {
 // Returns url with scheme prefix.
 func urlWithScheme(url string) string {
 	if !schemaPattern.MatchString(url) {
+		logger.Debug("URL has no scheme. Defaulting to https.", zap.String("url", url))
 		return "https://" + url
 	}
-	logger.Debug("pcap-api URL contains a scheme")
 	return url
 }
 
@@ -329,7 +337,7 @@ func createCaptureOptions(device string, filter string, snaplen uint32) *pcap.Ca
 
 // writeBoshConfig writes the Config to the config-file under configFileName.
 func writeBoshConfig(config *Config, configFileName string) error {
-	configWriter, err := os.Create(configFileName)
+	configWriter, err := os.Create(os.ExpandEnv(configFileName))
 	if err != nil {
 		return fmt.Errorf("failed to create bosh-config file: %w", err)
 	}
@@ -382,8 +390,24 @@ func (e *Environment) UpdateTokens() error {
 // connect uses the URL from the parsed Bosh environment of a config, sets up the http client for use with either TLS or plain HTTP
 // and uses this client to establish a connection to the BOSH Director and its UAA.
 func (e *Environment) connect() error {
+	err := e.setup()
+
+	if err != nil {
+		return err
+	}
+
+	err = e.fetchUAAURL()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setup configures the BOSH http client for a given environment.
+func (e *Environment) setup() error {
 	var err error
-	e.DirectorURL, err = url.Parse(e.URL)
+	e.DirectorURL, err = url.Parse(urlWithScheme(e.URL))
 	if err != nil {
 		return fmt.Errorf("error parsing environment url (%v): %w", e.URL, err)
 	}
@@ -393,29 +417,30 @@ func (e *Environment) connect() error {
 		e.DirectorURL.Path = "/"
 	}
 
+	// If no port was provided, use BOSH default port
+	if e.DirectorURL.Port() == "" {
+		e.DirectorURL.Host = fmt.Sprintf("%s:%d", e.DirectorURL.Host, BoshDefaultPort)
+	}
+
 	if e.DirectorURL.Scheme != "https" {
 		logger.Warn("using unencrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
 		e.client = http.DefaultClient
 		return nil
 	}
-
 	logger.Info("using TLS-encrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
-	boshCA := x509.NewCertPool()
-	ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
-	if !ok {
-		return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed")
-	}
-
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig.RootCAs = boshCA
+
+	if e.CaCert != "" {
+		boshCA := x509.NewCertPool()
+		ok := boshCA.AppendCertsFromPEM([]byte(e.CaCert))
+		if !ok {
+			return fmt.Errorf("could not add BOSH Director CA from bosh-config, adding to the cert pool failed")
+		}
+		transport.TLSClientConfig.RootCAs = boshCA
+	}
 
 	e.client = &http.Client{
 		Transport: transport,
-	}
-
-	err = e.fetchUAAURL()
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -446,6 +471,10 @@ func (e *Environment) fetchUAAURL() error {
 		return err
 	}
 
+	if info.UserAuthentication.Type != BoshAuthTypeUAA {
+		return fmt.Errorf("unsupported authentication type '%s'", info.UserAuthentication.Type)
+	}
+
 	uaaURL, err := url.Parse(info.UserAuthentication.Options.URL)
 	if err != nil {
 		return err
@@ -462,6 +491,9 @@ func (e *Environment) fetchUAAURL() error {
 
 // refreshTokens connects to the bosh-uaa API to fetch updated bosh access- & refresh-token.
 func (e *Environment) refreshTokens() error {
+	if e.RefreshToken == "" {
+		return fmt.Errorf("no refresh token found in bosh config. please login first")
+	}
 	req := http.Request{
 		Method: http.MethodPost,
 		URL:    e.UaaURL.JoinPath("/oauth/token"),

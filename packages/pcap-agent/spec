@@ -6,4 +6,4 @@ dependencies:
 
 files:
 - pcap/**/*
-- libpcap-*.tgz
+- libpcap-*.tar.gz

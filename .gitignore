@@ -26,6 +26,7 @@ package.json
 # Releases/tarballs
 .final_builds/jobs/**/*.tgz
 .final_builds/packages/**/*.tgz
+ci/scripts/stemcell/*.tgz
 pcap-server.tgz
 releases/*.tgz
 releases/**/*.tgz

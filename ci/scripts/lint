@@ -7,8 +7,14 @@ echo "> Running 'bundle exec rake lint'"
 bundle install
 bundle exec rake lint
 
-echo "> Running 'go vet'"
+echo "> Running 'go vet' and linter checks for src"
 pushd src/pcap
+  go vet ./...
+  golangci-lint run
+popd
+
+echo "> Running 'go vet' and linter checks for acceptance-tests"
+pushd acceptance-tests
   go vet ./...
   golangci-lint run
 popd
