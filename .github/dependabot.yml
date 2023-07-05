@@ -22,3 +22,14 @@ updates:
     prefix: "dep"
   labels:
     - run-ci
+- package-ecosystem: gomod
+  directory: /acceptance-tests
+  schedule:
+    interval: weekly
+    day: "monday"
+    time: "09:00"
+    timezone: "Europe/Berlin"
+  commit-message:
+    prefix: "dep"
+  labels:
+    - run-ci
