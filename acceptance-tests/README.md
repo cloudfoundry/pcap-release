@@ -3,8 +3,8 @@
 ## Requirements
 
 * Docker installed locally
-* A matching Bionic stemcell tgz downloaded to `ci/scripts/stemcell-bionic`
-    * Get it from https://bosh.io/stemcells/bosh-warden-boshlite-ubuntu-bionic-go_agent
+* A matching Jammy stemcell tgz downloaded to `ci/scripts/stemcell`
+    * Get it from https://bosh.io/stemcells/bosh-warden-boshlite-ubuntu-jammy-go_agent
 
 ## Running
 
