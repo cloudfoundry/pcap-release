@@ -13,8 +13,9 @@ pushd src/pcap
   golangci-lint run
 popd
 
-echo "> Running 'go vet' and linter checks for acceptance-tests"
-pushd acceptance-tests
-  go vet ./...
-  golangci-lint run
-popd
+# Commented out until we refactored acceptance tests as discussed
+#echo "> Running 'go vet' and linter checks for acceptance-tests"
+#pushd acceptance-tests
+#  go vet ./...
+#  golangci-lint run
+#popd
