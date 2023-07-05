@@ -260,7 +260,7 @@ jobs:
     plan:
     - do:
       - in_parallel:
-          - { get: git,     passed: [unit-tests] }
+          - { get: git,     passed: [acceptance-tests] }
       - task: release-candidate
         config:
           platform: linux
