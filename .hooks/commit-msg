@@ -1,3 +1,18 @@
 #!/usr/bin/env bash
 
 echo "commit message: $1"
+
+#conv_commit_type_re='fix|feat|build|chore|ci|docs|style|refactor|perf|test'
+#conv_commit_optional_scope_re='.{1,50}'
+#conv_commit_desc_re='.{1,100}'
+conv_commit_msg="^(fix|feat|build|chore|ci|docs|style|refactor|perf|test)(\(.{1,50}\))?: (.{1,100})\$"
+flag=0
+if ! [[ "$1" =~ (${conv_commit_msg}) ]]; then
+    flag=1
+    echo "ERROR: Conventional commit message formatting error" >&2
+    echo "$1" >&2
+fi
+
+if [ "$flag" -ne 0 ]; then
+  exit 1
+fi
