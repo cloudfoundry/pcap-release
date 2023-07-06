@@ -344,9 +344,12 @@ func login(username, password string) {
 	stdin, err := cmd.StdinPipe()
 	Expect(err).NotTo(HaveOccurred())
 
-	stdin.Write([]byte(fmt.Sprintf("%s\n", username)))
-	stdin.Write([]byte(fmt.Sprintf("%s\n", password)))
-	stdin.Close()
+	_, err = stdin.Write([]byte(fmt.Sprintf("%s\n", username)))
+	Expect(err).NotTo(HaveOccurred())
+	_, err = stdin.Write([]byte(fmt.Sprintf("%s\n", password)))
+	Expect(err).NotTo(HaveOccurred())
+	err = stdin.Close()
+	Expect(err).NotTo(HaveOccurred())
 
 	session, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
 	Expect(err).NotTo(HaveOccurred())
