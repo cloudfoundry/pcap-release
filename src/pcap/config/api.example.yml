@@ -11,10 +11,10 @@ listen:
   tls: # omitempty -> nil == tls off
     certificate: api-cert.pem
     private_key: api-cert.key
-    ca: pcap-ca.pem
+    client_cas: pcap-ca.pem
 
 agents_mtls:
-  common_name: pcap-agent.service.cf.internal
+  server_name: pcap-agent.service.cf.internal
   skip_verify: false
 
   certificate: api-client-cert.pem
@@ -34,10 +34,7 @@ bosh:
   director_url: https://bosh.service.cf.internal:8080
   token_scope: bosh.admin
   agent_port: 9494
-  mtls:
-    common_name: bosh.service.cf.internal
+  tls:
+    server_name: bosh.service.cf.internal
     skip_verify: false
-
-    certificate: bosh-client-cert.pem
-    private_key: bosh-client-key.key
     ca: bosh-ca.pem

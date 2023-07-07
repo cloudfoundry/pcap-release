@@ -34,8 +34,8 @@ type API struct {
 	UnimplementedAPIServer
 }
 
-func NewAPI(bufConf BufferConf, clientTls *ClientTls, id string, maxConcurrentCaptures uint) (*API, error) {
-	clientTlsConf, err := clientTls.Config()
+func NewAPI(bufConf BufferConf, clientTLS *ClientTLS, id string, maxConcurrentCaptures uint) (*API, error) {
+	clientTLSConf, err := clientTLS.Config()
 	if err != nil {
 		return nil, fmt.Errorf("create api failed: %w", err)
 	}
@@ -46,7 +46,7 @@ func NewAPI(bufConf BufferConf, clientTls *ClientTls, id string, maxConcurrentCa
 		resolvers:             make(map[string]AgentResolver),
 		id:                    id,
 		maxConcurrentCaptures: maxConcurrentCaptures,
-		tlsCredentials:        credentials.NewTLS(clientTlsConf),
+		tlsCredentials:        credentials.NewTLS(clientTLSConf),
 	}, nil
 }
 

@@ -27,7 +27,7 @@ describe 'config/pcap-api.yml bosh properties' do
             'agent_port' => 9495,
             'director_url' => 'https://bosh.service.cf.internal:8080',
             'token_scope' => 'bosh.admin',
-            'mtls' =>
+            'tls' =>
             {
               'enabled' => false
             }
@@ -40,7 +40,7 @@ describe 'config/pcap-api.yml bosh properties' do
       expect(pcap_api_conf['bosh']['agent_port']).to be(9495)
       expect(pcap_api_conf['bosh']['director_url']).to include('https://bosh.service.cf.internal:8080')
       expect(pcap_api_conf['bosh']['token_scope']).to include('bosh.admin')
-      expect(pcap_api_conf['bosh']['mtls']).to be_nil
+      expect(pcap_api_conf['bosh']['tls']).to be_nil
     end
   end
 
@@ -51,7 +51,7 @@ describe 'config/pcap-api.yml bosh properties' do
           {
             'director_url' => 'https://bosh.service.cf.internal:8080',
             'token_scope' => 'bosh.admin',
-            'mtls' => {
+            'tls' => {
               'enabled' => true,
               'common_name' => 'bosh.service.cf.internal',
               'skip_verify' => true
@@ -63,10 +63,8 @@ describe 'config/pcap-api.yml bosh properties' do
     it 'configures bosh correctly' do
       properties.merge!(bosh_properties)
       expect(pcap_api_conf['bosh']['director_url']).to include('https://bosh.service.cf.internal:8080')
-      expect(pcap_api_conf['bosh']['mtls']['skip_verify']).to be(true)
-      expect(pcap_api_conf['bosh']['mtls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.crt')
-      expect(pcap_api_conf['bosh']['mtls']['private_key']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.key')
-      expect(pcap_api_conf['bosh']['mtls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh-ca.crt')
+      expect(pcap_api_conf['bosh']['tls']['skip_verify']).to be(true)
+      expect(pcap_api_conf['bosh']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh-ca.crt')
     end
   end
 
@@ -77,7 +75,7 @@ describe 'config/pcap-api.yml bosh properties' do
           {
             'director_url' => 'https://bosh.service.cf.internal:8080',
             'token_scope' => 'bosh.admin',
-            'mtls' => {
+            'tls' => {
               'enabled' => true,
               'common_name' => 'bosh.service.cf.internal',
               'skip_verify' => false
@@ -89,10 +87,8 @@ describe 'config/pcap-api.yml bosh properties' do
     it 'configures bosh correctly' do
       properties.merge!(bosh_properties)
       expect(pcap_api_conf['bosh']['director_url']).to include('https://bosh.service.cf.internal:8080')
-      expect(pcap_api_conf['bosh']['mtls']['skip_verify']).to be(false)
-      expect(pcap_api_conf['bosh']['mtls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.crt')
-      expect(pcap_api_conf['bosh']['mtls']['private_key']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh.key')
-      expect(pcap_api_conf['bosh']['mtls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh-ca.crt')
+      expect(pcap_api_conf['bosh']['tls']['skip_verify']).to be(false)
+      expect(pcap_api_conf['bosh']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/bosh/pcap-api-bosh-ca.crt')
     end
   end
 end

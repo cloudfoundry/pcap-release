@@ -3,7 +3,6 @@ package pcap
 import (
 	"crypto/rsa"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,7 +56,7 @@ type BoshResolverConfig struct {
 	RawDirectorURL string     `yaml:"director_url" validate:"required,url"`
 	AgentPort      int        `yaml:"agent_port" validate:"required,gt=0,lte=65535"`
 	TokenScope     string     `yaml:"token_scope" validate:"required"`
-	Tls            *ClientTls `yaml:"tls" validate:"omitempty"`
+	TLS            *ClientTLS `yaml:"tls" validate:"omitempty"`
 }
 
 // BoshResolver uses a BOSH director to resolve AgentEndpoint s.
@@ -70,7 +69,6 @@ type BoshResolver struct {
 	DirectorURL *url.URL
 	logger      *zap.Logger
 	tlsConf     *tls.Config
-	boshRootCAs *x509.CertPool
 }
 
 // NewBoshResolver creates and initializes a BoshResolver based on the provided config.
@@ -95,7 +93,7 @@ func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 		DirectorURL: directorURL,
 	}
 
-	resolver.tlsConf, err = config.Tls.Config()
+	resolver.tlsConf, err = config.TLS.Config()
 	if err != nil {
 		return nil, err
 	}

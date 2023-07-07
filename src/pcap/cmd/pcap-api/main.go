@@ -11,14 +11,14 @@ import (
 	"os"
 	"syscall"
 
-	"google.golang.org/grpc/credentials"
-
 	"github.com/cloudfoundry/pcap-release/src/pcap"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
+//nolint:funlen // the function is good readable
 func main() {
 	log := zap.L()
 	log.Info("init phase done, starting api")

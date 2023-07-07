@@ -232,7 +232,7 @@ func generateCertAndKey(cert *x509.Certificate, ca *x509.Certificate, issuerKey 
 }
 
 func configureServer(certFile string, keyFile string, clientCAFile string) (credentials.TransportCredentials, error) {
-	tlsConf, err := (&pcap.ServerTls{
+	tlsConf, err := (&pcap.ServerTLS{
 		Certificate: certFile,
 		PrivateKey:  keyFile,
 		ClientCas:   clientCAFile,
@@ -275,7 +275,7 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	return server, target, agent
 }
 
-func createAPI(resolver pcap.AgentResolver, bufConf pcap.BufferConf, mTLSConfig *pcap.ClientTls, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
+func createAPI(resolver pcap.AgentResolver, bufConf pcap.BufferConf, mTLSConfig *pcap.ClientTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
 	var server *grpc.Server
 	api, err := pcap.NewAPI(bufConf, mTLSConfig, id, MaxConcurrentCaptures)
 	Expect(err).NotTo(HaveOccurred())

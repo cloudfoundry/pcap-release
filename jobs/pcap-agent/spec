@@ -36,5 +36,5 @@ properties:
     description: "Certificate and chain to talk to pcap-api in PEM format"
   pcap-agent.listen.tls.private_key:
     description: "Private key to talk to pcap-api in PEM format"
-  pcap-agent.listen.tls.ca:
+  pcap-agent.listen.tls.client_cas:
     description: "CA bundle which is used to request and verify client certificates"

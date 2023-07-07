@@ -1,0 +1,13 @@
+<%- if p("pcap-api.bosh.tls.enabled").to_s == "true"
+      if !p("pcap-api.bosh.tls.ca", nil)
+        raise "Conflicting configuration: pcap-api.bosh.tls.enabled, you must provide a valid Bosh CAs"
+      end
+    end
+-%>
+<%
+if_p("pcap-api.bosh.tls.ca") do |pem|
+%>
+<%= pem %>
+<%
+end
+%>

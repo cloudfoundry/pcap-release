@@ -22,10 +22,10 @@ func TestAPIConfig(t *testing.T) {
 		NodeConfig: pcap.NodeConfig{
 			Listen: pcap.Listen{
 				Port: 8080,
-				TLS: &pcap.TLS{
-					Certificate:          "api-cert.pem",
-					PrivateKey:           "api-cert.key",
-					CertificateAuthority: "pcap-ca.pem",
+				TLS: &pcap.ServerTLS{
+					Certificate: "api-cert.pem",
+					PrivateKey:  "api-cert.key",
+					ClientCas:   "pcap-ca.pem",
 				},
 			},
 			Buffer: pcap.BufferConf{
@@ -36,14 +36,12 @@ func TestAPIConfig(t *testing.T) {
 			LogLevel: "debug",
 			ID:       "pcap-api/234",
 		},
-		AgentsMTLS: &pcap.MutualTLS{
-			TLS: pcap.TLS{
-				Certificate:          "api-client-cert.pem",
-				PrivateKey:           "api-client-cert.key",
-				CertificateAuthority: "pcap-ca.pem",
-			},
-			SkipVerify: false,
-			CommonName: "pcap-agent.service.cf.internal",
+		AgentsMTLS: &pcap.ClientTLS{
+			Certificate: "api-client-cert.pem",
+			PrivateKey:  "api-client-cert.key",
+			RootCas:     "pcap-ca.pem",
+			SkipVerify:  false,
+			ServerName:  "pcap-agent.service.cf.internal",
 		},
 		ConcurrentCaptures: 5,
 		DrainTimeout:       time.Second * 10,
@@ -51,14 +49,10 @@ func TestAPIConfig(t *testing.T) {
 			RawDirectorURL: "https://bosh.service.cf.internal:8080",
 			AgentPort:      9494,
 			TokenScope:     "bosh.admin",
-			MTLS: &pcap.MutualTLS{
-				TLS: pcap.TLS{
-					Certificate:          "bosh-client-cert.pem",
-					PrivateKey:           "bosh-client-key.key",
-					CertificateAuthority: "bosh-ca.pem",
-				},
+			TLS: &pcap.ClientTLS{
+				RootCas:    "bosh-ca.pem",
 				SkipVerify: false,
-				CommonName: "bosh.service.cf.internal",
+				ServerName: "bosh.service.cf.internal",
 			},
 		},
 	}

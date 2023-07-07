@@ -64,7 +64,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 			boshConfig := pcap.BoshResolverConfig{
 				AgentPort:  agentPort,
 				TokenScope: "bosh.admin",
-				Tls:        nil,
+				TLS:        nil,
 			}
 
 			var err error
@@ -73,7 +73,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 
 			messageWriter = NewMemoryMessageWriter()
 
-			agentTLSConf := &pcap.ClientTls{SkipVerify: true}
+			agentTLSConf := &pcap.ClientTLS{SkipVerify: true}
 			apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180}
 
 			var apiAddr net.Addr
@@ -323,7 +323,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 	})
 })
 
-func createAPIwithBoshResolver(resolver *pcap.BoshResolver, bufConf pcap.BufferConf, mTLSConfig *pcap.ClientTls, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
+func createAPIwithBoshResolver(resolver *pcap.BoshResolver, bufConf pcap.BufferConf, mTLSConfig *pcap.ClientTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
 	return createAPI(resolver, bufConf, mTLSConfig, id)
 }
 

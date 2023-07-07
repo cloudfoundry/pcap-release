@@ -112,7 +112,7 @@ describe 'config/pcap-api.yml global properties' do
       properties.merge!(listen)
       expect(pcap_api_conf['listen']['tls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api.crt')
       expect(pcap_api_conf['listen']['tls']['private_key']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api.key')
-      expect(pcap_api_conf['listen']['tls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-ca.crt')
+      expect(pcap_api_conf['listen']['tls']['client_cas']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-ca.crt')
     end
   end
 

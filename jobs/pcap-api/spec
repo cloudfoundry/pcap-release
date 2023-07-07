@@ -9,9 +9,7 @@ templates:
   pcap-api.crt.erb: config/certs/pcap-api.crt
   pcap-api.key.erb: config/certs/pcap-api.key
   pcap-api.ca.erb: config/certs/pcap-api-ca.crt
-  bosh_mtls/pcap-api-bosh.ca.erb: config/certs/bosh/pcap-api-bosh-ca.crt
-  bosh_mtls/pcap-api-bosh.crt.erb: config/certs/bosh/pcap-api-bosh.crt
-  bosh_mtls/pcap-api-bosh.key.erb: config/certs/bosh/pcap-api-bosh.key
+  pcap-api-bosh.ca.erb: config/certs/bosh/pcap-api-bosh-ca.crt
   agents_mtls/pcap-api-client.crt.erb: config/certs/pcap-api-client.crt
   agents_mtls/pcap-api-client.key.erb: config/certs/pcap-api-client.key
   agents_mtls/pcap-api-client.ca.erb: config/certs/pcap-api-client-ca.crt
@@ -44,7 +42,7 @@ properties:
     description: "Certificate chain to talk to gorouter in PEM format"
   pcap-api.listen.tls.private_key:
     description: "Private key to talk to gorouter in PEM format"
-  pcap-api.listen.tls.ca:
+  pcap-api.listen.tls.client_cas:
     description: "CA bundle which is used to request and verify client certificates" # platform CA (gorouter CA)
 
   pcap-api.agents_mtls.enabled:
@@ -70,19 +68,15 @@ properties:
     description: "Endpoint of the BOSH Director API"
   pcap-api.bosh.token_scope:
     description: "Scope of the token"
-  pcap-api.bosh.mtls.enabled:
+  pcap-api.bosh.tls.enabled:
     default: true
-  pcap-api.bosh.mtls.common_name:
+  pcap-api.bosh.tls.common_name:
     description: "Common name of the Bosh Director"
-  pcap-api.bosh.mtls.skip_verify:
+  pcap-api.bosh.tls.skip_verify:
     description: "Skip server verification for connection to Bosh Director"
     default: false
-  pcap-api.bosh.mtls.certificate:
-    description: "Client certificate to talk to Bosh Director in PEM format"
-  pcap-api.bosh.mtls.private_key:
-    description: "Private key to talk to Bosh Director in PEM format"
-  pcap-api.bosh.mtls.ca:
-    description: "CA bundle which is used to request and verify Bosh Director client certificates"
+  pcap-api.bosh.tls.ca:
+    description: "CA bundle which is used to request and verify Bosh Director certificates"
 
 
   pcap-api.cli_download_root:

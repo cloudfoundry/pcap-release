@@ -79,7 +79,7 @@ describe 'config/pcap-agent.yml global properties' do
       expect(pcap_agent_conf['listen']['port']).to be(9494)
       expect(pcap_agent_conf['listen']['tls']['certificate']).to include('/var/vcap/jobs/pcap-agent/config/certs/pcap-agent.crt')
       expect(pcap_agent_conf['listen']['tls']['private_key']).to include('/var/vcap/jobs/pcap-agent/config/certs/pcap-agent.key')
-      expect(pcap_agent_conf['listen']['tls']['ca']).to include('/var/vcap/jobs/pcap-agent/config/certs/client-ca.crt')
+      expect(pcap_agent_conf['listen']['tls']['client_cas']).to include('/var/vcap/jobs/pcap-agent/config/certs/client-ca.crt')
     end
   end
 

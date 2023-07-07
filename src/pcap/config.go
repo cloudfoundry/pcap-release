@@ -9,16 +9,16 @@ import (
 	"regexp"
 )
 
-// newTlsConfig is used to set common defaults on newly created TLS
+// newTLSConfig is used to set common defaults on newly created TLS
 // configurations.
-func newTlsConfig() *tls.Config {
+func newTLSConfig() *tls.Config {
 	return &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		MaxVersion: tls.VersionTLS13,
 	}
 }
 
-type ServerTls struct {
+type ServerTLS struct {
 	// Certificate holds the path to the PEM encoded certificate (chain) that
 	// is presented by the client / server to its peer.
 	Certificate string `yaml:"certificate" validate:"omitempty,file"`
@@ -39,12 +39,12 @@ type ServerTls struct {
 	Verify tls.ClientAuthType `yaml:"verify"`
 }
 
-func (c *ServerTls) Config() (*tls.Config, error) {
+func (c *ServerTLS) Config() (*tls.Config, error) {
 	if c == nil {
 		return nil, fmt.Errorf("server TLS config must be non-nil")
 	}
 
-	tlsConf := newTlsConfig()
+	tlsConf := newTLSConfig()
 
 	cert, err := tls.LoadX509KeyPair(c.Certificate, c.PrivateKey)
 	if err != nil {
@@ -73,7 +73,7 @@ func (c *ServerTls) Config() (*tls.Config, error) {
 	return tlsConf, nil
 }
 
-type ClientTls struct {
+type ClientTLS struct {
 	// Certificate holds the path to the PEM encoded certificate (chain) that
 	// is presented by the client / server to its peer.
 	Certificate string `yaml:"certificate" validate:"omitempty,file"`
@@ -91,8 +91,8 @@ type ClientTls struct {
 	ServerName string `yaml:"server_name"`
 }
 
-func (c *ClientTls) Config() (*tls.Config, error) {
-	tlsConf := newTlsConfig()
+func (c *ClientTLS) Config() (*tls.Config, error) {
+	tlsConf := newTLSConfig()
 	if c == nil {
 		return tlsConf, nil
 	}
@@ -142,7 +142,7 @@ type BufferConf struct {
 // Listen defines the port and optional TLS configuration for the listening socket.
 type Listen struct {
 	Port int        `yaml:"port" validate:"gt=0,lte=65535"`
-	TLS  *ServerTls `yaml:"tls,omitempty"`
+	TLS  *ServerTLS `yaml:"tls,omitempty"`
 }
 
 type NodeConfig struct {

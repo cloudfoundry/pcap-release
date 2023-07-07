@@ -21,10 +21,10 @@ func TestConfig(t *testing.T) {
 		NodeConfig: pcap.NodeConfig{
 			Listen: pcap.Listen{
 				Port: 9494,
-				TLS: &pcap.TLS{
-					Certificate:          "agent-cert.pem",
-					PrivateKey:           "agent-cert.key",
-					CertificateAuthority: "pcap-ca.pem",
+				TLS: &pcap.ServerTLS{
+					Certificate: "agent-cert.pem",
+					PrivateKey:  "agent-cert.key",
+					ClientCas:   "pcap-ca.pem",
 				},
 			},
 			Buffer: pcap.BufferConf{
