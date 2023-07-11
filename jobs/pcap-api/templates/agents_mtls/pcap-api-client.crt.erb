@@ -1,6 +1,6 @@
 <%- if p("pcap-api.agents_mtls.enabled").to_s == "true"
       if !p("pcap-api.agents_mtls.certificate", nil)
-        raise "Conflicting configuration: pcap-api.agents_mtls.enabled is true, you must provide a valid client CAs"
+        raise "Conflicting configuration: pcap-api.agents_mtls.enabled is true, you must provide a valid certificate"
       end
     end
 -%>

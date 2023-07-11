@@ -93,9 +93,11 @@ func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 		DirectorURL: directorURL,
 	}
 
-	resolver.tlsConf, err = config.TLS.Config()
-	if err != nil {
-		return nil, err
+	if config.TLS != nil {
+		resolver.tlsConf, err = config.TLS.Config()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = resolver.setup()

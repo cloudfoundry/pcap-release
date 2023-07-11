@@ -73,11 +73,10 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 
 			messageWriter = NewMemoryMessageWriter()
 
-			agentTLSConf := &pcap.ClientTLS{SkipVerify: true}
 			apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180}
 
 			var apiAddr net.Addr
-			apiClient, apiServer, api, apiAddr = createAPIwithBoshResolver(boshResolver, apiBuffConf, agentTLSConf, apiID)
+			apiClient, apiServer, api, apiAddr = createAPIwithBoshResolver(boshResolver, apiBuffConf, nil, apiID)
 
 			apiURL = mock.MustParseURL(fmt.Sprintf("http://%s", apiAddr.String()))
 		})

@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
@@ -35,9 +36,13 @@ type API struct {
 }
 
 func NewAPI(bufConf BufferConf, clientTLS *ClientTLS, id string, maxConcurrentCaptures uint) (*API, error) {
-	clientTLSConf, err := clientTLS.Config()
-	if err != nil {
-		return nil, fmt.Errorf("create api failed: %w", err)
+	clientTLSCreds := insecure.NewCredentials()
+	if clientTLS != nil {
+		clientTLSConf, err := clientTLS.Config()
+		if err != nil {
+			return nil, fmt.Errorf("create api failed: %w", err)
+		}
+		clientTLSCreds = credentials.NewTLS(clientTLSConf)
 	}
 
 	return &API{
@@ -46,7 +51,7 @@ func NewAPI(bufConf BufferConf, clientTLS *ClientTLS, id string, maxConcurrentCa
 		resolvers:             make(map[string]AgentResolver),
 		id:                    id,
 		maxConcurrentCaptures: maxConcurrentCaptures,
-		tlsCredentials:        credentials.NewTLS(clientTLSConf),
+		tlsCredentials:        clientTLSCreds,
 	}, nil
 }
 

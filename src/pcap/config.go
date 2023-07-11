@@ -115,6 +115,10 @@ func (c *ClientTLS) Config() (*tls.Config, error) {
 		tlsConf.RootCAs = trustedCas
 	}
 
+	if c.ServerName != "" {
+		tlsConf.ServerName = c.ServerName
+	}
+
 	return tlsConf, nil
 }
 
