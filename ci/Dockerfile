@@ -3,14 +3,15 @@ FROM bosh/docker-cpi:main
 
 ARG GINKGO_VERSION=latest
 ARG GOLANGCILINT_VERSION=latest
-RUN apt-get update && apt-get install -y libpcap-dev python3-pip && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && \
-    apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
-
 # Set bosh env at login
 RUN echo "source /tmp/local-bosh/director/env" >> /root/.bashrc
 
+# Install apt libs
+RUN apt-get update && apt-get install -y libpcap-dev python3-pip && rm -rf /var/lib/apt/lists/*
+
+# Install semantic-release and node lts
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && \
+    apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
 RUN npm install -g semantic-release && \
     npm install -g @semantic-release/exec
 
