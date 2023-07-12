@@ -12,9 +12,22 @@ import (
 )
 
 var _ = Describe("Pcap Deployment", func() {
+
+	var info pcapInfo
+
+	AfterEach(func() {
+		// Get pcap logs in case of failure
+		if CurrentSpecReport().Failed() {
+			pcapApiOut, _, _ := runOnRemote(info.SSHUser, info.PcapAPIPublicIP, info.SSHPrivateKey, "cat /var/vcap/sys/log/pcap-api/pcap-api.stdout.log")
+			pcapApiErr, _, _ := runOnRemote(info.SSHUser, info.PcapAPIPublicIP, info.SSHPrivateKey, "cat /var/vcap/sys/log/pcap-api/pcap-api.stderr.log")
+
+			writeLog(fmt.Sprintf("%s: PCAP-API LOGS:\nSTDOUT: %s\nSTDERR: %s\n", deploymentNameForTestNode(), pcapApiOut, pcapApiErr))
+		}
+	})
+
 	It("Deploys and Captures Traffic Successfully", func() {
 
-		info, _ := deployPcap(
+		info, _ = deployPcap(
 			baseManifestVars{
 				deploymentName: deploymentNameForTestNode(),
 			},
