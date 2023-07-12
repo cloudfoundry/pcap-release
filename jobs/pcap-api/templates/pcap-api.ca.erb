@@ -1,5 +1,5 @@
 <%- if p("pcap-api.listen.tls.enabled").to_s == "true"
-      if !p("pcap-api.listen.tls.ca", nil)
+      if !p("pcap-api.listen.tls.client_cas", nil)
         raise "Conflicting configuration: pcap-api.listen.tls.enabled is true, you must provide a valid client CA"
       end
     end
