@@ -1,6 +1,8 @@
 package acceptance_tests
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,18 +11,19 @@ import (
 var config Config
 
 type Config struct {
-	ReleaseRepoPath  string `json:"releaseRepoPath"`
-	ReleaseVersion   string `json:"releaseVersion"`
-	BoshDirectorAPI  string `json:"boshDirectorAPI"`
-	BoshDirectorCert string `json:"boshDirectorCert"`
-	BoshDirectorKey  string `json:"boshDirectorKey"`
-	BoshDirectorCA   string `json:"boshDirectorCA"`
-	BoshClient       string `json:"boshClient"`
-	BoshClientSecret string `json:"boshClientSecret"`
-	BoshEnvironment  string `json:"boshEnvironment"`
-	BoshPath         string `json:"boshPath"`
-	BaseManifestPath string `json:"baseManifestPath"`
-	HomePath         string `json:"homePath"`
+	ReleaseRepoPath    string `json:"releaseRepoPath"`
+	ReleaseVersion     string `json:"releaseVersion"`
+	BoshDirectorAPI    string `json:"boshDirectorAPI"`
+	BoshDirectorCertCN string `json:"boshDirectorCertCN"`
+	BoshDirectorCert   string `json:"boshDirectorCert"`
+	BoshDirectorKey    string `json:"boshDirectorKey"`
+	BoshDirectorCA     string `json:"boshDirectorCA"`
+	BoshClient         string `json:"boshClient"`
+	BoshClientSecret   string `json:"boshClientSecret"`
+	BoshEnvironment    string `json:"boshEnvironment"`
+	BoshPath           string `json:"boshPath"`
+	BaseManifestPath   string `json:"baseManifestPath"`
+	HomePath           string `json:"homePath"`
 }
 
 func loadConfig() (Config, error) {
@@ -84,20 +87,30 @@ func loadConfig() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	// extract Bosh Director SSL Certificate Common Name
+	block, _ := pem.Decode([]byte(boshDirectorCert))
+	if block == nil {
+		return Config{}, fmt.Errorf("failed to parse PEM block containing the public key")
+	}
+
+	cert, _ := x509.ParseCertificate(block.Bytes) // handle error
+
+	boshDirectorCertCN := cert.Subject.CommonName
 
 	return Config{
-		ReleaseRepoPath:  releaseRepoPath,
-		ReleaseVersion:   releaseVersion,
-		BoshDirectorAPI:  boshDirectorAPI,
-		BoshDirectorCert: boshDirectorCert,
-		BoshDirectorKey:  boshDirectorKey,
-		BoshDirectorCA:   boshDirectorCA,
-		BoshClient:       boshClient,
-		BoshClientSecret: boshClientSecret,
-		BoshEnvironment:  boshEnvironment,
-		BoshPath:         boshPath,
-		BaseManifestPath: baseManifestPath,
-		HomePath:         homePath,
+		ReleaseRepoPath:    releaseRepoPath,
+		ReleaseVersion:     releaseVersion,
+		BoshDirectorAPI:    boshDirectorAPI,
+		BoshDirectorCertCN: boshDirectorCertCN,
+		BoshDirectorCert:   boshDirectorCert,
+		BoshDirectorKey:    boshDirectorKey,
+		BoshDirectorCA:     boshDirectorCA,
+		BoshClient:         boshClient,
+		BoshClientSecret:   boshClientSecret,
+		BoshEnvironment:    boshEnvironment,
+		BoshPath:           boshPath,
+		BaseManifestPath:   baseManifestPath,
+		HomePath:           homePath,
 	}, nil
 }
 

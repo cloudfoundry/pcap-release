@@ -99,20 +99,28 @@ var opsfileStartApache = `
         apt-get update && apt-get install apache2 -y && apache2ctl start
 `
 
+var opsfileChangeBoshDirectorCN string = `---
+# Replace bosh director cert common name with the right one
+- type: replace
+  path: /instance_groups/name=pcap-api/jobs/name=pcap-api/properties/pcap-api/bosh/tls/common_name
+  value: ((director_common_name))
+`
+
 // opsfiles that need to be set for all tests
-var defaultOpsfiles = []string{opsfileChangeName, opsfileChangeVersion, opsfileAddSSHUser, opsfileStartApache}
+var defaultOpsfiles = []string{opsfileChangeName, opsfileChangeVersion, opsfileChangeBoshDirectorCN, opsfileAddSSHUser, opsfileStartApache}
 var defaultSSHUser string = "ginkgo"
 
 // buildManifestVars returns a map of variables needed to deploy pcap.
 func buildManifestVars(baseManifestVars baseManifestVars, customVars map[string]interface{}) map[string]interface{} {
 	vars := map[string]interface{}{
-		"release-version":   config.ReleaseVersion,
-		"director_ssl_ca":   config.BoshDirectorCA,
-		"bosh_director_api": config.BoshDirectorAPI,
-		"director_ssl_cert": config.BoshDirectorCert,
-		"director_ssl_key":  config.BoshDirectorKey,
-		"deployment-name":   baseManifestVars.deploymentName,
-		"ssh_user":          defaultSSHUser,
+		"release-version":      config.ReleaseVersion,
+		"director_ssl_ca":      config.BoshDirectorCA,
+		"bosh_director_api":    config.BoshDirectorAPI,
+		"director_ssl_cert":    config.BoshDirectorCert,
+		"director_ssl_key":     config.BoshDirectorKey,
+		"director_common_name": config.BoshDirectorCertCN,
+		"deployment-name":      baseManifestVars.deploymentName,
+		"ssh_user":             defaultSSHUser,
 	}
 	for k, v := range customVars {
 		vars[k] = v

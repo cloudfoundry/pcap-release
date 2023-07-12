@@ -60,7 +60,7 @@ instance_groups:
               tls:
                 certificate: ((pcap_agent_tls.certificate))
                 private_key: ((pcap_agent_tls.private_key))
-                ca: ((pcap_agent_tls.ca))
+                client_cas: ((pcap_agent_tls.ca))
 
 update:
   canaries: 1
