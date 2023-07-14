@@ -3,7 +3,6 @@ package pcap
 import (
 	"crypto/rsa"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,7 +56,7 @@ type BoshResolverConfig struct {
 	RawDirectorURL string     `yaml:"director_url" validate:"required,url"`
 	AgentPort      int        `yaml:"agent_port" validate:"required,gt=0,lte=65535"`
 	TokenScope     string     `yaml:"token_scope" validate:"required"`
-	MTLS           *MutualTLS `yaml:"mtls" validate:"omitempty"`
+	TLS            *ClientTLS `yaml:"tls" validate:"omitempty"`
 }
 
 // BoshResolver uses a BOSH director to resolve AgentEndpoint s.
@@ -69,7 +68,7 @@ type BoshResolver struct {
 	Config      BoshResolverConfig
 	DirectorURL *url.URL
 	logger      *zap.Logger
-	boshRootCAs *x509.CertPool
+	tlsConf     *tls.Config
 }
 
 // NewBoshResolver creates and initializes a BoshResolver based on the provided config.
@@ -88,19 +87,17 @@ func NewBoshResolver(config BoshResolverConfig) (*BoshResolver, error) {
 		directorURL.Path = "/"
 	}
 
-	var boshRootCAs *x509.CertPool
-	if config.MTLS != nil {
-		boshRootCAs, err = createCAPool(config.MTLS.CertificateAuthority)
-		if err != nil {
-			return nil, fmt.Errorf("could not create bosh CA pool: %w", err)
-		}
-	}
-
 	resolver := &BoshResolver{
 		logger:      zap.L().With(zap.String(LogKeyHandler, BoshResolverName)),
 		Config:      config,
 		DirectorURL: directorURL,
-		boshRootCAs: boshRootCAs,
+	}
+
+	if config.TLS != nil {
+		resolver.tlsConf, err = config.TLS.Config()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = resolver.setup()
@@ -224,17 +221,6 @@ func (br *BoshResolver) Validate(endpointRequest *EndpointRequest) error {
 func (br *BoshResolver) setup() error {
 	br.logger.Debug("setting up BoshResolver", zap.Any("resolver-config", br.Config))
 
-	var tlsConfig *tls.Config
-
-	if br.Config.MTLS != nil {
-		tlsConfig = &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			MaxVersion: tls.VersionTLS13,
-			ClientAuth: tls.RequireAndVerifyClientCert,
-			RootCAs:    br.boshRootCAs,
-		}
-	}
-
 	timeout := 500 * time.Millisecond //nolint:gomnd // reasonable value.
 
 	br.client = &http.Client{
@@ -247,7 +233,7 @@ func (br *BoshResolver) setup() error {
 			ExpectContinueTimeout: timeout,
 			DisableKeepAlives:     true,
 			MaxIdleConnsPerHost:   -1,
-			TLSClientConfig:       tlsConfig,
+			TLSClientConfig:       br.tlsConf,
 		},
 		Timeout: timeout,
 	}

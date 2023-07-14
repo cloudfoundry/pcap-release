@@ -64,7 +64,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 			boshConfig := pcap.BoshResolverConfig{
 				AgentPort:  agentPort,
 				TokenScope: "bosh.admin",
-				MTLS:       nil,
+				TLS:        nil,
 			}
 
 			var err error
@@ -73,11 +73,10 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 
 			messageWriter = NewMemoryMessageWriter()
 
-			agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 			apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180}
 
 			var apiAddr net.Addr
-			apiClient, apiServer, api, apiAddr = createAPIwithBoshResolver(boshResolver, apiBuffConf, agentTLSConf, apiID)
+			apiClient, apiServer, api, apiAddr = createAPIwithBoshResolver(boshResolver, apiBuffConf, nil, apiID)
 
 			apiURL = mock.MustParseURL(fmt.Sprintf("http://%s", apiAddr.String()))
 		})
@@ -323,7 +322,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 	})
 })
 
-func createAPIwithBoshResolver(resolver *pcap.BoshResolver, bufConf pcap.BufferConf, mTLSConfig *pcap.MutualTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
+func createAPIwithBoshResolver(resolver *pcap.BoshResolver, bufConf pcap.BufferConf, mTLSConfig *pcap.ClientTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
 	return createAPI(resolver, bufConf, mTLSConfig, id)
 }
 

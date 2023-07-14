@@ -284,7 +284,7 @@ func TestAPIRegisterHandler(t *testing.T) {
 
 	config := pcap.BoshResolverConfig{
 		RawDirectorURL: boshAPI.URL,
-		MTLS:           nil,
+		TLS:            nil,
 		AgentPort:      8083,
 	}
 	boshResolver, err := pcap.NewBoshResolver(config)

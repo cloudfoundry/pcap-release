@@ -1,7 +1,9 @@
-<%
-if_p("pcap-api.agents_mtls.ca") do |pem|
-%>
+<%- if p("pcap-api.agents_mtls.enabled").to_s == "true"
+      if !p("pcap-api.agents_mtls.ca", nil)
+        raise "Conflicting configuration: pcap-api.agents_mtls.enabled is true, you must provide a valid client CAs"
+      end
+    end
+-%>
+<%- if_p("pcap-api.agents_mtls.ca") do |pem| -%>
 <%= pem %>
-<%
-end
-%>
+<%- end -%>

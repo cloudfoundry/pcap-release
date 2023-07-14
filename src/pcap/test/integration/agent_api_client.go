@@ -28,7 +28,7 @@ var port = 9494
 
 var APIPort = 8080
 
-func createAPIwithLocalResolver(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig *pcap.MutualTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
+func createAPIwithLocalResolver(targets []pcap.AgentEndpoint, bufConf pcap.BufferConf, mTLSConfig *pcap.ClientTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
 	resolver := NewLocalResolver(targets)
 	return createAPI(resolver, bufConf, mTLSConfig, id)
 }
@@ -59,9 +59,8 @@ var _ = Describe("Using LocalResolver", func() {
 				agentServer2, agentTarget2, _ = createAgent(9494, agentID2, nil)
 				targets = append(targets, agentTarget2)
 
-				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 				apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180} //nolint:gomnd // Values for a test
-				apiClient, apiServer, api, _ = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, apiID)
+				apiClient, apiServer, api, _ = createAPIwithLocalResolver(targets, apiBuffConf, nil, apiID)
 
 				defaultOptions = &pcap.CaptureOptions{
 					Device:  loopback,
@@ -212,9 +211,8 @@ var _ = Describe("Using LocalResolver", func() {
 				agentServer1, agentTarget1, agent1 = createAgent(port, agentID1, nil)
 				targets = append(targets, agentTarget1)
 
-				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 				apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 90}
-				apiClient, apiServer, _, _ = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, apiID)
+				apiClient, apiServer, _, _ = createAPIwithLocalResolver(targets, apiBuffConf, nil, apiID)
 				apiPort++
 
 				defaultOptions = &pcap.CaptureOptions{
@@ -256,9 +254,8 @@ var _ = Describe("Using LocalResolver", func() {
 
 				agentServer2, agentTarget2, _ = createAgent(port, agentID2, nil)
 				targets = append(targets, agentTarget2)
-				agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 				apiBuffConf := pcap.BufferConf{Size: 7, UpperLimit: 6, LowerLimit: 4}
-				apiClient, apiServer, _, _ = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, apiID)
+				apiClient, apiServer, _, _ = createAPIwithLocalResolver(targets, apiBuffConf, nil, apiID)
 				apiPort++
 
 				defaultOptions = &pcap.CaptureOptions{
@@ -306,13 +303,12 @@ var _ = Describe("Using LocalResolver", func() {
 				agentServer1, target, agent1 = createAgent(port, agentID1, mTLSConfig)
 				targets = append(targets, target)
 
-				agentTLSConf := &pcap.MutualTLS{
-					SkipVerify: false,
-					CommonName: agentServerCertCN,
-					TLS: pcap.TLS{
-						Certificate: clientCertFile,
-						PrivateKey:  clientKeyFile, CertificateAuthority: caPath,
-					},
+				agentTLSConf := &pcap.ClientTLS{
+					Certificate: clientCertFile,
+					PrivateKey:  clientKeyFile,
+					RootCas:     caPath,
+					SkipVerify:  false,
+					ServerName:  agentServerCertCN,
 				}
 				apiBuffConf := pcap.BufferConf{Size: 100, UpperLimit: 98, LowerLimit: 80}
 				apiClient, apiServer, _, _ = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, agentID1)
@@ -379,9 +375,8 @@ var _ = Describe("Using LocalResolver", func() {
 			agentServer1, agentTarget1, agent1 = createAgent(port, agentID1, nil)
 			targets = append(targets, agentTarget1)
 
-			agentTLSConf := &pcap.MutualTLS{SkipVerify: true}
 			apiBuffConf := pcap.BufferConf{Size: 100000, UpperLimit: 99000, LowerLimit: 90000}
-			apiClient, apiServer, api, apiAddr = createAPIwithLocalResolver(targets, apiBuffConf, agentTLSConf, apiID)
+			apiClient, apiServer, api, apiAddr = createAPIwithLocalResolver(targets, apiBuffConf, nil, apiID)
 
 		})
 

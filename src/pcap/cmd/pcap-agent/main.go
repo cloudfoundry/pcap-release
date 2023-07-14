@@ -15,6 +15,7 @@ import (
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 func main() {
@@ -57,11 +58,13 @@ func main() {
 		return
 	}
 
-	tlsCredentials, err := config.TLSCredentials()
+	tlsConfig, err := config.NodeConfig.Listen.TLS.Config()
 	if err != nil {
 		log.Error("unable to load provided TLS credentials", zap.Error(err))
 		return
 	}
+
+	tlsCredentials := credentials.NewTLS(tlsConfig)
 
 	server := grpc.NewServer(grpc.Creds(tlsCredentials))
 	pcap.RegisterAgentServer(server, agent)

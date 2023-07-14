@@ -109,10 +109,7 @@ func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 	)
 
 	if apiURL.Scheme == "https" {
-		creds, err = LoadTLSCredentials("", "", nil, nil, nil)
-		if err != nil {
-			return fmt.Errorf("could not generate TLS credentials: %w", err)
-		}
+		creds = credentials.NewTLS(newTLSConfig())
 	} else { // plain http
 		creds = insecure.NewCredentials()
 	}

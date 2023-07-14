@@ -15,8 +15,11 @@ import (
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
+//nolint:funlen // the function is good readable
 func main() {
 	log := zap.L()
 	log.Info("init phase done, starting api")
@@ -78,11 +81,19 @@ func main() {
 		return
 	}
 
-	tlsCredentials, err := config.TLSCredentials()
-	if err != nil {
-		log.Error("unable to load provided TLS credentials", zap.Error(err))
-		return
+	var tlsCredentials credentials.TransportCredentials
+	if config.NodeConfig.Listen.TLS != nil {
+		tlsConfig, tlsConfigErr := config.NodeConfig.Listen.TLS.Config()
+		if tlsConfigErr != nil {
+			log.Error("unable to load provided TLS credentials", zap.Error(tlsConfigErr))
+			return
+		}
+
+		tlsCredentials = credentials.NewTLS(tlsConfig)
+	} else {
+		tlsCredentials = insecure.NewCredentials()
 	}
+
 	server := grpc.NewServer(grpc.Creds(tlsCredentials))
 	pcap.RegisterAPIServer(server, api)
 

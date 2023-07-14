@@ -7,32 +7,119 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-// TLS configures the server side of (m)TLS.
-type TLS struct {
-	// Certificate holds the path to the PEM encoded certificate (chain).
-	Certificate string `yaml:"certificate" validate:"file"`
-	// PrivateKey holds the path to the PEM encoded private key.
-	PrivateKey string `yaml:"private_key" validate:"file"`
-	// CertificateAuthority holds the path to the PEM encoded CA bundle which is used
-	// to request and verify client certificates.
-	CertificateAuthority string `yaml:"ca" validate:"file"`
+// newTLSConfig is used to set common defaults on newly created TLS
+// configurations.
+func newTLSConfig() *tls.Config {
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		MaxVersion: tls.VersionTLS13,
+	}
 }
 
-// MutualTLS defines the client-side configuration for an mTLS connection.
-//
-// Certificate and PrivateKey are for the mTLS client certificate
-// The CertificateAuthority is a file containing the server's CA that should be trusted when connecting to the server.
-type MutualTLS struct {
-	TLS `yaml:"-,inline"`
-	// SkipVerify can disable the server certificate verification when connecting.
+type ServerTLS struct {
+	// Certificate holds the path to the PEM encoded certificate (chain) that
+	// is presented by the client / server to its peer.
+	Certificate string `yaml:"certificate" validate:"omitempty,file"`
+	// PrivateKey is the private key matching the certificate.
+	PrivateKey string `yaml:"private_key" validate:"omitempty,file"`
+	ClientCas  string `yaml:"client_cas"`
+	// Verify controls how the peer certificate is verified:
+	//
+	// 0: tls.NoClientCert
+	//
+	// 1: tls.RequestClientCert
+	//
+	// 2: tls.RequireAnyClientCert
+	//
+	// 3: tls.VerifyClientCertIfGiven
+	//
+	// 4: tls.RequireAndVerifyClientCert
+	Verify tls.ClientAuthType `yaml:"verify"`
+}
+
+func (c *ServerTLS) Config() (*tls.Config, error) {
+	if c == nil {
+		return nil, fmt.Errorf("server TLS config must be non-nil")
+	}
+
+	tlsConf := newTLSConfig()
+
+	cert, err := tls.LoadX509KeyPair(c.Certificate, c.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("load x509 key pair: %w", err)
+	}
+	tlsConf.Certificates = []tls.Certificate{cert}
+
+	if c.ClientCas == "" && tlsConf.ClientAuth > 0 {
+		return nil, fmt.Errorf("tls config: configuered client certificate authentication without client CA list")
+	}
+
+	if c.ClientCas == "" {
+		// no mTLS
+		return tlsConf, nil
+	}
+
+	// configure mTLS
+	tlsConf.ClientAuth = c.Verify
+
+	trustedCas, err := createCAPool(c.ClientCas)
+	if err != nil {
+		return nil, fmt.Errorf("create CA pool: %w", err)
+	}
+	tlsConf.ClientCAs = trustedCas
+
+	return tlsConf, nil
+}
+
+type ClientTLS struct {
+	// Certificate holds the path to the PEM encoded certificate (chain) that
+	// is presented by the client / server to its peer.
+	Certificate string `yaml:"certificate" validate:"omitempty,file"`
+	// PrivateKey is the private key matching the certificate.
+	PrivateKey string `yaml:"private_key" validate:"omitempty,file"`
+	// RootCas holds the path to the PEM encoded CA bundle which
+	// is used to validate the certificate presented by the server if acting as
+	// the client.
+	RootCas string `yaml:"ca" validate:"omitempty,file"`
+	// SkipVerify can be set to disable verification of the peer certificate if
+	// acting as the client.
 	SkipVerify bool `yaml:"skip_verify"`
-	// CommonName is used as part of the certificate verification, together with CertificateAuthority.
-	CommonName string `yaml:"common_name"`
+	// ServerName that the certificate presented by the server must be signed
+	// for.
+	ServerName string `yaml:"server_name"`
+}
+
+func (c *ClientTLS) Config() (*tls.Config, error) {
+	tlsConf := newTLSConfig()
+	if c == nil {
+		return tlsConf, nil
+	}
+
+	if c.Certificate != "" || c.PrivateKey != "" {
+		cert, err := tls.LoadX509KeyPair(c.Certificate, c.PrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("load x509 key pair: %w", err)
+		}
+		tlsConf.Certificates = []tls.Certificate{cert}
+	}
+
+	tlsConf.InsecureSkipVerify = c.SkipVerify
+
+	if c.RootCas != "" {
+		trustedCas, err := createCAPool(c.RootCas)
+		if err != nil {
+			return nil, fmt.Errorf("create CA pool: %w", err)
+		}
+		tlsConf.RootCAs = trustedCas
+	}
+
+	if c.ServerName != "" {
+		tlsConf.ServerName = c.ServerName
+	}
+
+	return tlsConf, nil
 }
 
 // BufferConf allows to specify the behaviour of buffers.
@@ -58,8 +145,8 @@ type BufferConf struct {
 
 // Listen defines the port and optional TLS configuration for the listening socket.
 type Listen struct {
-	Port int  `yaml:"port" validate:"gt=0,lte=65535"`
-	TLS  *TLS `yaml:"tls,omitempty"`
+	Port int        `yaml:"port" validate:"gt=0,lte=65535"`
+	TLS  *ServerTLS `yaml:"tls,omitempty"`
 }
 
 type NodeConfig struct {
@@ -67,57 +154,6 @@ type NodeConfig struct {
 	Buffer   BufferConf `yaml:"buffer"`
 	LogLevel string     `yaml:"log_level"`
 	ID       string     `yaml:"id" validate:"required"`
-}
-
-// TLSCredentials creates the necessary credentials from this Config. If NodeConfig.Listen.TLS is
-// nil, credentials which disable transport security, will be used.
-//
-// Note: the TLS version is currently hard-coded to TLSv1.3.
-func (c NodeConfig) TLSCredentials() (credentials.TransportCredentials, error) {
-	if tlsConfig := c.Listen.TLS; tlsConfig != nil {
-		return LoadTLSCredentials(tlsConfig.Certificate, tlsConfig.PrivateKey, &tlsConfig.CertificateAuthority, nil, nil)
-	}
-	return insecure.NewCredentials(), nil
-}
-
-// LoadTLSCredentials creates TLS transport credentials from the given parameters.
-func LoadTLSCredentials(certFile, keyFile string, caFile *string, peerCAFile *string, peerCommonName *string) (credentials.TransportCredentials, error) {
-	tlsConf := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		MaxVersion: tls.VersionTLS13,
-		ClientAuth: tls.RequireAndVerifyClientCert,
-	}
-
-	if certFile != "" && keyFile != "" {
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			return nil, fmt.Errorf("load client certificate or private key failed: %w", err)
-		}
-		tlsConf.Certificates = []tls.Certificate{cert}
-	}
-
-	if caFile != nil {
-		caPool, err := createCAPool(*caFile)
-		if err != nil {
-			return nil, fmt.Errorf("load certificate authority file failed: %w", err)
-		}
-		tlsConf.ClientCAs = caPool
-		tlsConf.ClientAuth = tls.RequireAndVerifyClientCert
-	}
-
-	if peerCAFile != nil {
-		caPool, err := createCAPool(*peerCAFile)
-		if err != nil {
-			return nil, fmt.Errorf("load certificate authority file failed: %w", err)
-		}
-		tlsConf.RootCAs = caPool
-	}
-
-	if peerCommonName != nil {
-		tlsConf.ServerName = *peerCommonName
-	}
-
-	return credentials.NewTLS(tlsConf), nil
 }
 
 func createCAPool(certificateAuthorityFile string) (*x509.CertPool, error) {

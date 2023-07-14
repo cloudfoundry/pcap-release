@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -231,7 +232,13 @@ func generateCertAndKey(cert *x509.Certificate, ca *x509.Certificate, issuerKey 
 }
 
 func configureServer(certFile string, keyFile string, clientCAFile string) (credentials.TransportCredentials, error) {
-	return pcap.LoadTLSCredentials(certFile, keyFile, &clientCAFile, nil, nil)
+	tlsConf, err := (&pcap.ServerTLS{
+		Certificate: certFile,
+		PrivateKey:  keyFile,
+		ClientCas:   clientCAFile,
+		Verify:      tls.RequireAndVerifyClientCert,
+	}).Config()
+	return credentials.NewTLS(tlsConf), err
 }
 
 func createAgent(port int, id string, tlsCreds credentials.TransportCredentials) (*grpc.Server, pcap.AgentEndpoint, *pcap.Agent) {
@@ -268,7 +275,7 @@ func createAgent(port int, id string, tlsCreds credentials.TransportCredentials)
 	return server, target, agent
 }
 
-func createAPI(resolver pcap.AgentResolver, bufConf pcap.BufferConf, mTLSConfig *pcap.MutualTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
+func createAPI(resolver pcap.AgentResolver, bufConf pcap.BufferConf, mTLSConfig *pcap.ClientTLS, id string) (pcap.APIClient, *grpc.Server, *pcap.API, net.Addr) {
 	var server *grpc.Server
 	api, err := pcap.NewAPI(bufConf, mTLSConfig, id, MaxConcurrentCaptures)
 	Expect(err).NotTo(HaveOccurred())

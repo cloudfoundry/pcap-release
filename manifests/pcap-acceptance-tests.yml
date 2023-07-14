@@ -26,11 +26,10 @@ instance_groups:
               director_url: ((bosh_director_api))
               token_scope: bosh.admin
               agent_port: 9494
-              mtls:
+              tls:
+                enabled: true
                 common_name: bosh.service.cf.internal
                 skip_verify: false
-                certificate: ((director_ssl_cert))
-                private_key: ((director_ssl_key))
                 ca: ((director_ssl_ca))
             agents_mtls:
               common_name: pcap-agent.service.cf.internal
@@ -61,7 +60,7 @@ instance_groups:
               tls:
                 certificate: ((pcap_agent_tls.certificate))
                 private_key: ((pcap_agent_tls.private_key))
-                ca: ((pcap_agent_tls.ca))
+                client_cas: ((pcap_agent_tls.ca))
 
 update:
   canaries: 1

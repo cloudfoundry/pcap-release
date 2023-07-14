@@ -9,5 +9,5 @@ listen:
   tls: # omitempty -> nil == tls off
     certificate: agent-cert.pem
     private_key: agent-cert.key
-    ca: pcap-ca.pem
+    client_cas: pcap-ca.pem
 

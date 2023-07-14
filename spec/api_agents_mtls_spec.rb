@@ -48,7 +48,7 @@ describe 'config/pcap-api.yml agents properties' do
     it 'configures correctly' do
       properties.merge!(agents_mtls_properties)
       expect(pcap_api_conf['agents_mtls']['skip_verify']).to be(true)
-      expect(pcap_api_conf['agents_mtls']['common_name']).to include('pcap-agent-test.service.cf.internal')
+      expect(pcap_api_conf['agents_mtls']['server_name']).to include('pcap-agent-test.service.cf.internal')
       expect(pcap_api_conf['agents_mtls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.crt')
       expect(pcap_api_conf['agents_mtls']['private_key']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.key')
       expect(pcap_api_conf['agents_mtls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client-ca.crt')
@@ -67,7 +67,7 @@ describe 'config/pcap-api.yml agents properties' do
     it 'takes defaults correctly' do
       properties.merge!(agents_mtls_properties)
       expect(pcap_api_conf['agents_mtls']['skip_verify']).to be(false)
-      expect(pcap_api_conf['agents_mtls']['common_name']).to include('pcap-agent.service.cf.internal')
+      expect(pcap_api_conf['agents_mtls']['server_name']).to include('pcap-agent.service.cf.internal')
       expect(pcap_api_conf['agents_mtls']['certificate']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.crt')
       expect(pcap_api_conf['agents_mtls']['private_key']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client.key')
       expect(pcap_api_conf['agents_mtls']['ca']).to include('/var/vcap/jobs/pcap-api/config/certs/pcap-api-client-ca.crt')
