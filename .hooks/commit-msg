@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# use commitlint with its full config if available
+if command -v commitlint >/dev/null && commitlint -v >/dev/null; then
+  # Find base directory (script_location/..)
+  COMMITLINT_CONFIG="$(realpath "$(dirname "$0")/..")/commitlint.config.js"
+  # execute commitlint only if the commitlint config exists
+  [[ -f "$COMMITLINT_CONFIG" ]] && exec commitlint --edit "$1" --verbose --config "$COMMITLINT_CONFIG"
+fi
+
+# Configuration
+
+# list of allowed commit types, space separated
+TYPES="fix feat dep ci doc refactor test"
+# scope length
+SCOPE_LENGTH=25
+# commit subject length
+SUBJECT_LENGTH=70
+
+# Logic
+first_line=$(head -n1 "$1")
+conv_commit_msg="^(${TYPES// /|})(\(.{1,$SCOPE_LENGTH}\))?(!?): (.{1,$SUBJECT_LENGTH})\$"
+
+_print_convention() {
+  echo "ERROR: Commit message does not confirm to commit conventions."
+  echo "       ----"
+  sed 's/^/     > /' "$1"
+  echo
+  echo "Rules: type(scope)!: commit subject"
+  echo "     - type: must be one of: ${TYPES// /, }"
+  echo "     - scope: (optional) arbitrary text: "
+  echo "     - !: breaking change indicator. Body MUST contain 'breaking-change:' header (case in-sensitive)"
+}
+
+# trap will be fired when the script exits. It will exit if any of the commands, including the grep below, fail.
+trap '_print_convention "$1"' EXIT
+
+# check that the first line conforms to the convention pattern
+grep -qE "$conv_commit_msg" <<< "$first_line"
+
+# if there is a !, indicating breaking change, ensure that there is a "breaking-change:" header.
+if [[ "$(sed -nE "s/$conv_commit_msg/\3/p" <<<"$first_line")" == "!" ]]; then
+  grep -qiE "^breaking(-| )change: .+" "$1"
+fi
+
+# All rules passed. Disable _print_convention printing
+trap "" EXIT
