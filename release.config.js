@@ -1,3 +1,6 @@
+// The following configuration uses the agreed-upon convention for commit message format
+// and the resulting version increases described in the CONTRIBUTING file.
+
 // parser opts ensure that breaking changes indicated with `!` after the scope (before `:`)
 // are valid commits and are processed correctly.
 const parserOpts = {
