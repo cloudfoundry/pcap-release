@@ -61,32 +61,41 @@ For tcpdumps of CF app containers, pcap-release provides a plugin to the CF Clou
 The release provides two files to integrate with an
 existing [cf-deployment](https://github.com/cloudfoundry/cf-deployment):
 
-* `manifests/ops-files/add-pcap-agent.yml` This provides a shared CA between pcap-agent and pcap-api. It also adds the pcap-agent job to all diego cells.
-* `manifests/pcap-api.yml` This is an example BOSH manifest to deploy the pcap-api
+* `manifests/ops-files/add-pcap-agent.yml` This adds the PCAP agent as an addon to any BOSH deployment.
+* `manifests/pcap-api.yml` This is an example BOSH manifest to deploy the pcap-api and agent.
 
-### Step 1 - Add pcap-agent to cf-deployment
+### Step 1 - Prepare vars.yml
+```bash
+cp manifests/vars-template.yml manifests/vars.yml
+vim manifests/vars.yml (adjust as needed)
+```
+
+### Step 2 - Deploy pcap-api
 
 ```bash
-bosh interpolate -o manifests/ops-files/add-pcap-agent.yml cf-deployment.yml > cf-deployment-pcap.yml
+bosh -d pcap deploy -l manifests/vars.yml manifests/pcap-api.yml
+```
+
+### Step 3 - Add pcap-agent to cf-deployment
+
+```bash
+bosh interpolate -o manifests/ops-files/add-pcap-agent.yml -l manifests/vars.yml cf-deployment.yml > cf-deployment-pcap.yml
 bosh -d cf deploy cf-deployment-pcap.yml
 ```
 
 This assumes your BOSH deployment name of cf-deployment is called `cf`
 
-### Step 2 - Deploy pcap-api
+
+### Step 4 - Install CF CLI plugin
+
+tbd
+
+### Step 5 - Install BOSH CLI
 
 ```bash
-cp manifests/vars-template.yml manifests/vars.yml
-vim manifests/vars.yml (adjust as needed)
-bosh -d pcap deploy -l manifests/vars.yml manifests/pcap-api.yml
-```
-
-### Step 3 - Install CF CLI plugin
-
-```bash
-wget https://pcap.cf.cfapp.com/cli/pcap-cli-[linux|mac]-amd64 (adjust URL as needed) -O pcap-cli
-cf install-plugin pcap-cli
-cf pcap ...
+bosh -d pcap scp <bosh instance of pcap api>:/var/vcap/packages/pcap-api/bin/cli/build/pcap-bosh-cli-linux-amd64
+mv pcap-bosh-cli-linux-amd64 /usr/local/bin/pcap-bosh
+pcap-bosh ...
 ```
 
 ## Development Deployment for BOSH
