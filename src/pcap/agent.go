@@ -143,6 +143,13 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 		<-ctx.Done()
 	}
 
+	// To release the readPackets routine we have to close the handle,
+	// otherwise we are forced to wait until a new packet is captured before
+	// observing that the context has been cancelled. This is because the call
+	// to read a packet blocks until either a packet is read or the handle is
+	// closed.
+	handle.Close()
+
 	err = context.Cause(ctx)
 	// Cancelling the context with nil causes context.Cancelled to be set
 	// which is a non-error in our case.
