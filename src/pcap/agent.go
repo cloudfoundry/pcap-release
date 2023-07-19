@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/pcap"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 )
+
+const readPacketTimeout = 1 * time.Second
 
 // Agent is the central struct to which the handlers are attached.
 type Agent struct {
@@ -193,7 +196,7 @@ func validateAgentStartRequest(req *AgentRequest) error {
 // openHandle is a helper function to open the packet capturing handle that reads from the
 // network interface and returns the data. Puts the network interface into promiscuous mode.
 func openHandle(opts *CaptureOptions) (*pcap.Handle, error) {
-	handle, err := pcap.OpenLive(opts.Device, int32(opts.SnapLen), true, pcap.BlockForever)
+	handle, err := pcap.OpenLive(opts.Device, int32(opts.SnapLen), true, readPacketTimeout)
 	if err != nil {
 		return nil, errorf(codes.Internal, "open handle: %w", err)
 	}
@@ -235,9 +238,15 @@ func readPackets(ctx context.Context, cancel context.CancelCauseFunc, handle pca
 			}
 
 			data, captureInfo, err := handle.ReadPacketData()
-			if err != nil {
+			// We ignore timeout errors and just retry since the timeout is for
+			// each packet that we read and not for the overall capture. This
+			// is done to ensure that we check at least once per second if the
+			// capture has been cancelled.
+			if err != nil && !errors.Is(err, pcap.NextErrorTimeoutExpired) {
 				cancel(fmt.Errorf("read packet: %w", err))
 				return
+			} else if errors.Is(err, pcap.NextErrorTimeoutExpired) {
+				continue
 			}
 
 			out <- newPacketResponse(data, captureInfo)
