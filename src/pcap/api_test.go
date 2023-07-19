@@ -75,12 +75,6 @@ func TestReadMsg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			ctx, cancel := context.WithCancelCause(ctx)
-			if tt.contextCancelled {
-				cancel(nil)
-			}
-
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 

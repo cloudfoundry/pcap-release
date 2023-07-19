@@ -458,7 +458,8 @@ func (api *API) capture(ctx context.Context, clientStream responseSender, opts *
 		log = log.With(zap.String(LogKeyTarget, target.String()))
 		log.Info("starting capture")
 
-		agentStream, err := prepareStream(ctx, opts, target, api.tlsCredentials, log)
+		var agentStream captureStream
+		agentStream, err = prepareStream(ctx, opts, target, api.tlsCredentials, log)
 		if err != nil {
 			errMsg := convertAgentStatusCodeToMsg(err, target.Identifier)
 			sendErr := clientStream.Send(errMsg)
