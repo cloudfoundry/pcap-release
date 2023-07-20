@@ -13,18 +13,14 @@ Credentials and admin access lie with that team. <!-- TODO: If you have question
 Concourse is used as CI system. There are two main types of tests and various release specific steps, all of which are defined in [pipeline.yml](pipeline.yml).
 
 * `unit-tests` and `unit-tests-pr` run a series of tests on the Ruby templating based configuration file generators as well Go unit and integration tests. They also include linters for all code and test code.
+* `acceptance-tests` and `acceptance-tests-pr` runs a series of acceptance tests developed in Go.
+* `unit-tests-pr` and `acceptance-tests-pr` are executed for PRs that are marked with the `run-ci` label AND authored by a member of `wg-app-runtime-platform-networking-extensions-approvers` or technical users like `dependabot` or `CFN-CI`.
+* `unit-tests-pr` and `acceptance-tests-pr` are executed for each approved PR that is marked with the `run-ci` label.
+* `acceptance-tests` is run on new commits to `master`, e.g. after a PR has been merged.
+
+All tests run in Docker. The image `cf-routing.common.repositories.cloud.sap/pcap-release-testflight` is a built and cached version of building [`Dockerfile`](Dockerfile).
 
 
-## Current State
-
-Currently, the PR validation uses the docker image `cf-routing.common.repositories.cloud.sap/pcap-release-testflight`. 
-
-<!-- TODO: * `acceptance-tests` and `acceptance-tests-pr` runs a series of acceptance tests developed in Go.
-  * `acceptance-tests-pr` is executed for each PR that is marked with the `run-ci` label, while
-  * `acceptance-tests` is run on new commits to `master`, e.g. after a PR has been merged.
-All tests run in Docker. The image `iacbox.common.repositories.cloud.sap/haproxy-boshrelease-testflight` is a built and cached version of building [`Dockerfile`](Dockerfile).
-
--->
 ## TODO
 Add a description on unit tests and acceptance tests
 <!--
