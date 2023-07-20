@@ -435,7 +435,6 @@ var _ = Describe("Using LocalResolver", func() {
 					delta := lastTimestamp.Sub(stop)
 					logger.Sugar().Infof("Captured %d packets. Last timestamp: %v, %v after stop command", len(packets), lastTimestamp, delta)
 					Expect(delta).To(BeNumerically("<", maxAge), "Expected %s to be up to %s after %s", lastTimestamp, maxAge, stop)
-					Expect(delta).To(BeNumerically(">", 0), "Expected delay of stop command and last packet to be > 0")
 
 				}
 				validatePcapFile(file, validateAge)

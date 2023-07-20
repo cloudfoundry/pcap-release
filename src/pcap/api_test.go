@@ -75,16 +75,10 @@ func TestReadMsg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			ctx, cancel := context.WithCancelCause(ctx)
-			if tt.contextCancelled {
-				cancel(nil)
-			}
-
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 
-			out := readMsgFromStream(ctx, tt.captureStream, tt.target, bufSize)
+			out := readMsgFromStream(tt.captureStream, tt.target, bufSize)
 
 			if !containsMsgType(out, tt.expectedData) {
 				t.Errorf("Expected %s but got something else", tt.expectedData)
@@ -284,7 +278,7 @@ func TestCapture(t *testing.T) {
 	tests := []struct {
 		name           string
 		targets        []AgentEndpoint
-		stream         captureReceiver
+		stream         captureStream
 		err            error
 		wantStatusCode codes.Code
 		wantErr        bool
@@ -312,7 +306,7 @@ func TestCapture(t *testing.T) {
 				t.Errorf("capture() unexpected error during api creation: %v", err)
 			}
 
-			var connectToTargetFn = func(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
+			var connectToTargetFn = func(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureStream, error) {
 				return tt.stream, tt.err
 			}
 

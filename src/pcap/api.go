@@ -315,7 +315,7 @@ func mergeResponseChannels(cs []<-chan *CaptureResponse, bufSize int) <-chan *Ca
 
 // connectToTarget creates connection to the agent. If the agent is available and healthy
 // a new capture is started using Agent.Capture.
-func connectToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureReceiver, error) {
+func connectToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureStream, error) {
 	cc, err := grpc.Dial(target.String(), grpc.WithTransportCredentials(creds))
 	if err != nil {
 		err = fmt.Errorf("start capture from '%s': %w", target, err)
@@ -337,13 +337,13 @@ func connectToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpo
 	} else {
 		agentContext, _ = setVcapID(agentContext, log, &vcapID)
 	}
-	captureStream, err := agent.Capture(agentContext)
+	agentStream, err := agent.Capture(agentContext)
 
 	if err != nil {
 		return nil, err
 	}
 
-	err = captureStream.Send(&AgentRequest{
+	err = agentStream.Send(&AgentRequest{
 		Payload: &AgentRequest_Start{
 			Start: &StartAgentCapture{
 				Capture: req,
@@ -353,12 +353,11 @@ func connectToTarget(ctx context.Context, req *CaptureOptions, target AgentEndpo
 	if err != nil {
 		return nil, err
 	}
-	return captureStream, nil
+	return agentStream, nil
 }
 
 type captureReceiver interface {
 	Recv() (*CaptureResponse, error)
-	Send(*AgentRequest) error
 	CloseSend() error
 	Context() context.Context
 }
@@ -366,17 +365,12 @@ type captureReceiver interface {
 // readMsgFromStream reads Capture messages from stream and outputs them to the out channel.
 // If context will be cancelled from other routine (mostly because client requests to stop capture), the stop request will be forwarded to agent.
 // The data from the agent will be read till stream ends with EOF.
-func readMsgFromStream(ctx context.Context, captureStream captureReceiver, target AgentEndpoint, bufSize int) <-chan *CaptureResponse {
+func readMsgFromStream(captureStream captureReceiver, target AgentEndpoint, bufSize int) <-chan *CaptureResponse {
 	out := make(chan *CaptureResponse, bufSize)
-	stopped := false
 	go func() {
-		defer close(out)
 		defer closeCaptureStream(out, target, captureStream)
+		defer close(out)
 		for {
-			if ctx.Err() != nil && !stopped {
-				stopped = true
-				stopAgentCapture(captureStream, out, target)
-			}
 			msg, err := captureStream.Recv()
 			if err != nil && errors.Is(err, io.EOF) {
 				msg := fmt.Sprintf("Capturing stopped on agent pcap-agent %s", target)
@@ -404,15 +398,6 @@ func closeCaptureStream(out chan *CaptureResponse, target AgentEndpoint, capture
 	if closeSendErr != nil {
 		out <- convertAgentStatusCodeToMsg(closeSendErr, target.Identifier)
 		return
-	}
-}
-
-func stopAgentCapture(captureStream captureReceiver, out chan *CaptureResponse, target AgentEndpoint) {
-	err := captureStream.Send(&AgentRequest{
-		Payload: &AgentRequest_Stop{},
-	})
-	if err != nil {
-		out <- convertAgentStatusCodeToMsg(err, target.Identifier)
 	}
 }
 
@@ -450,9 +435,16 @@ func stopCmd(cancel context.CancelCauseFunc, stream requestReceiver) {
 	}()
 }
 
-type streamPreparer func(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials, *zap.Logger) (captureReceiver, error)
+type captureStream interface {
+	Recv() (*CaptureResponse, error)
+	Send(*AgentRequest) error
+	CloseSend() error
+	Context() context.Context
+}
 
-func (api *API) capture(ctx context.Context, stream responseSender, opts *CaptureOptions, targets []AgentEndpoint, log *zap.Logger, prepareStream streamPreparer) (<-chan *CaptureResponse, error) {
+type streamPreparer func(context.Context, *CaptureOptions, AgentEndpoint, credentials.TransportCredentials, *zap.Logger) (captureStream, error)
+
+func (api *API) capture(ctx context.Context, clientStream responseSender, opts *CaptureOptions, targets []AgentEndpoint, log *zap.Logger, prepareStream streamPreparer) (<-chan *CaptureResponse, error) {
 	var captureCs []<-chan *CaptureResponse
 
 	runningCaptures := 0
@@ -466,11 +458,11 @@ func (api *API) capture(ctx context.Context, stream responseSender, opts *Captur
 		log = log.With(zap.String(LogKeyTarget, target.String()))
 		log.Info("starting capture")
 
-		var captureStream captureReceiver
-		captureStream, err = prepareStream(ctx, opts, target, api.tlsCredentials, log)
+		var agentStream captureStream
+		agentStream, err = prepareStream(ctx, opts, target, api.tlsCredentials, log)
 		if err != nil {
 			errMsg := convertAgentStatusCodeToMsg(err, target.Identifier)
-			sendErr := stream.Send(errMsg)
+			sendErr := clientStream.Send(errMsg)
 			if sendErr != nil {
 				log.Error(fmt.Sprintf("cannot send error to receiver: %s", errMsg.String()))
 			}
@@ -482,7 +474,8 @@ func (api *API) capture(ctx context.Context, stream responseSender, opts *Captur
 
 		runningCaptures++
 
-		c := readMsgFromStream(ctx, captureStream, target, api.bufConf.Size)
+		c := readMsgFromStream(agentStream, target, api.bufConf.Size)
+		go stopAgentOnCancel(ctx, agentStream)
 		captureCs = append(captureCs, c)
 	}
 
@@ -494,6 +487,18 @@ func (api *API) capture(ctx context.Context, stream responseSender, opts *Captur
 	// merge channels to one channel and send to forward to stream
 	out := mergeResponseChannels(captureCs, api.bufConf.Size)
 	return out, nil
+}
+
+type captureSender interface {
+	Send(*AgentRequest) error
+}
+
+func stopAgentOnCancel(ctx context.Context, captureStream captureSender) {
+	<-ctx.Done()
+	err := captureStream.Send(&AgentRequest{Payload: &AgentRequest_Stop{Stop: &StopAgentCapture{}}})
+	if err != nil {
+		zap.L().Warn("unable to send stop request to agent", zap.Error(err))
+	}
 }
 
 // convertAgentStatusCodeToMsg matches response code from agent to suitable message type.
