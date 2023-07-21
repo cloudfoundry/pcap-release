@@ -1,0 +1,78 @@
+# Contributing
+
+You can contribute to the `pcap-release` repository by [opening PRs on GitHub](https://github.com/cloudfoundry/pcap-release/pull).
+
+## Commit Conventions
+
+We use [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) for automatically generating release notes for each of the releases. This saves on a lot of maintainer work.
+
+The convention is checked by a GitHub action job on PRs. A local Git pre-commit hook is also available in `.hooks/commit-msg`.
+
+A conventional commit is structured as follows:
+
+```plain
+type(scope)!: add an imperative subject with effects of the change
+
+Other text in the body describes the change
+
+co-authored-by: John Doe <john.doe@example.com>
+breaking-change: this is a major change that leads to a new version
+```
+
+Many of the elements are optional, but type and subject are mandatory.
+
+The following elements exist and can be used:
+* `type`: a classification of the change, e.g. whether it's a new feature, bug fix or behind-the-scenes change. See below.
+* `scope`: a sub-classification of the change, often used to describe the component affected by a change.
+* `!`: a breaking change indicator. This indicator is paired with a trailer or note called `breaking change` (with our without dash, case-insensitive).
+* `subject`: the summary description of the change in imperative form. What this sentence says is what happens when you apply this change to your repository.
+* Body: the text after the subject and before tailers. This space is used to describe the change's effects and motivation in more detail.
+* Trailers,
+    * e.g. `co-authored-by`: Some of those are used by GitHub, other are good ways to add contextual information and links.
+    * `breaking change`, `breaking-change`: provides the description of breaking changes.
+
+### Commit `type` and Semantic Release
+
+We use [semantic-release](https://github.com/semantic-release/semantic-release) for automatically determining the appropriate semantic version for a release and create release notes based on commit messages.
+
+The following commit types (in the sense of conventional commits) are supported, and lead to :
+* **Major release** (x.0.0, where the x is bumped)
+  * Any of the types below can have a breaking change indicator and breaking change trailer that describes the breaking change.
+    Breaking changes will always lead to a new major version. The breaking change description is highlighted in the
+* **Minor release** (1.x.0, where the x is bumped)
+  * `feat`: new feature changes.
+* **Patch release** (1.0.x, where x is bumped)
+    * `fix`: bug fixes.
+    * `dep`: dependency update for a dependency that is part of the resulting release (i.e. not support tools, see `ci`).
+* **No new release**
+    * `doc`: documentation update. Does not lead to a new release.
+    * `ci`: continuous integration pipeline or tooling update or dependency bump.
+    * `refactor`: code refactoring without behaviour change.
+    * `test`: test code without change to the resulting release code.
+
+Note that reverts are treated as regular conventional commits. Please adjust the default message of the commit accordingly
+to explain what and why something was reverted.
+
+## PR Approval and Continuous Integration
+
+PRs require passing unit test and acceptance test validation, as well as approval before they can be merged.
+
+Validation is triggered only for:
+* PRs that have the `run-ci` label, and
+* PRs that are approved.
+
+
+External PRs, i.e. those not created by members of the approver teams, will always require approval before PRs are run.
+Stale approvals will be revoked on new commits.
+
+## Approval
+
+The working group for [application runtime](https://github.com/orgs/cloudfoundry/teams/wg-app-runtime-platform) and the [network extensions team](https://github.com/orgs/cloudfoundry/teams/wg-app-runtime-platform-networking-extensions-approvers) may approve PRs.
+
+## Continuous Integration
+
+Continuous integration is run at https://concourse.cfi.sapcloud.io. 
+
+
+
+
