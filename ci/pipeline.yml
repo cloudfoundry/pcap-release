@@ -377,8 +377,8 @@ resources:
   - name: golang-release
     type: git
     source:
-      uri: https://github.com/bosh-packages/golang-release.git
-      branch: master
+      uri: https://github.com/cloudfoundry/bosh-package-golang-release
+      branch: main
       password: ((github.access_token))
 
   - name: git-pull-requests
