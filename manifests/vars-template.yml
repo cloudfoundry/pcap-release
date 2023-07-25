@@ -4,11 +4,18 @@ pcap_api:
   vm_type: default
   networks: [{name: default}]
   cf_api: https://api.cf.cfapp.com
-  ca_path: /cf/pcap_ca
-  bosh_director_ca: /bosh/default_ca.ca
-  bosh_director_api: https://192.168.1.11:25555
+  bosh_director_ca: ((/bosh/default_ca.ca))
+  bosh_director_api: https://bosh.cf.internal:25555
+  bosh_director_name: bosh.cf.internal
+  client_cas: ((/bosh/cf/gorouter_backend_tls.ca))
+  certificate: ((/bosh/cf/platform_services_cert.certificate))
+  private_key: ((/bosh/cf/platform_services_cert.private_key))
 route_registrar:
   public_route: pcap.cf.cfapp.com
 nats:
-  client_cert: /cf/nats_client_cert.certificate
-  client_key: /cf/nats_client_cert.private_key
+  client_cert: ((/bosh/cf/nats_client_cert.certificate))
+  client_key: ((/bosh/cf/nats_client_cert.private_key))
+pcap_agent:
+  client_cas: ((/bosh/pcap/pcap_ca.ca))
+  certificate: ((/bosh/pcap/pcap_agent_mtls.certificate))((/bosh/pcap/pcap_agent_mtls.ca))
+  private_key: ((/bosh/pcap/pcap_agent_mtls.private_key))

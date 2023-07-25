@@ -3,36 +3,12 @@
   path: /releases/name=pcap?
   value:
     name: pcap
-    version: 0+dev.7
-    url: https://github.com/cloudfoundry/pcap-release/releases/download/v0.0.1/pcap-0.0.1.tgz
-    sha1: a1655c1992b911fef3ad0b46c5abb8a0217ef0a2
+    version: "1.1.0"
+    url: "https://github.com/cloudfoundry/pcap-release/releases/download/v1.1.0/pcap-v1.1.0.tgz"
+    sha1: "50444b75da6b6376e8218400145df46d17c4c877"
 
 - type: replace
-  path: /variables/name=pcap_ca?
-  value:
-    name: pcap_ca
-    type: certificate
-    options:
-      common_name: pcap_ca
-      is_ca: true
-
-- type: replace
-  path: /variables/name=pcap_agent_mtls?
-  value:
-    name: pcap_agent_mtls
-    type: certificate
-    update_mode: converge
-    options:
-      ca: /bosh/pcap/pcap.ca
-      common_name: pcap_agent_mtls
-      alternative_names:
-        - pcap-agent.service.cf.internal
-      extended_key_usage:
-        - client_auth
-        - server_auth
-
-- type: replace
-  path: /instance_groups/name=diego-cell/jobs/name=pcap-agent?
+  path: /addons/name=pcap-agent?/jobs/-
   value:
     name: pcap-agent
     release: pcap
@@ -47,6 +23,6 @@
         listen:
           port: 9494
           tls:
-            certificate: ((pcap_agent_mtls.certificate))
-            private_key: ((pcap_agent_mtls.private_key))
-            ca: ((/bosh/pcap/pcap_ca.ca))
+            certificate: ((pcap_agent.certificate))
+            private_key: ((pcap_agent.private_key))
+            client_cas: ((pcap_agent.client_cas))
