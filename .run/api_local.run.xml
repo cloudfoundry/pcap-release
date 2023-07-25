@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="api_local" type="GoApplicationRunConfiguration" factoryName="Go Application" folderName="local">
+    <module name="pcap-release" />
+    <target name="@@@LOCAL@@@" />
+    <working_directory value="$PROJECT_DIR$" />
+    <parameters value="$PROJECT_DIR$/src/pcap/config/gen/api-config.yml" />
+    <kind value="PACKAGE" />
+    <package value="github.com/cloudfoundry/pcap-release/src/pcap/cmd/pcap-api" />
+    <directory value="$PROJECT_DIR$/src/pcap/cmd/pcap-api" />
+    <option name="build_on_remote_target" value="true" />
+    <method v="2" />
+  </configuration>
+</component>

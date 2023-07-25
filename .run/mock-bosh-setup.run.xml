@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="mock-bosh-setup" type="GoApplicationRunConfiguration" factoryName="Go Application" folderName="local" activateToolWindowBeforeRun="false">
+    <module name="pcap-release" />
+    <working_directory value="$PROJECT_DIR$/src/pcap" />
+    <kind value="PACKAGE" />
+    <package value="github.com/cloudfoundry/pcap-release/src/pcap/devtools/mock-bosh-setup" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/src/pcap/cmd/mock-bosh-api/main.go" />
+    <method v="2" />
+  </configuration>
+</component>
