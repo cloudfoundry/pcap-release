@@ -6,6 +6,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"os"
@@ -58,15 +59,19 @@ func main() {
 		return
 	}
 
-	tlsConfig, err := config.NodeConfig.Listen.TLS.Config()
-	if err != nil {
-		log.Error("unable to load provided TLS credentials", zap.Error(err))
-		return
+	var grpcOptions []grpc.ServerOption
+	if config.NodeConfig.Listen.TLS != nil {
+		var tlsConfig *tls.Config
+		tlsConfig, err = config.NodeConfig.Listen.TLS.Config()
+		if err != nil {
+			log.Error("unable to load provided TLS credentials", zap.Error(err))
+			return
+		}
+		tlsCredentials := credentials.NewTLS(tlsConfig)
+		grpcOptions = append(grpcOptions, grpc.Creds(tlsCredentials))
 	}
 
-	tlsCredentials := credentials.NewTLS(tlsConfig)
-
-	server := grpc.NewServer(grpc.Creds(tlsCredentials))
+	server := grpc.NewServer(grpcOptions...)
 	pcap.RegisterAgentServer(server, agent)
 
 	go pcap.StopOnSignal(log, agent, server, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
