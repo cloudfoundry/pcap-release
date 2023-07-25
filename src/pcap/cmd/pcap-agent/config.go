@@ -12,7 +12,7 @@ import (
 
 var DefaultConfig = Config{
 	pcap.NodeConfig{
-		Listen: pcap.Listen{Port: 8083}, //nolint:gomnd // default value used for testing
+		Listen: pcap.Listen{Port: 9494}, //nolint:gomnd // default value used for testing
 		Buffer: pcap.BufferConf{
 			Size:       100, //nolint:gomnd // default value used for testing
 			UpperLimit: 95,  //nolint:gomnd // default value used for testing

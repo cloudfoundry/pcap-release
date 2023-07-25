@@ -15,8 +15,8 @@ import (
 )
 
 type options struct {
-	APIConfigFile     string `short:"a" long:"apiconfigfile" required:"true"`
-	BoshCLIConfigFile string `short:"b" long:"boshcliconfigfile" required:"true"`
+	APIConfigFile     string `short:"a" long:"apiconfigfile" required:"true" default:"config/gen/api-config.yml"`
+	BoshCLIConfigFile string `short:"b" long:"boshcliconfigfile" required:"true" default:"config/gen/bosh_config"`
 }
 
 var opts options
@@ -29,6 +29,9 @@ func init() {
 }
 
 func main() {
+	// create default config dir if not exists
+	_ = os.Mkdir("config/gen", os.ModePerm)
+
 	jwtapi, _ := mock.NewMockJWTAPI()
 	responses := prepareMockBoshDirectorResponse()
 	boshAPI := mock.NewMockBoshDirectorAPI(responses, jwtapi.URL)
@@ -73,22 +76,21 @@ func prepareMockBoshDirectorResponse() map[string]string {
 
 func updateAPIConfig(file string, boshURL string) {
 	config := fmt.Sprintf(`log_level: debug
-agent:
-  buffer:
-    size: 100
-    upperLimit: 95
-    lowerLimit: 90
-  id: "testapi"
-  listen:
-    port: 8080
-  agents:
-    listen: 8080
-  bosh_environment:
-    director_url: "%v"
-    agent_port: 8083
-    token_scope: "bosh.admin"
-  drain_timeout: 10s
-  concurrent_captures: 5
+id: "test-pcap-api"
+buffer:
+  size: 1000
+  upperLimit: 995
+  lowerLimit: 900
+concurrent_captures: 5
+listen:
+  port: 8081
+cli_download_root: "/var/vcap/packages/pcap-api/bin/cli/build/"
+bosh:
+  agent_port: 9494
+  director_url: %v
+  token_scope: "bosh.admin"
+  tls:
+    enabled: false
 `, boshURL)
 	log := zap.L().With(zap.String("file", file))
 
