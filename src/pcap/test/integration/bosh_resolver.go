@@ -100,7 +100,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				client, err = pcap.NewClient("test.pcap", logger, messageWriter)
 				Expect(err).ShouldNot(HaveOccurred(), "failed initializing client")
 
-				err = client.ConnectToAPI(apiURL)
+				err = client.ConnectToAPI(apiURL, false)
 				Expect(err).ShouldNot(HaveOccurred(), "failed to connect to API")
 			})
 
@@ -248,7 +248,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				client, err = pcap.NewClient("test.pcap", logger, messageWriter)
 				Expect(err).ShouldNot(HaveOccurred(), "failed initializing client")
 
-				err = client.ConnectToAPI(apiURL)
+				err = client.ConnectToAPI(apiURL, false)
 				Expect(err).ShouldNot(HaveOccurred(), "failed to connect to API")
 
 				// automatically stop capture after captureDuration
@@ -292,7 +292,7 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				client, err = pcap.NewClient("test.pcap", logger, messageWriter)
 				Expect(err).ShouldNot(HaveOccurred(), "failed initializing client")
 
-				err = client.ConnectToAPI(apiURL)
+				err = client.ConnectToAPI(apiURL, false)
 				Expect(err).ShouldNot(HaveOccurred(), "failed to connect to API")
 
 				// automatically stop capture after captureDuration

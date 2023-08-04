@@ -3,6 +3,7 @@
     <module name="pcap-release" />
     <target name="@@@LOCAL@@@" />
     <working_directory value="$PROJECT_DIR$/src/pcap" />
+    <parameters value="$PROJECT_DIR$/src/pcap/config/gen/agent-config.yml" />
     <sudo value="true" />
     <kind value="PACKAGE" />
     <package value="github.com/cloudfoundry/pcap-release/src/pcap/cmd/pcap-agent" />

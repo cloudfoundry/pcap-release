@@ -102,14 +102,16 @@ func (c *Client) Stop() {
 // ConnectToAPI sets up the grpc-connection between client and pcap-api.
 //
 // Depending on the http scheme in apiURL, it uses plain HTTP or TLS.
-func (c *Client) ConnectToAPI(apiURL *url.URL) error {
+func (c *Client) ConnectToAPI(apiURL *url.URL, skipVerify bool) error {
 	var (
 		err   error
 		creds credentials.TransportCredentials
 	)
 
 	if apiURL.Scheme == "https" {
-		creds = credentials.NewTLS(newTLSConfig())
+		tlsConfig := newTLSConfig()
+		tlsConfig.InsecureSkipVerify = skipVerify
+		creds = credentials.NewTLS(tlsConfig)
 	} else { // plain http
 		creds = insecure.NewCredentials()
 	}

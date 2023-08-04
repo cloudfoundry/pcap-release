@@ -394,7 +394,7 @@ var _ = Describe("Using LocalResolver", func() {
 				Expect(err).To(BeNil())
 
 				apiURL := mock.MustParseURL(fmt.Sprintf("http://%s", apiAddr.String()))
-				err = client.ConnectToAPI(apiURL)
+				err = client.ConnectToAPI(apiURL, false)
 				Expect(err).To(BeNil())
 
 				ctx := context.Background()
@@ -418,7 +418,7 @@ var _ = Describe("Using LocalResolver", func() {
 
 				var stop time.Time
 				go func() {
-					time.Sleep(1 * time.Second)
+					time.Sleep(2 * time.Second)
 					GinkgoWriter.Println("sending Stop")
 					stop = time.Now().UTC()
 					client.StopRequest()

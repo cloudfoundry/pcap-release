@@ -1,9 +1,9 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="bosh-cli_local" type="GoApplicationRunConfiguration" factoryName="Go Application" folderName="local">
+  <configuration default="false" name="bosh-cli_local-tls" type="GoApplicationRunConfiguration" factoryName="Go Application" folderName="local">
     <module name="pcap-release" />
     <target name="@@@LOCAL@@@" />
     <working_directory value="$PROJECT_DIR$/src/pcap" />
-    <parameters value="-d haproxy -g ha_proxy_z1 -o $PROJECT_DIR$/pcap-tcpdump.pcap -u http://localhost:8081 -c config/gen/bosh_config -i lo0 -e bosh -F" />
+    <parameters value="-d haproxy -g ha_proxy_z1 -o $PROJECT_DIR$/pcap-tcpdump.pcap -k -u https://localhost:8081 -c config/gen/bosh_config -i lo0 -e bosh -F -v" />
     <kind value="PACKAGE" />
     <package value="github.com/cloudfoundry/pcap-release/src/pcap/cmd/pcap-bosh-cli" />
     <directory value="$PROJECT_DIR$" />
