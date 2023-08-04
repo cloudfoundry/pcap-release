@@ -28,14 +28,14 @@ type API struct {
 	// id of the instance where the api is located.
 	id string
 
-	maxConcurrentCaptures uint
+	maxConcurrentCaptures int32
 	concurrentStreams     atomic.Int32
 	tlsCredentials        credentials.TransportCredentials
 
 	UnimplementedAPIServer
 }
 
-func NewAPI(bufConf BufferConf, clientTLS *ClientTLS, id string, maxConcurrentCaptures uint) (*API, error) {
+func NewAPI(bufConf BufferConf, clientTLS *ClientTLS, id string, maxConcurrentCaptures int32) (*API, error) {
 	clientTLSCreds := insecure.NewCredentials()
 	if clientTLS != nil {
 		clientTLSConf, err := clientTLS.Config()
@@ -182,7 +182,7 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 
 	defer api.concurrentStreams.Add(-1)
 
-	if currentStreams > int32(api.maxConcurrentCaptures) {
+	if currentStreams > api.maxConcurrentCaptures {
 		vcapID, ok := ctx.Value(HeaderVcapID).(string)
 		if !ok {
 			return errorf(codes.ResourceExhausted, "failed starting capture: %w", errTooManyCaptures)

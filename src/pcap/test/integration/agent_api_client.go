@@ -21,7 +21,7 @@ import (
 
 var apiClient pcap.APIClient
 
-var MaxConcurrentCaptures uint = 2
+var MaxConcurrentCaptures int32 = 2
 
 // port is used for creating agents.
 var port = 9494
