@@ -48,6 +48,7 @@ type options struct {
 	InstanceIds        []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"`
 	SnapLength         uint16   `short:"l" long:"snaplen" description:"Snap Length, defining the captured length of the packet, with the remainder truncated. The real packet length is recorded." default:"65535"`
 	Verbose            bool     `short:"v" long:"verbose" description:"Show verbose debug information"`
+	Insecure           bool     `short:"k" long:"insecure" description:"Allow insecure server connections" required:"false"`
 	Quiet              bool     `short:"q" long:"quiet" description:"Show only warnings and errors"`
 }
 
@@ -121,7 +122,7 @@ func main() {
 		err = fmt.Errorf("could not set up pcap-client: %w", err)
 		return
 	}
-	err = client.ConnectToAPI(apiURL)
+	err = client.ConnectToAPI(apiURL, opts.Insecure)
 	if err != nil {
 		err = fmt.Errorf("could not connect to pcap-api: %w", err)
 		return

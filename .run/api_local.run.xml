@@ -2,7 +2,7 @@
   <configuration default="false" name="api_local" type="GoApplicationRunConfiguration" factoryName="Go Application" folderName="local">
     <module name="pcap-release" />
     <target name="@@@LOCAL@@@" />
-    <working_directory value="$PROJECT_DIR$" />
+    <working_directory value="$PROJECT_DIR$/src/pcap" />
     <parameters value="$PROJECT_DIR$/src/pcap/config/gen/api-config.yml" />
     <kind value="PACKAGE" />
     <package value="github.com/cloudfoundry/pcap-release/src/pcap/cmd/pcap-api" />

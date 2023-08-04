@@ -16,7 +16,9 @@ import (
 
 type options struct {
 	APIConfigFile     string `short:"a" long:"apiconfigfile" required:"true" default:"config/gen/api-config.yml"`
+	AgentConfigFile   string `short:"g" long:"agentconfigfile" required:"true" default:"config/gen/agent-config.yml"`
 	BoshCLIConfigFile string `short:"b" long:"boshcliconfigfile" required:"true" default:"config/gen/bosh_config"`
+	EnableTLS         bool   `short:"t" long:"enabletls" required:"false"`
 }
 
 var opts options
@@ -38,7 +40,8 @@ func main() {
 	defer boshAPI.Close()
 
 	zap.L().Info("jwtapi listening", zap.String("url", jwtapi.URL))
-	updateAPIConfig(opts.APIConfigFile, boshAPI.URL)
+	updateAPIConfig(opts.APIConfigFile, boshAPI.URL, opts.EnableTLS)
+	updateAgentConfig(opts.AgentConfigFile, opts.EnableTLS)
 
 	zap.L().Info("boshapi listening", zap.String("url", boshAPI.URL))
 	updateBoshCLIConfig(opts.BoshCLIConfigFile, boshAPI.URL, jwtapi.URL)
@@ -74,7 +77,27 @@ func prepareMockBoshDirectorResponse() map[string]string {
 	return responses
 }
 
-func updateAPIConfig(file string, boshURL string) {
+func updateAPIConfig(file string, boshURL string, enableTLS bool) {
+	log := zap.L().With(zap.String("file", file))
+	tlsConfig := ""
+	agentsMTLS := ""
+	if enableTLS {
+		err := generatePKI()
+		if err != nil {
+			log.Fatal("Failed to create local PKI", zap.Error(err))
+		}
+		// we don't use client_cas here because in dev mode there is no gorouter using a client cert.
+		tlsConfig = `tls:
+    certificate: "config/gen/pcap-api.crt"
+    private_key: "config/gen/pcap-api.key"
+`
+		agentsMTLS = `agents_mtls:
+  server_name: pcap-agent.service.cf.internal
+  skip_verify: false
+  certificate: "config/gen/pcap-api-client.crt"
+  private_key: "config/gen/pcap-api-client.key"
+  ca: "config/gen/pcap-ca.crt"`
+	}
 	config := fmt.Sprintf(`log_level: debug
 id: "test-pcap-api"
 buffer:
@@ -84,15 +107,16 @@ buffer:
 concurrent_captures: 5
 listen:
   port: 8081
+  %s
 cli_download_root: "/var/vcap/packages/pcap-api/bin/cli/build/"
+%s
 bosh:
   agent_port: 9494
   director_url: %v
   token_scope: "bosh.admin"
   tls:
     enabled: false
-`, boshURL)
-	log := zap.L().With(zap.String("file", file))
+`, tlsConfig, agentsMTLS, boshURL)
 
 	err := os.WriteFile(file, []byte(config), fs.ModePerm)
 	if err != nil {
@@ -101,6 +125,36 @@ bosh:
 	}
 	log.Info("Wrote api config file")
 }
+
+func updateAgentConfig(file string, enableTLS bool) {
+	tlsConfig := ""
+	if enableTLS {
+		tlsConfig = `tls:
+    certificate: "config/gen/pcap-agent.crt"
+    private_key: "config/gen/pcap-agent.key"
+    client_cas: "config/gen/pcap-ca.crt"
+`
+	}
+	config := fmt.Sprintf(`log_level: debug
+id: pcap-agent
+listen:
+  port: 9494
+  %s
+buffer:
+  size: 100
+  upper_limit: 95
+  lower_limit: 90
+`, tlsConfig)
+	log := zap.L().With(zap.String("file", file))
+
+	err := os.WriteFile(file, []byte(config), fs.ModePerm)
+	if err != nil {
+		log.Fatal("Failed to write api config file", zap.Error(err))
+		return
+	}
+	log.Info("Wrote agent config file")
+}
+
 func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 	log := zap.L().With(zap.String("file", file))
 	token, err := mock.GetValidToken(jwtAPIurl)
@@ -162,4 +216,53 @@ func updateBoshCLIConfig(file string, boshURL string, jwtAPIurl string) {
 
 	log.Info("Wrote bosh CLI config")
 	log.Info("Generated Token", zap.String("token", token))
+}
+
+func generatePKI() error {
+	pcapCA, err := newCA("pcap-ca")
+	if err != nil {
+		return err
+	}
+	err = writePem("config/gen/pcap-ca.crt", pcapCA.CertPEM)
+	if err != nil {
+		return err
+	}
+	pcapAPIServerCert, err := pcapCA.ServerCert("pcap-api.service.cf.internal")
+	if err != nil {
+		return err
+	}
+	err = writePem("config/gen/pcap-api.crt", pcapAPIServerCert.CertPEM)
+	if err != nil {
+		return err
+	}
+	err = writePem("config/gen/pcap-api.key", pcapAPIServerCert.KeyPEM)
+	if err != nil {
+		return err
+	}
+	pcapAPIClientCert, err := pcapCA.ClientCert("pcap-api.service.cf.internal")
+	if err != nil {
+		return err
+	}
+	err = writePem("config/gen/pcap-api-client.crt", pcapAPIClientCert.CertPEM)
+	if err != nil {
+		return err
+	}
+	err = writePem("config/gen/pcap-api-client.key", pcapAPIClientCert.KeyPEM)
+	if err != nil {
+		return err
+	}
+	pcapAgentServerCert, err := pcapCA.ServerCert("pcap-agent.service.cf.internal")
+	if err != nil {
+		return err
+	}
+	err = writePem("config/gen/pcap-agent.crt", pcapAgentServerCert.CertPEM)
+	if err != nil {
+		return err
+	}
+	err = writePem("config/gen/pcap-agent.key", pcapAgentServerCert.KeyPEM)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
