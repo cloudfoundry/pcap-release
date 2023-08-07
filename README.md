@@ -58,11 +58,11 @@ For tcpdumps of CF app containers, pcap-release provides a plugin to the CF Clou
 
 ## How to deploy
 
-The release provides two files to integrate with an
-existing [cf-deployment](https://github.com/cloudfoundry/cf-deployment):
+Provided manifests and ops files:
 
 * `manifests/ops-files/add-pcap-agent.yml` This adds the PCAP agent as an addon to any BOSH deployment.
-* `manifests/pcap-api.yml` This is an example BOSH manifest to deploy the pcap-api and agent.
+* `manifests/pcap-api.yml` This is an example BOSH manifest to deploy the pcap-api.
+* `manifests/ops-files/expose-route-to-pcap-api.yml` This adds bosh dns as an addon to the pcap-api instance group and configures the route for pcap-api route registration.
 
 ### Step 1 - Prepare vars.yml
 ```bash
@@ -70,13 +70,24 @@ cp manifests/vars-template.yml manifests/vars.yml
 vim manifests/vars.yml (adjust as needed)
 ```
 
-### Step 2 - Deploy pcap-api
+### Step 2 (Optional) - Add bosh-dns and route-registrar to pcap-api manifest
+```shell
+bosh interpolate -o manifests/ops-files/expose-route-to-pcap-api.yml -l manifests/vars.yml manifests/pcap-api.yml > manifests/pcap-api-with-exposed-route.yml
+```
 
-```bash
+### Step 3 - Deploy pcap-api
+
+```shell
 bosh -d pcap deploy -l manifests/vars.yml manifests/pcap-api.yml
 ```
 
-### Step 3 - Add pcap-agent to cf-deployment
+If a new manifest file has been generated in Step 2, then execute: 
+
+```shell
+bosh -d pcap deploy manifests/pcap-api-with-exposed-route.yml
+```
+
+### Step 4 - Add pcap-agent to cf-deployment
 
 ```bash
 bosh interpolate -o manifests/ops-files/add-pcap-agent.yml -l manifests/vars.yml cf-deployment.yml > cf-deployment-pcap.yml
@@ -86,14 +97,14 @@ bosh -d cf deploy cf-deployment-pcap.yml
 This assumes your BOSH deployment name of cf-deployment is called `cf`
 
 
-### Step 4 - Install CF CLI plugin
+### Step 5 - Install CF CLI plugin
 
 tbd
 
-### Step 5 - Install BOSH CLI
+### Step 6 - Install BOSH CLI
 
 ```bash
-bosh -d pcap scp <bosh instance of pcap api>:/var/vcap/packages/pcap-api/bin/cli/build/pcap-bosh-cli-linux-amd64
+bosh -d pcap scp <bosh instance of pcap api>:/var/vcap/packages/pcap-api/bin/cli/build/pcap-bosh-cli-linux-amd64 pcap-bosh-cli-linux-amd64
 mv pcap-bosh-cli-linux-amd64 /usr/local/bin/pcap-bosh
 pcap-bosh ...
 ```
