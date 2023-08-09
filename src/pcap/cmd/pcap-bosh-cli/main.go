@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -94,6 +95,9 @@ func main() {
 		}
 	}()
 
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
 	// Parse command-line arguments
 	_, err = flags.Parse(&opts)
 	if err != nil {
@@ -133,17 +137,28 @@ func main() {
 
 	logger.Debug("pcap-client successfully initialized and connected to pcap-api")
 
-	go pcap.StopOnSignal(logger, client, nil, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	go pcap.StopOnSignal(logger, &stopper{f: func() {
+		client.Stop()
+		cancel(nil)
+	}}, nil, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
 	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups)
 	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, uint32(opts.SnapLength))
 
-	err = client.CaptureRequest(endpointRequest, captureOptions)
+	err = client.CaptureRequest(ctx, cancel, endpointRequest, captureOptions)
 	if err != nil {
 		return
 	}
 
 	logger.Info("capture finished successfully")
+}
+
+type stopper struct {
+	f func()
+}
+
+func (s *stopper) Stop() {
+	s.f()
 }
 
 func initFromOptions(opts options) (*url.URL, *Environment, error) {

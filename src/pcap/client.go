@@ -122,10 +122,7 @@ func (c *Client) ConnectToAPI(apiURL *url.URL) error {
 	return nil
 }
 
-func (c *Client) CaptureRequest(endpointRequest *EndpointRequest, options *CaptureOptions) error {
-	// set up capture request
-	ctx, cancel := context.WithCancelCause(context.Background())
-
+func (c *Client) CaptureRequest(ctx context.Context, cancel context.CancelCauseFunc, endpointRequest *EndpointRequest, options *CaptureOptions) error {
 	// perform capture request
 	err := c.ProcessCapture(ctx, endpointRequest, options, cancel)
 	if err != nil {
