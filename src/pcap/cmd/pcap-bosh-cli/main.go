@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -95,6 +96,9 @@ func main() {
 		}
 	}()
 
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
 	// Parse command-line arguments
 	_, err = flags.Parse(&opts)
 	if err != nil {
@@ -139,7 +143,7 @@ func main() {
 	endpointRequest := createEndpointRequest(environment.AccessToken, opts.Deployment, opts.InstanceGroups)
 	captureOptions := createCaptureOptions(opts.Interface, opts.Filter, uint32(opts.SnapLength))
 
-	err = client.CaptureRequest(endpointRequest, captureOptions)
+	err = client.CaptureRequest(ctx, cancel, endpointRequest, captureOptions)
 	if err != nil {
 		return
 	}

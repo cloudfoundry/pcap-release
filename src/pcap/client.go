@@ -124,10 +124,7 @@ func (c *Client) ConnectToAPI(apiURL *url.URL, skipVerify bool) error {
 	return nil
 }
 
-func (c *Client) CaptureRequest(endpointRequest *EndpointRequest, options *CaptureOptions) error {
-	// set up capture request
-	ctx, cancel := context.WithCancelCause(context.Background())
-
+func (c *Client) CaptureRequest(ctx context.Context, cancel context.CancelCauseFunc, endpointRequest *EndpointRequest, options *CaptureOptions) error {
 	// perform capture request
 	err := c.ProcessCapture(ctx, endpointRequest, options, cancel)
 	if err != nil {
@@ -174,7 +171,8 @@ func (c *Client) ProcessCapture(ctx context.Context, endpointRequest *EndpointRe
 		},
 	}
 
-	c.stream, err = c.Capture(ctx)
+	// use a new context for the API stream to keep the context in client and the context in API decoupled.
+	c.stream, err = c.Capture(context.Background())
 	if err != nil {
 		return err
 	}
@@ -188,12 +186,15 @@ func (c *Client) ProcessCapture(ctx context.Context, endpointRequest *EndpointRe
 
 	go c.logProgress(ctx, logger)
 
-	// wait for progress to finish
-	<-ctx.Done()
-
 	logger.Info("waiting for capture to finish")
-	// wait for the ReadCaptureResponse goroutine to finish.
-	<-done
+	select {
+	case <-ctx.Done():
+		// nothing to do, stream was terminated
+	case <-done:
+		cancel(nil)
+		// just to be sure that the error was already propagated
+		<-ctx.Done()
+	}
 
 	logger.Debug("syncing file to disk")
 	err = c.packetFile.Sync()
@@ -235,6 +236,11 @@ func (c *Client) StopRequest() {
 	if err != nil {
 		c.log.Error("could not stop")
 	}
+	err = c.stream.CloseSend()
+	if err != nil {
+		c.log.Error("could not close send direction of client  stream")
+	}
+
 	c.stopped = true
 }
 
@@ -246,18 +252,20 @@ func (c *Client) ReadCaptureResponse(stream API_CaptureClient, packetWriter *pca
 
 	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		for {
 			res, err := stream.Recv()
 			if errors.Is(err, io.EOF) {
 				logger.Info("clean stop, done")
 				cancel(nil)
-				break
+				return
 			}
+
 			code := status.Code(err)
 			if code != codes.OK {
 				err = fmt.Errorf("receive non-OK code: %v: %w", code, err)
 				cancel(err)
-				break
+				return
 			}
 
 			switch p := res.Payload.(type) {
@@ -267,7 +275,6 @@ func (c *Client) ReadCaptureResponse(stream API_CaptureClient, packetWriter *pca
 				writePacket(p.Packet, packetWriter)
 			}
 		}
-		close(done)
 	}()
 
 	return done

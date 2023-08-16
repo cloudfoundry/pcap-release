@@ -240,7 +240,10 @@ func (api *API) Capture(stream API_CaptureServer) (err error) {
 		return err
 	}
 
+	log.Debug("waiting for stream forwarding to finish")
 	forwardWG.Wait()
+
+	log.Info("capture done")
 
 	return nil
 }

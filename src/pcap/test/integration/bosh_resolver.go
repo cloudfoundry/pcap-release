@@ -137,7 +137,8 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				})
 
 				It("completes successfully for two agents in different instance groups", func() {
-					err := client.CaptureRequest(endpointRequest, defaultOptions)
+					ctx, cancel := context.WithCancelCause(context.Background())
+					err := client.CaptureRequest(ctx, cancel, endpointRequest, defaultOptions)
 					Expect(err).ShouldNot(HaveOccurred(), "capture request failed")
 
 					Expect(messageWriter.Filter(pcap.MessageType_CAPTURE_STOPPED)).Should(HaveLen(2))
@@ -146,7 +147,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				It("completes successfully for one agent in an instance group", func() {
 					endpointRequest.GetBosh().Groups = []string{"router"}
 
-					err := client.CaptureRequest(endpointRequest, defaultOptions)
+					ctx, cancel := context.WithCancelCause(context.Background())
+					err := client.CaptureRequest(ctx, cancel, endpointRequest, defaultOptions)
+
 					Expect(err).ShouldNot(HaveOccurred(), "capture request failed")
 
 					Expect(messageWriter.Filter(pcap.MessageType_CAPTURE_STOPPED)).Should(HaveLen(1))
@@ -155,7 +158,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				It("fails for a request with an unknown instance group", func() {
 					endpointRequest.GetBosh().Groups = []string{"unknown"}
 
-					err := client.CaptureRequest(endpointRequest, defaultOptions)
+					ctx, cancel := context.WithCancelCause(context.Background())
+					err := client.CaptureRequest(ctx, cancel, endpointRequest, defaultOptions)
+
 					Expect(err).Should(HaveOccurred(), "capture request should have failed")
 					Expect(err.Error()).To(ContainSubstring(pcap.ErrNoEndpoints.Error()))
 				})
@@ -163,7 +168,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				It("fails for a request without instance group", func() {
 					endpointRequest.GetBosh().Groups = []string{""}
 
-					err := client.CaptureRequest(endpointRequest, defaultOptions)
+					ctx, cancel := context.WithCancelCause(context.Background())
+					err := client.CaptureRequest(ctx, cancel, endpointRequest, defaultOptions)
+
 					Expect(err).Should(HaveOccurred(), "capture request should have failed")
 					Expect(err.Error()).To(ContainSubstring(pcap.ErrNoEndpoints.Error()))
 				})
@@ -172,7 +179,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 					// instance IDs are taken from agentID1 and agentID2
 					endpointRequest.GetBosh().Instances = []string{"2abc"}
 
-					err := client.CaptureRequest(endpointRequest, defaultOptions)
+					ctx, cancel := context.WithCancelCause(context.Background())
+					err := client.CaptureRequest(ctx, cancel, endpointRequest, defaultOptions)
+
 					Expect(err).ShouldNot(HaveOccurred(), "capture request failed")
 
 					messages := messageWriter.Filter(pcap.MessageType_CAPTURE_STOPPED)
@@ -184,7 +193,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 					// instance IDs are taken from agentID1 and agentID2
 					endpointRequest.GetBosh().Instances = []string{"this-id-does-not-exist"}
 
-					err := client.CaptureRequest(endpointRequest, defaultOptions)
+					ctx, cancel := context.WithCancelCause(context.Background())
+					err := client.CaptureRequest(ctx, cancel, endpointRequest, defaultOptions)
+
 					Expect(err).Should(HaveOccurred(), "capture should have failed")
 				})
 			})
@@ -209,7 +220,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				})
 
 				It("fails with invalid token", func() {
-					err := client.CaptureRequest(endpointRequest, defaultOptions)
+					ctx, cancel := context.WithCancelCause(context.Background())
+					err := client.CaptureRequest(ctx, cancel, endpointRequest, defaultOptions)
+
 					Expect(err).Should(HaveOccurred(), "capture request should fail")
 
 					Expect(err.Error()).To(ContainSubstring("could not verify token"))
@@ -218,7 +231,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 				It("fails with empty token", func() {
 
 					endpointRequest.GetBosh().Token = ""
-					err := client.CaptureRequest(endpointRequest, defaultOptions)
+					ctx, cancel := context.WithCancelCause(context.Background())
+					err := client.CaptureRequest(ctx, cancel, endpointRequest, defaultOptions)
+
 					Expect(err).Should(HaveOccurred(), "capture request should fail")
 
 					Expect(err.Error()).To(ContainSubstring(pcap.ErrValidationFailed.Error()))
@@ -267,7 +282,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 					},
 				}
 
-				err := client.CaptureRequest(endpointRequest, defaultOptions)
+				ctx, cancel := context.WithCancelCause(context.Background())
+				err := client.CaptureRequest(ctx, cancel, endpointRequest, defaultOptions)
+
 				Expect(err).Should(HaveOccurred(), "capture request should have failed")
 				Expect(err.Error()).To(ContainSubstring("resolver unhealthy"))
 			})
@@ -311,7 +328,9 @@ var _ = Describe("Client to API with Bosh Resolver", func() {
 					},
 				}
 
-				err := client.CaptureRequest(endpointRequest, defaultOptions)
+				ctx, cancel := context.WithCancelCause(context.Background())
+				err := client.CaptureRequest(ctx, cancel, endpointRequest, defaultOptions)
+
 				Expect(err).Should(HaveOccurred(), "capture request should have failed")
 				Expect(err.Error()).To(ContainSubstring("could not verify token"))
 			})
