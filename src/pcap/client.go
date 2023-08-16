@@ -169,8 +169,8 @@ func (c *Client) ProcessCapture(ctx context.Context, endpointRequest *EndpointRe
 		},
 	}
 
-	apiContext := context.Background()
-	c.stream, err = c.Capture(apiContext)
+	// use a new context for the API stream to keep the context in client and the context in API decoupled.
+	c.stream, err = c.Capture(context.Background())
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,10 @@ func (c *Client) StopRequest() {
 	if err != nil {
 		c.log.Error("could not stop")
 	}
-	c.stream.CloseSend()
+	err = c.stream.CloseSend()
+	if err != nil {
+		c.log.Error("could not close send direction of client  stream")
+	}
 
 	c.stopped = true
 }
