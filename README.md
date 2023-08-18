@@ -132,3 +132,9 @@ cp manifests/vars-template.yml manifests/vars.yml
 vim manifests/vars.yml (adjust as needed)
 bosh -d pcap deploy -l manifests/vars.yml manifests/pcap-api.yml
 ```
+
+## How to test
+Local test execution is described in detail:
+* [Unit/Integration tests](src/pcap/README.md#running-on-macos-including-tests)
+* [Linters](src/pcap/README.md#running-linters)
+* [Acceptance tests](acceptance-tests/README.md#acceptance-tests)
