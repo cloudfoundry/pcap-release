@@ -108,7 +108,6 @@ concurrent_captures: 5
 listen:
   port: 8081
   %s
-cli_download_root: "/var/vcap/packages/pcap-api/bin/cli/build/"
 %s
 bosh:
   agent_port: 9494

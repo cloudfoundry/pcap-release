@@ -11,7 +11,6 @@ config = {
   "listen" => {
     "port" => p("pcap-api.listen.port"),
   },
-  "cli_download_root" => p("pcap-api.cli_download_root")
 }
 
 if p("pcap-api.listen.tls.enabled").to_s == "true"
