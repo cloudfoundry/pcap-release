@@ -1,8 +1,5 @@
 # PCAP
 
-
-
-
 ## Generating the gRPC stubs
 
 Set up the `protoc` compiler with output to gRPC:
@@ -80,3 +77,13 @@ You can configure an appropriate run configuration with a Docker based run targe
 **Important:** Select the "Build on remote Target" checkbox as cross-compiling pcap-release with libpcap is not easily possible.
 
 ![Build configuration in IntelliJ](docs/run-config.png)
+
+## Running linters
+Using [golangci-lint](https://golangci-lint.run/usage/install/#local-installation), the linters can be run locally or files can be fixed automatically:
+```
+# Execute linter locally
+golangci-lint run
+
+# Apply fixes locally
+golangci-lint run --fix
+```
