@@ -77,8 +77,3 @@ properties:
     default: false
   pcap-api.bosh.tls.ca:
     description: "CA bundle which is used to request and verify Bosh Director certificates"
-
-
-  pcap-api.cli_download_root:
-    description: "Root directory of CLI downloads"
-    default: "/var/vcap/packages/pcap-api/bin/cli/build/"
