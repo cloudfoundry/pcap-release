@@ -7,7 +7,7 @@ require (
 	github.com/go-playground/validator/v10 v10.15.1
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/go-cmp v0.5.9
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.3.1
 	github.com/gopacket/gopacket v1.1.1
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/onsi/ginkgo/v2 v2.12.0
