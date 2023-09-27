@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/bramvdbogaerde/go-scp v1.2.1
-	github.com/onsi/ginkgo/v2 v2.12.0
+	github.com/onsi/ginkgo/v2 v2.12.1
 	github.com/onsi/gomega v1.27.10
 	golang.org/x/crypto v0.13.0
 	gopkg.in/yaml.v3 v3.0.1
