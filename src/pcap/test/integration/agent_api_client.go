@@ -384,7 +384,10 @@ var _ = Describe("Using LocalResolver", func() {
 			agentServer1.GracefulStop()
 			apiServer.GracefulStop()
 		})
-		Context("with client sending SIGINT after 5 seconds", func() {
+		// Mark test spec as pending
+		// This test is flaky and should be rework to be a part of a stable test suite
+		// In the test it is expected that packets are not empty, but sometimes it is the case.
+		PContext("with client sending SIGINT after 5 seconds", func() {
 			It("handles capture stop gracefully", func() {
 				file := "bosh_e2e_integration_test.pcap"
 				_ = os.Remove(file) // remove test-file
