@@ -3,7 +3,7 @@ module acceptance_tests
 go 1.20
 
 require (
-	github.com/bramvdbogaerde/go-scp v1.2.1
+	github.com/bramvdbogaerde/go-scp v1.3.0
 	github.com/onsi/ginkgo/v2 v2.15.0
 	github.com/onsi/gomega v1.31.1
 	golang.org/x/crypto v0.18.0
