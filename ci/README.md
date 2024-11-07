@@ -1,12 +1,12 @@
 # Continuous Integration Setup
 
-The CI environment is maintained by the SAP Business Technology Platform on Cloud Foundry team for Routing and Networking.
+The CI environment is maintained by the SAP Business Technology Platform on Cloud Foundry [team for Routing and Networking](https://github.com/orgs/cloudfoundry/teams/wg-app-runtime-platform-networking-extensions-approvers).
 
-All secrets used in the pipeline and surrounding tools are kept in the team's Vault. Those secrets are only necessary for [modifying the pipeline](#updating-or-modifying-the-pipeline).
+All secrets used in the pipeline and surrounding tools are kept in the team's Vault. Those secrets are only necessary for [modifying the pipeline](#updating-or-modifying-the-pipeline). For git integration, [pcap-release pipeline](https://concourse.arp.cloudfoundry.org/teams/main/pipelines/pcap-release) has public visibility.
 
 ## Contact
 
-Credentials and admin access lie with that team. <!-- TODO: If you have questions or issues, please reach out via the [#pcap-release]() channel on Slack. -->
+Credentials and admin access lie with that team. If you have questions or issues, please reach out via the [#pcap-release](https://cloudfoundry.slack.com/archives/C049GM92WDR) channel on Slack.
 
 ## Setup
 
@@ -30,7 +30,7 @@ Unit tests are executed via `rake` and are contained in [spec/haproxy/templates]
 
 ### Acceptance Tests
 
-The acceptance tests run a full BOSH director and exercise creating and running the candidate `haproxy-boshrelease` against a test suite that covers a wide range of features and use cases supported by it.
+The acceptance tests run BOSH director and exercise creating and running the candidate `haproxy-boshrelease` against a test suite that covers a wide range of features and use cases supported by it.
 
 The code can be found in [acceptance-tests](../acceptance-tests/).
 
@@ -42,7 +42,7 @@ The deployed HAProxy will in most cases have a functioning backend that simply r
 
 There are examples for various types of tests already in the source code. Those include startup and draining behaviour, various types of requests and specific configurations where HAProxy modifies the request as well as general functionality checks to avoid regressions.
 
- There are a few things to highlight when developing new acceptance tests:
+There are a few things to highlight when developing new acceptance tests:
 
 1. The HAProxy deployed via the release is run in a container. The port to HAProxy and to the backend are forwarded via SSH tunnel to the test runner and allow interacting with either of those servers.
 2. The HAProxy deployment is carried out by:
@@ -93,6 +93,8 @@ The pipeline `pcap-release` is used to build, verify and release this BOSH relea
 
 New pipeline steps should be added without modifying existing steps or resources, or in a separate pipeline altogether.
 
+A pipeline can be uploaded to concourse via the [`upload-to-concourse.sh`](upload-to-concourse.sh) script. The script and pipeline require some secrets (`vars.yml`), which can be found in the team's Vault. The script will also expose the pipeline.
+
 ### Testing new Pipeline Steps in a Branch
 
 While developing new scripts or pipeline steps, these steps will not be in the Git `main` branch. In order to access them, *copy* the resource `git` and define this separate resource to check out the particular branch you are working on.
@@ -115,6 +117,8 @@ Note that you can use the `dir` parameter in `run` to define the working directo
 
 Don't forget to remove separate pipelines that were created for testing.
 
+Note that your test pipeline does not need to be publicly exposed. [`upload-to-concourse.sh`](upload-to-concourse.sh) does that by default, so if this is undesirable you can `fly hide-pipeline` afterwards.
+
 ## Concourse Pipeline for Releases
 
 The releases of a `pcap-release` is done using [semantic-release](https://github.com/semantic-release/semantic-release).
@@ -132,5 +136,6 @@ Otherwise, the [angular rules for semantic-release](https://github.com/conventio
 ### Concourse Pipeline
 
 The Concourse pipeline has the following jobs for releases:
+
 * `rc` provides a semantic-release try run, which shows what would happen if you ran `shipit` now. It provides a preview of the version to be created and the full release note.
 * `shipit` uses semantic-release, following the rules defined above and creates a bosh-release with the appropriate next version, creates a release note based on conventional commits and publishes the release to GitHub.
