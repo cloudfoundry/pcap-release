@@ -1,6 +1,6 @@
 module github.com/cloudfoundry/pcap-release/src/pcap
 
-go 1.20
+go 1.22.0
 
 require (
 	code.cloudfoundry.org/bytefmt v0.17.0
