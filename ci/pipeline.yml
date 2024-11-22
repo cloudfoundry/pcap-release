@@ -19,16 +19,11 @@ jobs:
       - do:
           - get: git
             trigger: true
+          - get: pcap-release-testflight
           - task: lint
+            image: pcap-release-testflight
             config:
               platform: linux
-              image_resource:
-                type: docker-image
-                source:
-                  repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-                  tag: latest
-                  username: ((docker.username))
-                  password: ((docker.password))
               inputs:
                 - { name: git }
               caches:
@@ -40,15 +35,9 @@ jobs:
               params:
                 REPO_ROOT: git
           - task: unit-tests
+            image: pcap-release-testflight
             config:
               platform: linux
-              image_resource:
-                type: docker-image
-                source:
-                  repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-                  tag: latest
-                  username: ((docker.username))
-                  password: ((docker.password))
               inputs:
                 - { name: git }
 
@@ -74,21 +63,16 @@ jobs:
     plan:
       - do:
           - { get: git-pull-requests, trigger: true, version: every }
+          - get: pcap-release-testflight
           - put: git-pull-requests
             params:
               path: git-pull-requests
               status: pending
               context: unit-tests
           - task: lint
+            image: pcap-release-testflight
             config:
               platform: linux
-              image_resource:
-                type: docker-image
-                source:
-                  repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-                  tag: latest
-                  username: ((docker.username))
-                  password: ((docker.password))
               inputs:
                 - { name: git-pull-requests }
               caches:
@@ -100,15 +84,9 @@ jobs:
               params:
                 REPO_ROOT: git-pull-requests
           - task: unit-tests
+            image: pcap-release-testflight
             config:
               platform: linux
-              image_resource:
-                type: docker-image
-                source:
-                  repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-                  tag: latest
-                  username: ((docker.username))
-                  password: ((docker.password))
               inputs:
                 - { name: git-pull-requests }
               caches:
@@ -140,17 +118,12 @@ jobs:
       - in_parallel:
         - { get: git, trigger: true, passed: [ unit-tests ] }
         - { get: stemcell }
+        - get: pcap-release-testflight
     - task: acceptance-tests
       privileged: true
+      image: pcap-release-testflight
       config:
         platform: linux
-        image_resource:
-          type: docker-image
-          source:
-            repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-            tag: latest
-            username: ((docker.username))
-            password: ((docker.password))
         inputs:
           - { name: git }
           - { name: stemcell }
@@ -174,6 +147,7 @@ jobs:
     - do:
       - { get: git-pull-requests, trigger: true, version: every }
       - { get: stemcell }
+      - get: pcap-release-testflight
     - put: git-pull-requests
       params:
         path: git-pull-requests
@@ -181,15 +155,9 @@ jobs:
         context: acceptance-tests
     - task: acceptance-tests
       privileged: true
+      image: pcap-release-testflight
       config:
         platform: linux
-        image_resource:
-          type: docker-image
-          source:
-            repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-            tag: latest
-            username: ((docker.username))
-            password: ((docker.password))
         inputs:
           - { name: git-pull-requests }
           - { name: stemcell }
@@ -218,16 +186,11 @@ jobs:
     - do:
       - in_parallel:
           - { get: git,     passed: [rc] }
+          - get: pcap-release-testflight
       - task: release
+        image: pcap-release-testflight
         config:
           platform: linux
-          image_resource:
-            type: docker-image
-            source:
-              repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-              tag:        latest
-              username:   ((docker.username))
-              password:   ((docker.password))
           inputs:
             - name: git
           outputs:
@@ -262,16 +225,11 @@ jobs:
     - do:
       - in_parallel:
           - { get: git,     passed: [acceptance-tests] }
+          - get: pcap-release-testflight
       - task: release-candidate
+        image: pcap-release-testflight
         config:
           platform: linux
-          image_resource:
-            type: docker-image
-            source:
-              repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-              tag:        latest
-              username:   ((docker.username))
-              password:   ((docker.password))
           inputs:
             - name: git
           outputs:
@@ -297,20 +255,15 @@ jobs:
         trigger: true
       - get: git
       - get: golang-release
+      - get: pcap-release-testflight
       - in_parallel:
           steps:
           - task: autobump-dependencies
+            image: pcap-release-testflight
             config:
               inputs:
                 - name: git
               platform: linux
-              image_resource:
-                type: docker-image
-                source:
-                    repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-                    tag: latest
-                    username: ((docker.username))
-                    password: ((docker.password))
               run:
                 dir: git
                 path: /usr/bin/python3
@@ -324,18 +277,12 @@ jobs:
                 GCP_SERVICE_KEY: ((gcp.service_key))
                 GITHUB_COM_TOKEN: ((github.access_token))
           - task: autobump-golang-release
+            image: pcap-release-testflight
             config:
               inputs:
                 - name: git
                 - name: golang-release
               platform: linux
-              image_resource:
-                type: docker-image
-                source:
-                  repository: cf-routing.common.repositories.cloud.sap/pcap-release-testflight
-                  tag: latest
-                  username: ((docker.username))
-                  password: ((docker.password))
               run:
                 dir: git
                 path: /usr/bin/python3
