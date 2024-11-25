@@ -1,4 +1,4 @@
-//nolint:gomnd // These tests include a lot of magic numbers that are part of the test scenarios.
+//nolint:mnd // These tests include a lot of magic numbers that are part of the test scenarios.
 package mock
 
 import (

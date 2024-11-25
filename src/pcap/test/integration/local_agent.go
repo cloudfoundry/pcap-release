@@ -15,8 +15,8 @@ var TestNodeIndex = 0
 // localNodeListener gives each mock gorouter a separate local IP address, so gorouters can be distinguished based on their IP address in tests.
 func localNodeListener(port int) net.Listener {
 	// exclude .0 and .255 as they may have special meaning.
-	node := (TestNodeIndex % 254) + 1 //nolint:gomnd // default IP range
-	subnet := TestNodeIndex / 254     //nolint:gomnd // default IP range
+	node := (TestNodeIndex % 254) + 1 //nolint:mnd // default IP range
+	subnet := TestNodeIndex / 254     //nolint:mnd // default IP range
 
 	TestNodeIndex++
 

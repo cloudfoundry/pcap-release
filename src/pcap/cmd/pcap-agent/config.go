@@ -12,11 +12,11 @@ import (
 
 var DefaultConfig = Config{
 	pcap.NodeConfig{
-		Listen: pcap.Listen{Port: 9494}, //nolint:gomnd // default value used for testing
+		Listen: pcap.Listen{Port: 9494}, //nolint:mnd // default value used for testing
 		Buffer: pcap.BufferConf{
-			Size:       1000, //nolint:gomnd // default value used for testing
-			UpperLimit: 995,  //nolint:gomnd // default value used for testing
-			LowerLimit: 900,  //nolint:gomnd // default value used for testing
+			Size:       1000, //nolint:mnd // default value used for testing
+			UpperLimit: 995,  //nolint:mnd // default value used for testing
+			LowerLimit: 900,  //nolint:mnd // default value used for testing
 		},
 		LogLevel: "debug",
 		ID:       "test-agent",

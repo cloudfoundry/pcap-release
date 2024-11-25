@@ -221,7 +221,7 @@ func (br *BoshResolver) Validate(endpointRequest *EndpointRequest) error {
 func (br *BoshResolver) setup() error {
 	br.logger.Debug("setting up BoshResolver", zap.Any("resolver-config", br.Config))
 
-	timeout := 500 * time.Millisecond //nolint:gomnd // reasonable value.
+	timeout := 500 * time.Millisecond //nolint:mnd // reasonable value.
 
 	br.client = &http.Client{
 		Transport: &http.Transport{

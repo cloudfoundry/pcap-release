@@ -1,4 +1,4 @@
-//nolint:gomnd // These tests include a lot of magic numbers that are part of the test scenarios.
+//nolint:mnd // These tests include a lot of magic numbers that are part of the test scenarios.
 package integration
 
 import (
@@ -59,13 +59,13 @@ var _ = Describe("Using LocalResolver", func() {
 				agentServer2, agentTarget2, _ = createAgent(9494, agentID2, nil)
 				targets = append(targets, agentTarget2)
 
-				apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180} //nolint:gomnd // Values for a test
+				apiBuffConf := pcap.BufferConf{Size: 200, UpperLimit: 198, LowerLimit: 180} //nolint:mnd // Values for a test
 				apiClient, apiServer, api, _ = createAPIwithLocalResolver(targets, apiBuffConf, nil, apiID)
 
 				defaultOptions = &pcap.CaptureOptions{
 					Device:  loopback,
 					Filter:  "",
-					SnapLen: 65000, //nolint:gomnd // Value for a test
+					SnapLen: 65000, //nolint:mnd // Value for a test
 				}
 			})
 

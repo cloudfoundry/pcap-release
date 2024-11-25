@@ -1,4 +1,4 @@
-//nolint:gomnd // These test tools include a lot of magic numbers that are part of the test scenarios.
+//nolint:mnd // These test tools include a lot of magic numbers that are part of the test scenarios.
 package integration
 
 import (
@@ -345,7 +345,7 @@ func containsMsgTypeWithOrigin(messages []*pcap.CaptureResponse, msgType pcap.Me
 }
 
 func NewMemoryMessageWriter() *MemoryMessageWriter {
-	return &MemoryMessageWriter{Messages: make([]*pcap.Message, 0, 10)} //nolint:gomnd // Default configuration
+	return &MemoryMessageWriter{Messages: make([]*pcap.Message, 0, 10)} //nolint:mnd // Default configuration
 }
 
 type MemoryMessageWriter struct {
