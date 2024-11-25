@@ -84,7 +84,7 @@ linters-settings:
         # Default: true
         skipRecvDeref: false
 
-  gomnd:
+  mnd:
     # List of function patterns to exclude from analysis.
     # Values always ignored: `time.Date`,
     # `strconv.FormatInt`, `strconv.FormatUint`, `strconv.FormatFloat`,
@@ -197,7 +197,7 @@ linters:
   - godot # checks if comments end in a period
   - gofmt # checks whether code was gofmt-ed
   - goimports # in addition to fixing imports, goimports also formats your code in the same style as gofmt
-  - gomnd # detects magic numbers
+  - mnd # detects magic numbers
   - gomoddirectives # manages the use of 'replace', 'retract', and 'excludes' directives in go.mod
   - gomodguard # allow and block lists linter for direct Go module dependencies. This is different from depguard where there are different block types for example version constraints and module recommendations
   - goprintffuncname # checks that printf-like functions are named with f at the end

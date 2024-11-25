@@ -13,18 +13,18 @@ import (
 
 var DefaultAPIConfig = APIConfig{
 	NodeConfig: pcap.NodeConfig{
-		Listen: pcap.Listen{Port: 8080}, //nolint:gomnd // default port
+		Listen: pcap.Listen{Port: 8080}, //nolint:mnd // default port
 		Buffer: pcap.BufferConf{
-			Size:       100, //nolint:gomnd // default size
-			UpperLimit: 95,  //nolint:gomnd // default size
-			LowerLimit: 60,  //nolint:gomnd // default size
+			Size:       100, //nolint:mnd // default size
+			UpperLimit: 95,  //nolint:mnd // default size
+			LowerLimit: 60,  //nolint:mnd // default size
 		},
 		LogLevel: "debug",
 		ID:       "test-api",
 	},
 	AgentsMTLS:         nil,
-	DrainTimeout:       10 * time.Second, //nolint:gomnd // default configuration
-	ConcurrentCaptures: 5,                //nolint:gomnd // default configuration
+	DrainTimeout:       10 * time.Second, //nolint:mnd // default configuration
+	ConcurrentCaptures: 5,                //nolint:mnd // default configuration
 }
 
 type APIConfig struct {

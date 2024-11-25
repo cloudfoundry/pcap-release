@@ -74,7 +74,7 @@ func main() {
 				Options: &pcap.CaptureOptions{
 					Device:  "en0",
 					Filter:  "",
-					SnapLen: 65000, //nolint:gomnd // default value used for testing
+					SnapLen: 65000, //nolint:mnd // default value used for testing
 				},
 			},
 		},
@@ -88,8 +88,8 @@ func main() {
 
 	// keep receiving some data long enough to start a manual drain
 	for i := 0; i < 10000; i++ {
-		devtools.ReadN(1000, stream)       //nolint:gomnd // default value used for testing
-		time.Sleep(200 * time.Millisecond) //nolint:gomnd // default value used for testing
+		devtools.ReadN(1000, stream)       //nolint:mnd // default value used for testing
+		time.Sleep(200 * time.Millisecond) //nolint:mnd // default value used for testing
 	}
 
 	err = stream.Send(pcap.MakeStopRequest())
@@ -98,5 +98,5 @@ func main() {
 		return
 	}
 
-	devtools.ReadN(10_000, stream) //nolint:gomnd // default value used for testing
+	devtools.ReadN(10_000, stream) //nolint:mnd // default value used for testing
 }
