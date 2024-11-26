@@ -74,7 +74,7 @@ func TestNewBoshResolver(t *testing.T) {
 func TestAuthenticate(t *testing.T) {
 	bar, _, _, err := mock.NewResolverWithMockBoshAPI(nil)
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Error(err)
 	}
 
 	validToken, err := mock.GetValidToken(bar.UaaURLs[0])
