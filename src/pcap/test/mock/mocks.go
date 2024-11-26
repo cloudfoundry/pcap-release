@@ -46,7 +46,7 @@ func NewMockJWTAPI() (*httptest.Server, string) {
 
 	jsonString := fmt.Sprintf(`{"keys":[{"kty": "RSA","e": "AQAB","use": "sig","kid": "uaa-jwt-key-1","alg": "RS256","value": "%v","n": ""}]}`, publicPemKeyNoLineBreak)
 
-	mux.HandleFunc("/token_keys", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/token_keys", func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 
 		_, err := writer.Write([]byte(jsonString))
@@ -55,7 +55,7 @@ func NewMockJWTAPI() (*httptest.Server, string) {
 		}
 	})
 
-	mux.HandleFunc("/oauth/token", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/oauth/token", func(writer http.ResponseWriter, _ *http.Request) {
 		response := fmt.Sprintf(`{"access_token": "%v","refresh_token": "%v","token_type": "bearer"}`, token, token)
 		_, err := writer.Write([]byte(response))
 		if err != nil {
@@ -159,7 +159,7 @@ func NewMockBoshDirectorAPI(responses map[string]string, url string) *httptest.S
 	responseTemplate := template.Must(template.New("boshapi").Parse(jsonTemplate))
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/info", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/info", func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		err := responseTemplate.Execute(writer, boshapi)
 		if err != nil {

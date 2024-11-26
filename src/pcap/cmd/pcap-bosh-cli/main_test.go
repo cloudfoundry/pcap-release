@@ -63,7 +63,7 @@ func TestParseAPIURL(t *testing.T) {
 
 func TestEnvironment_Connect(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/info", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/info", func(writer http.ResponseWriter, _ *http.Request) {
 		info := pcap.BoshInfo{}
 		info.UserAuthentication.Type = BoshAuthTypeUAA
 		info.UserAuthentication.Options.URL = "https://uaa.fakebosh.com"
