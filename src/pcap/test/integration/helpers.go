@@ -176,17 +176,17 @@ func generateCerts(commonName string, dir string) (string, string, string, error
 	certPath := path.Join(dir, "cert.pem")
 	keyPath := path.Join(dir, "private.key")
 	caPath := path.Join(dir, "ca.pem")
-	err = os.WriteFile(certPath, certPEM.Bytes(), os.ModePerm)
+	err = os.WriteFile(certPath, certPEM.Bytes(), 0600)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	err = os.WriteFile(keyPath, certPrivKeyPEM.Bytes(), os.ModePerm)
+	err = os.WriteFile(keyPath, certPrivKeyPEM.Bytes(), 0600)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	err = os.WriteFile(caPath, caPEM.Bytes(), os.ModePerm)
+	err = os.WriteFile(caPath, caPEM.Bytes(), 0600)
 	if err != nil {
 		return "", "", "", err
 	}
