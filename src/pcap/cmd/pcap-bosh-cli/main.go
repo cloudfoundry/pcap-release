@@ -46,7 +46,7 @@ type options struct {
 	BoshEnvironment    string   `short:"e" long:"bosh-environment" description:"The BOSH environment to use for retrieving the BOSH UAA token from the BOSH config file" env:"BOSH_ENVIRONMENT" required:"true"`
 	Deployment         string   `short:"d" long:"deployment" description:"The name of the deployment in which you would like to capture." required:"true"`
 	InstanceGroups     []string `short:"g" long:"instance-group" description:"The name of an instance group in the deployment in which you would like to capture. Can be defined multiple times." required:"true"`
-	InstanceIds        []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"`
+	InstanceIds        []string `positional-arg-name:"ids" description:"The instance IDs of the deployment to capture." required:"false"` //nolint:revive //keep InstanceIds name (not IDs)
 	SnapLength         uint16   `short:"l" long:"snaplen" description:"Snap Length, defining the captured length of the packet, with the remainder truncated. The real packet length is recorded." default:"65535"`
 	Verbose            bool     `short:"v" long:"verbose" description:"Show verbose debug information"`
 	Insecure           bool     `short:"k" long:"insecure" description:"Allow insecure server connections" required:"false"`
