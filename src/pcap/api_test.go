@@ -306,7 +306,7 @@ func TestCapture(t *testing.T) {
 				t.Errorf("capture() unexpected error during api creation: %v", err)
 			}
 
-			var connectToTargetFn = func(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureStream, error) {
+			var connectToTargetFn = func(ctx context.Context, req *CaptureOptions, target AgentEndpoint, creds credentials.TransportCredentials, log *zap.Logger) (captureStream, error) { //nolint:revive //keep vars even if unused for better context
 				return tt.stream, tt.err
 			}
 
