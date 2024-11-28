@@ -385,7 +385,7 @@ func (br *BoshResolver) verifyJWT(tokenString string) error {
 	scopes, ok := claims["scope"].([]interface{})
 	if ok {
 		for _, scope := range scopes {
-			if scope.(string) == br.Config.TokenScope {
+			if scope.(string) == br.Config.TokenScope { //nolint:errcheck //fine to panic if not string
 				return nil
 			}
 		}
@@ -406,7 +406,7 @@ func (br *BoshResolver) parseKey(token *jwt.Token) (interface{}, error) {
 		return nil, fmt.Errorf("header 'jku' missing from token, cannot verify signature: %w", ErrTokenUnsupported)
 	}
 
-	jkuURL, err := url.Parse(jku.(string))
+	jkuURL, err := url.Parse(jku.(string)) //nolint:errcheck //fine to panic if not string
 	if err != nil {
 		return nil, err
 	}

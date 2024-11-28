@@ -115,7 +115,7 @@ func (a *Agent) Capture(stream Agent_CaptureServer) (err error) {
 		return errorf(codes.InvalidArgument, "%w", err)
 	}
 
-	opts := req.Payload.(*AgentRequest_Start).Start.Capture
+	opts := req.Payload.(*AgentRequest_Start).Start.Capture //nolint:errcheck //this only returns one value
 	log.Info("starting capture", zap.String("device", opts.Device), zap.Uint32("snapLen", opts.SnapLen), zap.String("filter", opts.Filter))
 
 	handle, err := openHandle(opts)
