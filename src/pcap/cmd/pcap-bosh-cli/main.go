@@ -433,7 +433,7 @@ func (e *Environment) setup() error {
 		return nil
 	}
 	logger.Info("using TLS-encrypted connection to bosh-director", zap.String("bosh-director-url", e.DirectorURL.String()))
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport := http.DefaultTransport.(*http.Transport).Clone() //nolint:errcheck //Clone returns only one value
 
 	if e.CaCert != "" {
 		boshCA := x509.NewCertPool()
