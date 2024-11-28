@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/big"
 	"net"
 	"os"
@@ -173,20 +174,21 @@ func generateCerts(commonName string, dir string) (string, string, string, error
 		return "", "", "", err
 	}
 
+	certPerms := fs.FileMode(0600)
 	certPath := path.Join(dir, "cert.pem")
 	keyPath := path.Join(dir, "private.key")
 	caPath := path.Join(dir, "ca.pem")
-	err = os.WriteFile(certPath, certPEM.Bytes(), 0600)
+	err = os.WriteFile(certPath, certPEM.Bytes(), certPerms)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	err = os.WriteFile(keyPath, certPrivKeyPEM.Bytes(), 0600)
+	err = os.WriteFile(keyPath, certPrivKeyPEM.Bytes(), certPerms)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	err = os.WriteFile(caPath, caPEM.Bytes(), 0600)
+	err = os.WriteFile(caPath, caPEM.Bytes(), certPerms)
 	if err != nil {
 		return "", "", "", err
 	}
