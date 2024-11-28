@@ -313,7 +313,7 @@ func (c *Client) logProgress(ctx context.Context, logger *zap.Logger) {
 				logger.Debug("could not inspect output file", zap.Error(err))
 				return
 			}
-			logger.Debug(fmt.Sprintf("%s bytes written to disk (total).", bytefmt.ByteSize(uint64(info.Size()))))
+			logger.Debug(fmt.Sprintf("%s bytes written to disk (total).", bytefmt.ByteSize(uint64(info.Size())))) //nolint:gosec //file size is non negative
 		case <-ctx.Done():
 			return
 		}

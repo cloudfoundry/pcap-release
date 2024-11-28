@@ -196,7 +196,7 @@ func validateAgentStartRequest(req *AgentRequest) error {
 // openHandle is a helper function to open the packet capturing handle that reads from the
 // network interface and returns the data. Puts the network interface into promiscuous mode.
 func openHandle(opts *CaptureOptions) (*pcap.Handle, error) {
-	handle, err := pcap.OpenLive(opts.Device, int32(opts.SnapLen), true, readPacketTimeout)
+	handle, err := pcap.OpenLive(opts.Device, int32(opts.SnapLen), true, readPacketTimeout) //nolint:gosec //size in relation to packets, well within int32
 	if err != nil {
 		return nil, errorf(codes.Internal, "open handle: %w", err)
 	}

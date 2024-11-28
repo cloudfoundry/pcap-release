@@ -74,7 +74,7 @@ func newPacketResponse(data []byte, captureInfo gopacket.CaptureInfo) *CaptureRe
 			Packet: &Packet{
 				Data:      data,
 				Timestamp: timestamppb.New(captureInfo.Timestamp),
-				Length:    int32(captureInfo.Length),
+				Length:    int32(captureInfo.Length), //nolint:gosec //this is a size of network packet, well within int32
 			},
 		},
 	}
