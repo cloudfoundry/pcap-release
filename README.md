@@ -2,9 +2,7 @@
 
 [BOSH](https://bosh.io/) release of the pcap [Cloud Foundry](https://www.cloudfoundry.org/) add-on.
 
-## Disclaimer
-
-As pcap-release is still in active development, information on this page is subject to change and might be outdated.
+# !!! Currently, pcap-release is not maintained anymore. We are lacking the capacity to integrate it with diego-release and capi-release to make it deployable without manual workarounds. If anyone would like to pick it up please join the ARP Forum or reach out on Slack. !!!
 
 ## Description
 
